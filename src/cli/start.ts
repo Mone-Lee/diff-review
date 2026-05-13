@@ -7,7 +7,8 @@ import { startServer } from '../server';
 import type { ReviewSession } from '../shared/types';
 
 async function main() {
-  const mode = parseReviewMode(process.argv.slice(2));
+  const { dev, reviewArgs } = parseCliOptions(process.argv.slice(2));
+  const mode = parseReviewMode(reviewArgs);
   const repoRoot = await getRepoRoot(process.cwd());
   const diff = await getDiff(mode, repoRoot);
   const diffFiles = parseUnifiedDiff(diff);
@@ -21,9 +22,10 @@ async function main() {
 
   const apiUrl = await startServer({ session, diffFiles });
   const hasBuiltWeb = existsSync(join(process.cwd(), 'dist', 'web', 'index.html'));
-  const uiUrl = hasBuiltWeb ? apiUrl : 'http://127.0.0.1:5173';
+  const useVite = dev || !hasBuiltWeb;
+  const uiUrl = useVite ? 'http://127.0.0.1:5173' : apiUrl;
 
-  if (!hasBuiltWeb) {
+  if (useVite) {
     startVite();
   }
   openBrowser(uiUrl);
@@ -31,6 +33,13 @@ async function main() {
   console.log(`Diff Review is running: ${uiUrl}`);
   console.log(`Mode: ${modeLabel(mode)}`);
   console.log(`Files: ${diffFiles.length}`);
+}
+
+function parseCliOptions(args: string[]): { dev: boolean; reviewArgs: string[] } {
+  return {
+    dev: args.includes('--dev'),
+    reviewArgs: args.filter((arg) => arg !== '--dev')
+  };
 }
 
 function modeLabel(mode: ReviewSession['mode']): string {
