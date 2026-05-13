@@ -1,0 +1,55 @@
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { parseUnifiedDiff } from '../core/diff-parser';
+import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
+import { startServer } from '../server';
+import type { ReviewSession } from '../shared/types';
+
+async function main() {
+  const mode = parseReviewMode(process.argv.slice(2));
+  const repoRoot = await getRepoRoot(process.cwd());
+  const diff = await getDiff(mode, repoRoot);
+  const diffFiles = parseUnifiedDiff(diff);
+  const session: ReviewSession = {
+    id: crypto.randomUUID(),
+    repoRoot,
+    mode,
+    diffHash: diffHash(diff),
+    createdAt: new Date().toISOString()
+  };
+
+  const apiUrl = await startServer({ session, diffFiles });
+  const hasBuiltWeb = existsSync(join(process.cwd(), 'dist', 'web', 'index.html'));
+  const uiUrl = hasBuiltWeb ? apiUrl : 'http://127.0.0.1:5173';
+
+  if (!hasBuiltWeb) {
+    startVite();
+  }
+
+  console.log(`Diff Review is running: ${uiUrl}`);
+  console.log(`Mode: ${modeLabel(mode)}`);
+  console.log(`Files: ${diffFiles.length}`);
+}
+
+function modeLabel(mode: ReviewSession['mode']): string {
+  if (mode.kind === 'revision') return `${mode.base}..${mode.target}`;
+  return mode.kind;
+}
+
+function startVite() {
+  const child = spawn('npm', ['run', 'dev'], {
+    cwd: process.cwd(),
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+    env: { ...process.env, BROWSER: 'none' }
+  });
+
+  process.on('SIGINT', () => child.kill('SIGINT'));
+  process.on('SIGTERM', () => child.kill('SIGTERM'));
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+});

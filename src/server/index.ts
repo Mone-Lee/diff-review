@@ -1,0 +1,151 @@
+import express from 'express';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import type { DiffFile, MarkdownPreview, PromptScope, ReviewSession, ReviewThread } from '../shared/types';
+import { buildMarkdownBlocks } from '../core/markdown-source-map';
+import { formatPrompt } from '../core/prompt';
+import { readFileForPreview } from '../core/git';
+import { readComments, writeComments } from './storage';
+
+export type ReviewServerState = {
+  session: ReviewSession;
+  diffFiles: DiffFile[];
+};
+
+export async function startServer(state: ReviewServerState, port = 4966): Promise<string> {
+  const app = express();
+  app.use(express.json({ limit: '2mb' }));
+
+  app.get('/api/session', (_req, res) => {
+    res.json(state.session);
+  });
+
+  app.get('/api/diff', (_req, res) => {
+    res.json({ files: state.diffFiles });
+  });
+
+  app.get('/api/markdown-preview', async (req, res, next) => {
+    try {
+      const filePath = String(req.query.path ?? '');
+      const file = state.diffFiles.find((item) => item.path === filePath || item.oldPath === filePath);
+      if (!file || !file.isMarkdown) {
+        res.status(404).json({ error: 'Markdown file not found in diff' });
+        return;
+      }
+      const { content, deleted } = await readFileForPreview(file, state.session.mode, state.session.repoRoot);
+      const preview: MarkdownPreview = {
+        filePath: file.path,
+        content,
+        deleted,
+        blocks: buildMarkdownBlocks(content)
+      };
+      res.json(preview);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/threads', async (_req, res, next) => {
+    try {
+      res.json(await readComments(state.session.repoRoot));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/threads', async (req, res, next) => {
+    try {
+      const now = new Date().toISOString();
+      const body = req.body as Pick<ReviewThread, 'filePath' | 'anchor'> & { body: string };
+      const store = await readComments(state.session.repoRoot);
+      const thread: ReviewThread = {
+        id: crypto.randomUUID(),
+        filePath: body.filePath,
+        anchor: body.anchor,
+        status: 'unresolved',
+        comments: [
+          {
+            id: crypto.randomUUID(),
+            body: body.body,
+            createdAt: now,
+            updatedAt: now
+          }
+        ],
+        createdAt: now,
+        updatedAt: now
+      };
+      store.threads.push(thread);
+      await writeComments(state.session.repoRoot, store);
+      res.status(201).json(thread);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch('/api/threads/:id', async (req, res, next) => {
+    try {
+      const store = await readComments(state.session.repoRoot);
+      const thread = store.threads.find((item) => item.id === req.params.id);
+      if (!thread) {
+        res.status(404).json({ error: 'Thread not found' });
+        return;
+      }
+      if (req.body.status === 'resolved' || req.body.status === 'unresolved') {
+        thread.status = req.body.status;
+        thread.updatedAt = new Date().toISOString();
+      }
+      await writeComments(state.session.repoRoot, store);
+      res.json(thread);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete('/api/threads/:id', async (req, res, next) => {
+    try {
+      const store = await readComments(state.session.repoRoot);
+      store.threads = store.threads.filter((item) => item.id !== req.params.id);
+      await writeComments(state.session.repoRoot, store);
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/prompt', async (req, res, next) => {
+    try {
+      const scope = req.body as PromptScope;
+      const store = await readComments(state.session.repoRoot);
+      const threads = selectPromptThreads(store.threads, scope);
+      res.json({ prompt: formatPrompt(threads) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  const webDist = join(process.cwd(), 'dist', 'web');
+  if (existsSync(webDist)) {
+    app.use(express.static(webDist));
+    app.get(/.*/, (_req, res) => res.sendFile(join(webDist, 'index.html')));
+  }
+
+  app.use((error: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    res.status(500).json({ error: error.message });
+  });
+
+  return new Promise((resolve) => {
+    const server = app.listen(port, '127.0.0.1', () => {
+      const address = server.address();
+      const actualPort = typeof address === 'object' && address ? address.port : port;
+      resolve(`http://127.0.0.1:${actualPort}`);
+    });
+  });
+}
+
+function selectPromptThreads(threads: ReviewThread[], scope: PromptScope): ReviewThread[] {
+  if (scope.type === 'thread') return threads.filter((thread) => thread.id === scope.threadId);
+  if (scope.type === 'file-unresolved') {
+    return threads.filter((thread) => thread.filePath === scope.filePath && thread.status === 'unresolved');
+  }
+  return threads.filter((thread) => thread.status === 'unresolved');
+}
