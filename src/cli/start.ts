@@ -26,6 +26,7 @@ async function main() {
   if (!hasBuiltWeb) {
     startVite();
   }
+  openBrowser(uiUrl);
 
   console.log(`Diff Review is running: ${uiUrl}`);
   console.log(`Mode: ${modeLabel(mode)}`);
@@ -47,6 +48,19 @@ function startVite() {
 
   process.on('SIGINT', () => child.kill('SIGINT'));
   process.on('SIGTERM', () => child.kill('SIGTERM'));
+}
+
+function openBrowser(url: string) {
+  const child =
+    process.platform === 'darwin'
+      ? spawn('open', [url], { stdio: 'ignore', detached: true })
+      : process.platform === 'win32'
+        ? spawn('cmd', ['/c', 'start', '', url], {
+            stdio: 'ignore',
+            detached: true
+          })
+        : spawn('xdg-open', [url], { stdio: 'ignore', detached: true });
+  child.unref();
 }
 
 main().catch((error) => {
