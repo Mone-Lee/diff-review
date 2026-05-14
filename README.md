@@ -47,11 +47,19 @@ node skill/diff-review/scripts/start-review.mjs [args...]
 
 ```bash
 npm install
-npm run review:dev
+npm run dev
 npm run typecheck
 npm run build
 ```
 
-`npm run review:dev` 会启动 API 服务并打开 Vite dev server，前端代码修改会使用 Vite HMR 热更新。`npm run review` 优先使用已构建的 `dist/web`。
+`npm run dev`（等价于 `npm run review:dev`）会启动 API 服务并打开 Vite dev server，前端代码修改会使用 Vite HMR 热更新。`npm run review` 优先使用已构建的 `dist/web`。
+
+仅调试前端时可使用：
+
+```bash
+npm run web:dev
+```
+
+注意：`web:dev` 只启动 Vite，不会启动 API 服务。
 
 评论数据默认保存在 `.diff-review/comments.json`，该目录默认不提交到 git。

@@ -7,6 +7,7 @@ import { startServer } from '../server';
 import type { ReviewSession } from '../shared/types';
 
 async function main() {
+  // CLI 参数只负责确定审查模式，真正的数据都来自当前仓库状态。
   const { dev, reviewArgs } = parseCliOptions(process.argv.slice(2));
   const mode = parseReviewMode(reviewArgs);
   const repoRoot = await getRepoRoot(process.cwd());
@@ -21,6 +22,7 @@ async function main() {
   };
 
   const apiUrl = await startServer({ session, diffFiles });
+  // 非 --dev 模式下优先复用已构建的静态页面，避免每次都起 Vite。
   const hasBuiltWeb = existsSync(join(process.cwd(), 'dist', 'web', 'index.html'));
   const useVite = dev || !hasBuiltWeb;
   const uiUrl = useVite ? 'http://127.0.0.1:5173' : apiUrl;
@@ -48,7 +50,8 @@ function modeLabel(mode: ReviewSession['mode']): string {
 }
 
 function startVite() {
-  const child = spawn('npm', ['run', 'dev'], {
+  // 由 review 进程托管 Vite 子进程，便于 Ctrl+C 一并退出。
+  const child = spawn('npm', ['run', 'web:dev'], {
     cwd: process.cwd(),
     stdio: 'inherit',
     shell: process.platform === 'win32',
@@ -60,6 +63,7 @@ function startVite() {
 }
 
 function openBrowser(url: string) {
+  // 按平台选择默认打开方式，避免引入额外依赖。
   const child =
     process.platform === 'darwin'
       ? spawn('open', [url], { stdio: 'ignore', detached: true })
