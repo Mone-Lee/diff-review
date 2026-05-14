@@ -1,5 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { homedir, platform } from 'node:os';
+import { basename, dirname, join } from 'node:path';
 import type { ReviewThread } from '../shared/types';
 
 export type CommentStore = {
@@ -11,7 +13,7 @@ export async function readComments(repoRoot: string): Promise<CommentStore> {
   try {
     return JSON.parse(await readFile(path, 'utf8')) as CommentStore;
   } catch {
-    return { threads: [] };
+    return readLegacyComments(repoRoot);
   }
 }
 
@@ -22,5 +24,22 @@ export async function writeComments(repoRoot: string, store: CommentStore): Prom
 }
 
 function commentsPath(repoRoot: string): string {
-  return join(repoRoot, '.diff-review', 'comments.json');
+  const repoName = basename(repoRoot) || 'repo';
+  const repoHash = createHash('sha256').update(repoRoot).digest('hex').slice(0, 12);
+  return join(commentLogsDir(), `${repoName}-${repoHash}.comments.json`);
+}
+
+function commentLogsDir(): string {
+  if (platform() === 'win32') {
+    return join(process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'), 'diff-review', 'logs');
+  }
+  return join(homedir(), '.local', 'diff-review', 'logs');
+}
+
+async function readLegacyComments(repoRoot: string): Promise<CommentStore> {
+  try {
+    return JSON.parse(await readFile(join(repoRoot, '.diff-review', 'comments.json'), 'utf8')) as CommentStore;
+  } catch {
+    return { threads: [] };
+  }
 }

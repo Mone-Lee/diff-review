@@ -1,6 +1,6 @@
 # diff-review
 
-AI chat 里的本地代码审查工具。产品入口是 Codex skill slash command：`/diff-review`。
+AI chat 里的本地代码审查工具。产品入口是 skill slash command：`/diff-review`。
 
 ## 功能边界
 
@@ -62,4 +62,6 @@ npm run web:dev
 
 注意：`web:dev` 只启动 Vite，不会启动 API 服务。
 
-评论数据默认保存在 `.diff-review/comments.json`，该目录默认不提交到 git。
+评论数据默认归档在 `~/.local/diff-review/logs`。Windows 下使用类似位置：
+`%LOCALAPPDATA%\diff-review\logs`，如果未设置 `LOCALAPPDATA` 则退到
+`~/AppData/Local/diff-review/logs`。
