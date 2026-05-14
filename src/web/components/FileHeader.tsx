@@ -2,6 +2,8 @@
  * 文件头区域：展示文件信息并提供文件级评论、文件提示词复制等操作。
  */
 import React from 'react';
+import { Button, Card, Space, Tag, Typography } from 'antd';
+import { CommentOutlined, CopyOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import { CommentComposer } from './CommentComposer';
 import styles from '../styles.module.less';
@@ -19,14 +21,17 @@ export function FileHeader({ file, threads, onCreate, onCopy }: Props) {
   const fileThreads = threads.filter((thread) => thread.filePath === file.path);
 
   return (
-    <header className={styles.fileHeader}>
-      <div>
-        <p className={styles.eyebrow}>{file.isMarkdown ? 'Markdown 预览' : '统一 Diff'}</p>
-        <h2>{file.path}</h2>
-      </div>
-      <div className={styles.headerActions}>
-        <button onClick={() => void onCopy({ type: 'file-unresolved', filePath: file.path })}>复制文件提示词</button>
-        <button onClick={() => setOpen((value) => !value)}>文件级评论</button>
+    <Card className={styles.fileHeader}>
+      <div className={styles.headerTop}>
+        <Typography.Text strong>{file.path}</Typography.Text>
+        <div className={styles.headerActions}>
+          <Button className={styles.headerAction} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'file-unresolved', filePath: file.path })}>
+            复制文件级提示词
+          </Button>
+          <Button className={styles.headerAction} icon={<CommentOutlined />} type={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>
+            文件级评论
+          </Button>
+        </div>
       </div>
       {open ? (
         <CommentComposer
@@ -37,7 +42,11 @@ export function FileHeader({ file, threads, onCreate, onCopy }: Props) {
           }}
         />
       ) : null}
-      {fileThreads.length > 0 ? <p className={styles.threadCount}>本文件共有 {fileThreads.length} 个评论线程</p> : null}
-    </header>
+      {fileThreads.length > 0 ? (
+        <Tag className={styles.threadCount} color="gold">
+          {fileThreads.length} 个评论线程
+        </Tag>
+      ) : null}
+    </Card>
   );
 }

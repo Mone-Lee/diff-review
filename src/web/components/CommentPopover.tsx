@@ -2,6 +2,7 @@
  * 行内评论弹层：在 Diff/Markdown 视图中承载快速评论输入。
  */
 import React from 'react';
+import { Button } from 'antd';
 import { CommentComposer } from './CommentComposer';
 import styles from '../styles.module.less';
 
@@ -14,9 +15,9 @@ export function CommentPopover({ onCancel, onSubmit }: Props) {
   return (
     <div className={styles.popover}>
       <CommentComposer placeholder="请输入行内评论..." onSubmit={onSubmit} />
-      <button className={styles.ghost} onClick={onCancel}>
+      <Button className={styles.ghost} onClick={onCancel}>
         取消
-      </button>
+      </Button>
     </div>
   );
 }

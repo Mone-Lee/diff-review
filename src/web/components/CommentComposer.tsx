@@ -2,6 +2,7 @@
  * 评论输入组件：封装评论文本输入与提交行为。
  */
 import React from 'react';
+import { Button, Input, Space } from 'antd';
 import styles from '../styles.module.less';
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
 
 export function CommentComposer({ placeholder, onSubmit }: Props) {
   const [body, setBody] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
 
   return (
     <form
@@ -18,11 +20,18 @@ export function CommentComposer({ placeholder, onSubmit }: Props) {
       onSubmit={(event) => {
         event.preventDefault();
         if (!body.trim()) return;
-        void onSubmit(body.trim()).then(() => setBody(''));
+        setSubmitting(true);
+        void onSubmit(body.trim())
+          .then(() => setBody(''))
+          .finally(() => setSubmitting(false));
       }}
     >
-      <textarea placeholder={placeholder} value={body} onChange={(event) => setBody(event.target.value)} />
-      <button type="submit">添加评论</button>
+      <Input.TextArea placeholder={placeholder} value={body} onChange={(event) => setBody(event.target.value)} autoSize={{ minRows: 3, maxRows: 8 }} />
+      <Space>
+        <Button htmlType="submit" loading={submitting} type="primary">
+          添加评论
+        </Button>
+      </Space>
     </form>
   );
 }

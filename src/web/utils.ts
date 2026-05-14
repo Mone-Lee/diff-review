@@ -14,3 +14,11 @@ export function formatAnchor(thread: ReviewThread): string {
   if (thread.anchor.type === 'file') return thread.filePath;
   return `${thread.filePath}:${thread.anchor.lineNumber}`;
 }
+
+export function formatFileStatus(status: string): string {
+  if (status === 'added') return 'A';
+  if (status === 'modified') return 'M';
+  if (status === 'deleted') return 'D';
+  if (status === 'renamed') return 'R';
+  return status;
+}
