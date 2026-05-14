@@ -2,6 +2,7 @@ import GithubSlugger from 'github-slugger';
 import type { MarkdownBlock } from '../shared/types';
 
 export function buildMarkdownBlocks(content: string): MarkdownBlock[] {
+  // 这里做轻量级块划分，不追求完整 Markdown AST，只服务评论锚点定位。
   const lines = content.replace(/\r\n/g, '\n').split('\n');
   const blocks: MarkdownBlock[] = [];
   const slugger = new GithubSlugger();
@@ -73,6 +74,7 @@ export function buildMarkdownBlocks(content: string): MarkdownBlock[] {
 
     const start = lineNumber;
     const collected: string[] = [];
+    // 默认按段落收敛，直到空行为止。
     while (index < lines.length && lines[index].trim() !== '') {
       collected.push(lines[index]);
       index += 1;
@@ -84,6 +86,7 @@ export function buildMarkdownBlocks(content: string): MarkdownBlock[] {
 }
 
 function makeBlock(type: MarkdownBlock['type'], startLine: number, endLine: number, text: string, slugger: GithubSlugger): MarkdownBlock {
+  // 同类型、同行号下保持稳定 ID，减少前端渲染抖动。
   const seed = `${type}-${startLine}-${text.slice(0, 80)}`;
   return {
     id: slugger.slug(seed || `${type}-${startLine}`),

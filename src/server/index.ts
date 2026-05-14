@@ -26,6 +26,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
 
   app.get('/api/markdown-preview', async (req, res, next) => {
     try {
+      // path 既可能是新路径，也可能是 rename/delete 场景下的旧路径。
       const filePath = String(req.query.path ?? '');
       const file = state.diffFiles.find((item) => item.path === filePath || item.oldPath === filePath);
       if (!file || !file.isMarkdown) {
@@ -58,6 +59,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       const now = new Date().toISOString();
       const body = req.body as Pick<ReviewThread, 'filePath' | 'anchor'> & { body: string };
       const store = await readComments(state.session.repoRoot);
+      // 新建线程时默认仅包含一条初始评论，后续回复可在此基础扩展。
       const thread: ReviewThread = {
         id: crypto.randomUUID(),
         filePath: body.filePath,
@@ -116,6 +118,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     try {
       const scope = req.body as PromptScope;
       const store = await readComments(state.session.repoRoot);
+      // Prompt 只拼接目标范围内的线程文本，交由 AI 继续加工。
       const threads = selectPromptThreads(store.threads, scope);
       res.json({ prompt: formatPrompt(threads) });
     } catch (error) {
@@ -125,6 +128,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
 
   const webDist = join(process.cwd(), 'dist', 'web');
   if (existsSync(webDist)) {
+    // 生产模式使用静态资源托管并回退到 SPA 入口。
     app.use(express.static(webDist));
     app.get(/.*/, (_req, res) => res.sendFile(join(webDist, 'index.html')));
   }

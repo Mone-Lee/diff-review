@@ -22,6 +22,7 @@ export async function getDiff(mode: ReviewMode, repoRoot: string): Promise<strin
   }
 
   const trackedDiff = await execGitStdout(['diff', '--no-ext-diff', '--no-color'], repoRoot);
+  // working 模式除了 tracked 变更，还要把未跟踪文件拼成伪 diff。
   const untrackedDiff = await getUntrackedDiff(repoRoot);
   return [trackedDiff, untrackedDiff].filter(Boolean).join('\n');
 }
@@ -30,6 +31,7 @@ export async function readFileForPreview(file: DiffFile, mode: ReviewMode, repoR
   const targetPath = file.status === 'deleted' ? file.oldPath : file.path;
 
   if (!isSafeRepoPath(repoRoot, targetPath)) {
+    // 防御路径穿越，避免通过构造路径读取仓库外文件。
     throw new Error(`Unsafe file path: ${targetPath}`);
   }
 
@@ -98,6 +100,7 @@ async function getUntrackedDiff(repoRoot: string): Promise<string> {
     paths.map(async (path) => {
       if (!isSafeRepoPath(repoRoot, path)) return '';
       const content = await readFile(join(repoRoot, path));
+      // 二进制文件不展开文本 diff，避免污染输出。
       if (content.includes(0)) return binaryAddedDiff(path);
       return textAddedDiff(path, content.toString('utf8'));
     })

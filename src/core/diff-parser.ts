@@ -3,6 +3,7 @@ import type { DiffFile, DiffHunk, DiffLine } from '../shared/types';
 const hunkHeaderPattern = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
 export function parseUnifiedDiff(input: string): DiffFile[] {
+  // 统一换行符，避免不同平台产生解析偏差。
   const lines = input.replace(/\r\n/g, '\n').split('\n');
   const files: DiffFile[] = [];
   let currentFile: DiffFile | undefined;
@@ -26,6 +27,7 @@ export function parseUnifiedDiff(input: string): DiffFile[] {
         hunks: []
       };
       files.push(currentFile);
+      // 遇到新文件时重置 hunk 状态，防止串到上一个文件。
       currentHunk = undefined;
       continue;
     }
@@ -69,6 +71,7 @@ export function parseUnifiedDiff(input: string): DiffFile[] {
 
     const hunkMatch = line.match(hunkHeaderPattern);
     if (hunkMatch) {
+      // hunk 头部会给出 old/new 起始行号，后续逐行推进。
       oldLine = Number(hunkMatch[1]);
       newLine = Number(hunkMatch[3]);
       currentHunk = {
@@ -116,6 +119,7 @@ export function parseUnifiedDiff(input: string): DiffFile[] {
     }
 
     const synthetic: DiffLine = { type: 'context', content: line, oldLineNumber: oldLine, newLineNumber: newLine };
+    // 对无法识别的行保底按 context 处理，尽量保留可视信息。
     currentHunk.lines.push(synthetic);
   }
 
