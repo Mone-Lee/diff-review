@@ -35,6 +35,12 @@ AI chat 里的本地代码审查工具。产品入口是 skill slash command：`
 /diff-review HEAD~1 HEAD
 ```
 
+这三种模式分别表示：
+
+- `working`：审查当前工作区里尚未 `git add` 的改动。
+- `staged`：审查已经 `git add`、但还没有提交的改动。
+- `revision`：审查两个 revision 之间的差异，例如 `/diff-review HEAD~1 HEAD` 会比较 `HEAD~1..HEAD`。
+
 内部脚本位于：
 
 ```bash

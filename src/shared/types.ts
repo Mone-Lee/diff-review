@@ -1,3 +1,9 @@
+/**
+ * 审查模式决定本次 diff 的来源：
+ * `working` 表示审查工作区中尚未暂存的变更；
+ * `staged` 表示审查已经 git add 但尚未提交的变更；
+ * `revision` 表示审查两个 revision 之间的差异，base/target 可以是 commit、branch 或 tag。
+ */
 export type ReviewMode =
   | { kind: 'working' }
   | { kind: 'staged' }
