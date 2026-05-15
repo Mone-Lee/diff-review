@@ -171,7 +171,9 @@ export default function App() {
             批量提交给 Agent
           </Button>
         </div>
-        <ThreadList threads={threads} onPatch={patchThread} onCopy={copyPrompt} />
+        <div className={styles.threadRailBody}>
+          <ThreadList threads={threads} onPatch={patchThread} onCopy={copyPrompt} />
+        </div>
       </aside>
     </Layout>
   );

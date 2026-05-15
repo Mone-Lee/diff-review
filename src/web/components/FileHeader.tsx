@@ -26,7 +26,7 @@ export function FileHeader({ file, threads, onCreate, onCopy }: Props) {
         <Typography.Text strong>{file.path}</Typography.Text>
         <div className={styles.headerActions}>
           <Button className={styles.headerAction} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'file-unresolved', filePath: file.path })}>
-            复制文件级提示词
+            复制文件提示词
           </Button>
           <Button className={styles.headerAction} icon={<CommentOutlined />} type={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>
             文件级评论
