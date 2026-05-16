@@ -5,7 +5,7 @@ import React from 'react';
 import { MessageOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import { CommentPopover } from './CommentPopover';
-import { InlineThreadCard } from './InlineThreadCard';
+import { InlineThreadGroup } from './InlineThreadCard';
 import styles from '../styles.module.less';
 
 type Props = {
@@ -61,19 +61,16 @@ export function CodeDiffViewer({
 
     return (
       <div className={styles.inlineThreadStack}>
-        {lineThreads.map((thread) => (
-          <InlineThreadCard
-            key={thread.id}
-            thread={thread}
-            onFocus={onLocateThread}
-            onPatch={onPatchThread}
-            onDeleteThread={onDeleteThread}
-            onReply={onReplyThread}
-            onPatchComment={onPatchComment}
-            onDeleteComment={onDeleteComment}
-            onCopy={onCopyThread}
-          />
-        ))}
+        <InlineThreadGroup
+          threads={lineThreads}
+          onFocus={onLocateThread}
+          onPatch={onPatchThread}
+          onDeleteThread={onDeleteThread}
+          onReply={onReplyThread}
+          onPatchComment={onPatchComment}
+          onDeleteComment={onDeleteComment}
+          onCopy={onCopyThread}
+        />
       </div>
     );
   }

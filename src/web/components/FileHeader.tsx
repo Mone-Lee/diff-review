@@ -6,7 +6,7 @@ import { Button, Card, Tag, Typography } from 'antd';
 import { CommentOutlined, CopyOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import { CommentComposer } from './CommentComposer';
-import { InlineThreadCard } from './InlineThreadCard';
+import { InlineThreadGroup } from './InlineThreadCard';
 import styles from '../styles.module.less';
 
 type Props = {
@@ -70,19 +70,16 @@ export function FileHeader({
       ) : null}
       {fileLevelThreads.length > 0 ? (
         <div className={styles.fileLevelInlineThreads}>
-          {fileLevelThreads.map((thread) => (
-            <InlineThreadCard
-              key={thread.id}
-              thread={thread}
-              onFocus={onLocateThread}
-              onPatch={onPatchThread}
-              onDeleteThread={onDeleteThread}
-              onReply={onReplyThread}
-              onPatchComment={onPatchComment}
-              onDeleteComment={onDeleteComment}
-              onCopy={onCopyThread}
-            />
-          ))}
+          <InlineThreadGroup
+            threads={fileLevelThreads}
+            onFocus={onLocateThread}
+            onPatch={onPatchThread}
+            onDeleteThread={onDeleteThread}
+            onReply={onReplyThread}
+            onPatchComment={onPatchComment}
+            onDeleteComment={onDeleteComment}
+            onCopy={onCopyThread}
+          />
         </div>
       ) : null}
     </Card>

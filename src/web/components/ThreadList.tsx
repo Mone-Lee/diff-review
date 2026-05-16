@@ -1,12 +1,11 @@
 /**
- * 评论线程列表：展示线程内容，并提供复制与状态切换操作。
+ * 评论线程列表：按锚点合并展示线程内容，并提供复制与状态切换操作。
  */
 import React from 'react';
-import { Button, Card, Empty, Input, Popconfirm, Space, Tag, Tooltip, Typography } from 'antd';
-import { CheckOutlined, CopyOutlined, DeleteOutlined, EditOutlined, ReloadOutlined, RedoOutlined } from '@ant-design/icons';
-import type { ReviewThread } from '../../shared/types';
+import { Card, Empty, Space, Tag, Typography } from 'antd';
+import type { CommentAnchor, ReviewThread } from '../../shared/types';
 import { formatAnchor } from '../utils';
-import { CommentComposer } from './CommentComposer';
+import { InlineThreadGroup } from './InlineThreadCard';
 import styles from '../styles.module.less';
 
 type Props = {
@@ -20,155 +19,102 @@ type Props = {
   onCopy: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
+type ThreadGroup = {
+  key: string;
+  threads: ReviewThread[];
+};
+
 export function ThreadList({ threads, focusedThreadId, onPatch, onDeleteThread, onReply, onPatchComment, onDeleteComment, onCopy }: Props) {
-  const threadRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
-  const [expandedComposer, setExpandedComposer] = React.useState<Record<string, boolean>>({});
-  const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null);
-  const [editingBody, setEditingBody] = React.useState('');
+  const groupRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const groups = React.useMemo(() => groupThreadsByAnchor(threads), [threads]);
 
   React.useEffect(() => {
     if (!focusedThreadId) return;
-    threadRefs.current[focusedThreadId]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }, [focusedThreadId]);
+    const group = groups.find((item) => item.threads.some((thread) => thread.id === focusedThreadId));
+    if (group) {
+      groupRefs.current[group.key]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  }, [focusedThreadId, groups]);
 
-  if (threads.length === 0) {
+  if (groups.length === 0) {
     return <Empty className={styles.threadEmpty} description="暂无评论，悬停到行右侧或添加文件级评论即可开始。" />;
   }
 
   return (
     <div className={styles.threads}>
-      {threads.map((thread) => (
-        <Card
-          className={
-            focusedThreadId === thread.id
-              ? `${thread.status === 'resolved' ? `${styles.thread} ${styles.resolved} ${styles.threadFocusedResolved}` : `${styles.thread} ${styles.threadFocusedPending}`} ${styles.threadFocused}`
-              : thread.status === 'resolved'
-                ? `${styles.thread} ${styles.resolved}`
-                : styles.thread
-          }
-          key={thread.id}
-          bordered={false}
-          ref={(node) => {
-            threadRefs.current[thread.id] = node;
-          }}
-        >
-          <Space className={styles.threadTop} align="start" size={8}>
-            <Typography.Text className={styles.threadAnchor} strong>
-              {formatAnchor(thread)}
-            </Typography.Text>
-            {
-              thread.status === 'resolved' ? (
-                <Tag className={`${styles.threadTag} ${styles.threadTagResolved}`}>resolved</Tag>
-              ) : null
-            }
-            {/* <Tag className={thread.status === 'resolved' ? `${styles.threadTag} ${styles.threadTagResolved}` : `${styles.threadTag} ${styles.threadTagPending}`}>
-              {thread.status === 'resolved' ? 'resolved' : ''}
-            </Tag> */}
-          </Space>
-          {thread.comments.map((comment, index) => (
-            <div className={index === 0 ? styles.threadComment : styles.threadReply} key={comment.id}>
-              {index > 0 ? <Typography.Text className={styles.threadReplyLabel}>Reply {index} ({comment.author === 'agent' ? 'Agent' : 'User'})</Typography.Text> : null}
-              <div className={styles.commentRow}>
-                <div className={styles.commentContent}>
-                  {editingCommentId === comment.id ? (
-                    <div className={styles.inlineThreadEdit}>
-                      <Input.TextArea value={editingBody} autoSize={{ minRows: 3, maxRows: 8 }} onChange={(event) => setEditingBody(event.target.value)} />
-                      <div className={styles.inlineThreadEditActions}>
-                        <Button
-                          size="small"
-                          onClick={() => {
-                            setEditingCommentId(null);
-                            setEditingBody('');
-                          }}
-                        >
-                          取消
-                        </Button>
-                        <Button
-                          size="small"
-                          type="primary"
-                          onClick={async () => {
-                            await onPatchComment(thread.id, comment.id, editingBody);
-                            setEditingCommentId(null);
-                            setEditingBody('');
-                          }}
-                        >
-                          保存
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <Typography.Paragraph className={styles.threadBody}>{comment.body}</Typography.Paragraph>
-                  )}
-                </div>
-                {thread.status !== 'resolved' && editingCommentId !== comment.id ? (
-                  <div className={styles.inlineThreadCommentActions}>
-                    <Button
-                      className={styles.threadIconBtn}
-                      type="text"
-                      icon={<EditOutlined />}
-                      onClick={() => {
-                        setEditingCommentId(comment.id);
-                        setEditingBody(comment.body);
-                      }}
-                    />
-                    {index > 0 ? (
-                      <Popconfirm
-                        title="删除这条评论？"
-                        okText="删除"
-                        cancelText="取消"
-                        onConfirm={async () => {
-                          await onDeleteComment(thread.id, comment.id);
-                        }}
-                      >
-                        <Button className={styles.threadIconBtn} type="text" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ))}
-          {expandedComposer[thread.id] ? (
-            <div className={styles.threadReplyComposer}>
-              <CommentComposer
-                placeholder="继续评论..."
-                submitLabel="回复"
-                onCancel={() => setExpandedComposer((prev) => ({ ...prev, [thread.id]: false }))}
-                onSubmit={async (body) => {
-                  await onReply(thread.id, body);
-                  setExpandedComposer((prev) => ({ ...prev, [thread.id]: false }));
-                }}
+      {groups.map((group) => {
+        const representative = group.threads[0];
+        const groupStatus = getGroupStatus(group.threads);
+        const isFocused = focusedThreadId ? group.threads.some((thread) => thread.id === focusedThreadId) : false;
+
+        return (
+          <Card
+            className={[
+              styles.thread,
+              groupStatus === 'resolved' ? styles.resolved : '',
+              isFocused ? (groupStatus === 'resolved' ? `${styles.threadFocused} ${styles.threadFocusedResolved}` : `${styles.threadFocused} ${styles.threadFocusedPending}`) : ''
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            key={group.key}
+            ref={(node) => {
+              groupRefs.current[group.key] = node;
+            }}
+          >
+            <Space className={styles.threadTop} align="start" size={8}>
+              <Typography.Text className={styles.threadAnchor} strong>
+                {representative ? formatAnchor(representative) : ''}
+              </Typography.Text>
+              <Tag className={`${styles.threadTag} ${statusTagClass(groupStatus)}`}>{groupStatus}</Tag>
+            </Space>
+            <div className={styles.threadListInlineBorderless}>
+              <InlineThreadGroup
+                threads={group.threads}
+                showStatusTag={false}
+                onFocus={() => undefined}
+                onPatch={onPatch}
+                onDeleteThread={onDeleteThread}
+                onReply={onReply}
+                onPatchComment={onPatchComment}
+                onDeleteComment={onDeleteComment}
+                onCopy={onCopy}
               />
             </div>
-          ) : null}
-          <div className={styles.threadActions}>
-            {
-              thread.status === 'resolved' ? null : (
-                <>
-                  <Tooltip title="要求再改">
-                    <Button className={styles.threadActionBtn} icon={<RedoOutlined />} onClick={() => setExpandedComposer((prev) => ({ ...prev, [thread.id]: true }))}>
-                    </Button>
-                  </Tooltip>
-                  <Button type="primary" className={styles.threadActionBtn} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'thread', threadId: thread.id })}>
-                  </Button>
-                </>
-              )
-            }
-            <Popconfirm title="删除整个评论线程？" okText="删除" cancelText="取消" onConfirm={() => onDeleteThread(thread.id)}>
-              <Button className={styles.threadActionBtn} icon={<DeleteOutlined />} danger>
-              </Button>
-            </Popconfirm>
-            <Tooltip title={thread.status === 'resolved' ? '重新打开' : '确认完成'}>
-              <Button
-                className={styles.threadActionBtn}
-                icon={thread.status === 'resolved' ? <ReloadOutlined /> : <CheckOutlined />}
-                onClick={() => void onPatch(thread.id, thread.status === 'resolved' ? 'unresolved' : 'resolved')}
-              >
-              </Button>
-            </Tooltip>
-          </div>
-        </Card>
-      ))}
+          </Card>
+        );
+      })}
     </div>
   );
+}
+
+function groupThreadsByAnchor(threads: ReviewThread[]): ThreadGroup[] {
+  const groups = new Map<string, ReviewThread[]>();
+  for (const thread of threads) {
+    const key = anchorKey(thread.anchor);
+    groups.set(key, [...(groups.get(key) ?? []), thread]);
+  }
+  return Array.from(groups.entries()).map(([key, groupThreads]) => ({ key, threads: groupThreads }));
+}
+
+function anchorKey(anchor: CommentAnchor): string {
+  if (anchor.type === 'file') return `file:${anchor.filePath}`;
+  if (anchor.type === 'diff-line') return `diff:${anchor.filePath}:${anchor.side}:${anchor.lineNumber}`;
+  return `markdown:${anchor.filePath}:${anchor.lineNumber}`;
+}
+
+function getGroupStatus(threads: ReviewThread[]): ReviewThread['status'] {
+  if (threads.every((thread) => getThreadStatus(thread) === 'resolved')) return 'resolved';
+  if (threads.some((thread) => getThreadStatus(thread) === 'replied')) return 'replied';
+  return 'submit';
+}
+
+function statusTagClass(status: ReviewThread['status']): string {
+  if (status === 'submit') return styles.threadTagSubmit;
+  if (status === 'replied') return styles.threadTagReplied;
+  return styles.threadTagResolved;
+}
+
+function getThreadStatus(thread: ReviewThread): ReviewThread['status'] {
+  if (thread.status === 'resolved') return 'resolved';
+  return thread.comments.some((comment) => comment.author === 'agent') ? 'replied' : 'submit';
 }
