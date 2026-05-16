@@ -2,14 +2,20 @@
  * 代码 Diff 视图：渲染 hunk/行信息，并支持行级评论的定位与提交。
  */
 import React from 'react';
+import { MessageOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import { CommentPopover } from './CommentPopover';
+import { InlineThreadCard } from './InlineThreadCard';
 import styles from '../styles.module.less';
 
 type Props = {
   file: DiffFile;
   threads: ReviewThread[];
   onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
+  onLocateThread: (threadId: string) => void;
+  onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
+  onReplyThread: (id: string, body: string) => Promise<void>;
+  onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
   viewMode: 'inline' | 'split';
 };
 
@@ -32,8 +38,27 @@ type SplitRow = {
   newCell: SplitCell;
 };
 
-export function CodeDiffViewer({ file, threads, onCreate, viewMode }: Props) {
+export function CodeDiffViewer({ file, threads, onCreate, onLocateThread, onPatchThread, onReplyThread, onCopyThread, viewMode }: Props) {
   const [activeLine, setActiveLine] = React.useState<string | null>(null);
+
+  function renderInlineThreads(lineThreads: ReviewThread[]) {
+    if (lineThreads.length === 0) return null;
+
+    return (
+      <div className={styles.inlineThreadStack}>
+        {lineThreads.map((thread) => (
+          <InlineThreadCard
+            key={thread.id}
+            thread={thread}
+            onFocus={onLocateThread}
+            onPatch={onPatchThread}
+            onReply={onReplyThread}
+            onCopy={onCopyThread}
+          />
+        ))}
+      </div>
+    );
+  }
 
   function renderInlineLine(
     line: DiffFile['hunks'][number]['lines'][number],
@@ -65,6 +90,11 @@ export function CodeDiffViewer({ file, threads, onCreate, viewMode }: Props) {
           {getLineSign(line.type)}
         </span>
         <pre className={styles.codeLine}>{line.content || ' '}</pre>
+        {lineNumber && lineThreads.length === 0 ? (
+          <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setActiveLine(anchorKey)}>
+            <MessageOutlined />
+          </button>
+        ) : null}
         {activeLine === anchorKey && lineNumber ? (
           <CommentPopover
             onCancel={() => setActiveLine(null)}
@@ -74,7 +104,7 @@ export function CodeDiffViewer({ file, threads, onCreate, viewMode }: Props) {
             }}
           />
         ) : null}
-        {lineThreads.length > 0 ? <span className={styles.lineBadge}>{lineThreads.length}</span> : null}
+        {renderInlineThreads(lineThreads)}
       </div>
     );
   }
@@ -162,6 +192,11 @@ export function CodeDiffViewer({ file, threads, onCreate, viewMode }: Props) {
           {getLineSign(cell.type)}
         </span>
         <pre className={styles.codeLine}>{cell.content || ' '}</pre>
+        {cell.lineNumber && cellThreads.length === 0 ? (
+          <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setActiveLine(cellKey)}>
+            <MessageOutlined />
+          </button>
+        ) : null}
         {activeLine === cellKey && cell.lineNumber ? (
           <CommentPopover
             onCancel={() => setActiveLine(null)}
@@ -171,7 +206,7 @@ export function CodeDiffViewer({ file, threads, onCreate, viewMode }: Props) {
             }}
           />
         ) : null}
-        {cellThreads.length > 0 ? <span className={styles.lineBadge}>{cellThreads.length}</span> : null}
+        {renderInlineThreads(cellThreads)}
       </div>
     );
   }

@@ -240,7 +240,7 @@
   margin-bottom: 10px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   background: var(--panel);
 }
 
@@ -251,6 +251,7 @@
   color: #2456a8;
   background: linear-gradient(90deg, #edf5ff, #f7fbff);
   border-bottom: 1px solid var(--line);
+  border-radius: 12px 12px 0 0;
 }
 
 .diffRow {
@@ -258,6 +259,7 @@
   display: grid;
   grid-template-columns: 46px 46px 16px minmax(0, 1fr);
   border-top: 1px solid #edf1f6;
+  min-height: 26px;
 }
 
 .splitTable {
@@ -291,6 +293,7 @@
   display: grid;
   grid-template-columns: 46px 16px minmax(0, 1fr);
   border-top: 1px solid #edf1f6;
+  min-height: 26px;
 }
 
 .splitCell:first-child {
@@ -341,12 +344,43 @@
 
 .codeLine {
   margin: 0;
-  padding: 3px 8px 3px 2px;
+  padding: 3px 44px 3px 2px;
   white-space: pre-wrap;
   word-break: break-word;
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 11.5px;
   line-height: 1.35;
+}
+
+.commentTrigger {
+  position: absolute;
+  z-index: 4;
+  right: 10px;
+  top: 2px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  display: inline-grid;
+  place-items: center;
+  background: #fff;
+  color: #1f2937;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.commentTrigger:hover {
+  border-color: #2f6fed;
+  color: #2f6fed;
+  box-shadow: 0 4px 12px rgba(47, 111, 237, 0.14);
+}
+
+.diffRow:hover .commentTrigger,
+.splitCell:hover .commentTrigger,
+.markdownCommentBlock:hover .commentTrigger {
+  opacity: 1;
 }
 
 .composer {
@@ -357,35 +391,18 @@
 .popover {
   position: absolute;
   z-index: 5;
-  right: 12px;
-  top: calc(100% - 2px);
-  width: min(360px, 90vw);
+  right: 8px;
+  top: 0;
+  width: min(300px, 86vw);
   padding: 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 14px;
+  border-radius: 4px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.15);
 }
 
 .ghost {
   margin-top: 8px;
-}
-
-.lineBadge {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #2f6fed;
-  color: #fff;
-  font-size: 11px;
-  line-height: 1;
 }
 
 .markdownLoading {
@@ -408,6 +425,18 @@
 .markdownBody {
   min-width: 0;
   line-height: 1.72;
+}
+
+.markdownCommentBlock {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 32px;
+}
+
+.markdownCommentContent {
+  min-width: 0;
+  padding-right: 52px;
 }
 
 .markdownBody :global(h1),
@@ -608,6 +637,27 @@
   box-shadow: none;
 }
 
+.threadFocused {
+  transform: translateY(-1px);
+  position: relative;
+}
+
+.threadFocusedPending {
+  border-color: #e5c774 !important;
+  background: linear-gradient(0deg, rgba(255, 246, 221, 0.82), rgba(255, 246, 221, 0.82));
+  box-shadow:
+    0 0 0 3px rgba(229, 199, 116, 0.68),
+    0 12px 28px rgba(229, 199, 116, 0.36);
+}
+
+.threadFocusedResolved {
+  border-color: #8fd2a6 !important;
+  background: linear-gradient(0deg, rgba(236, 250, 241, 0.9), rgba(236, 250, 241, 0.9));
+  box-shadow:
+    0 0 0 3px rgba(143, 210, 166, 0.7),
+    0 12px 28px rgba(143, 210, 166, 0.34);
+}
+
 .thread :global(.ant-card-body) {
   padding: 8px 10px !important;
 }
@@ -639,11 +689,11 @@
   border-width: 1px;
 }
 
-.threadTagPending {
-  color: #8a5a00;
-  background: #fff7e0;
-  border-color: #f0d389;
-}
+// .threadTagPending {
+//   color: #8a5a00;
+//   background: #fff7e0;
+//   border-color: #f0d389;
+// }
 
 .threadTagResolved {
   color: #1e7f42;
@@ -659,9 +709,114 @@
   white-space: pre-wrap;
 }
 
+.threadComment {
+  margin-bottom: 6px;
+}
+
+.threadReply {
+  margin: 8px 0 8px 12px;
+  padding-left: 10px;
+  border-left: 2px solid #e2e8f0;
+}
+
+.threadReplyLabel {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.threadReplyComposer {
+  margin: 8px 0 10px;
+}
+
 .resolved {
   border-color: #c9e7d3;
   background-color: #fff;
+}
+
+.inlineThreadStack {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px 8px 58px;
+  background: rgba(255, 255, 255, 0.72);
+  border-top: 1px solid rgba(217, 225, 236, 0.78);
+}
+
+.splitCell .inlineThreadStack {
+  padding-left: 30px;
+}
+
+.markdownCommentBlock .inlineThreadStack {
+  padding: 0 0 16px;
+  background: transparent;
+  border-top: 0;
+}
+
+.inlineThread {
+  border: 1px solid #f2dda5;
+  border-left: 4px solid #f0b429;
+  border-radius: 4px;
+  padding: 10px 12px;
+  background: #fffdf3;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+.inlineThreadResolved {
+  border-color: #bee6cb;
+  border-left-color: #2f9e52;
+  background: #f5fff8;
+}
+
+.inlineThreadHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.inlineThreadAuthor {
+  color: #8a5a00;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.inlineThreadResolved .inlineThreadAuthor {
+  color: #1e7f42;
+}
+
+.inlineThreadComment,
+.inlineThreadReply {
+  min-width: 0;
+}
+
+.inlineThreadReply {
+  margin-top: 8px;
+  padding-left: 10px;
+  border-left: 2px solid #e7d8a6;
+}
+
+.inlineThreadBody {
+  margin-bottom: 0 !important;
+  color: #1f2937;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.inlineThreadComposer {
+  margin-top: 10px;
+}
+
+.inlineThreadActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 10px;
 }
 
 .threadActions {

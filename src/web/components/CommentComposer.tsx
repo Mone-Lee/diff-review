@@ -8,9 +8,11 @@ import styles from '../styles.module.less';
 type Props = {
   placeholder: string;
   onSubmit: (body: string) => Promise<void>;
+  submitLabel?: string;
+  onCancel?: () => void;
 };
 
-export function CommentComposer({ placeholder, onSubmit }: Props) {
+export function CommentComposer({ placeholder, onSubmit, submitLabel = '添加评论', onCancel }: Props) {
   const [body, setBody] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -29,8 +31,9 @@ export function CommentComposer({ placeholder, onSubmit }: Props) {
       <Input.TextArea placeholder={placeholder} value={body} onChange={(event) => setBody(event.target.value)} autoSize={{ minRows: 3, maxRows: 8 }} />
       <Space>
         <Button htmlType="submit" loading={submitting} type="primary">
-          添加评论
+          {submitLabel}
         </Button>
+        {onCancel ? <Button onClick={onCancel}>取消</Button> : null}
       </Space>
     </form>
   );

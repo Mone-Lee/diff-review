@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { App as AntApp, Button, Card, Layout, List, Segmented, Space, Tag, Typography } from 'antd';
-import { CopyOutlined, EyeOutlined, PartitionOutlined } from '@ant-design/icons';
+import { CopyOutlined, EyeOutlined, PartitionOutlined, MessageOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewSession, ReviewThread } from '../shared/types';
 import { CodeDiffViewer } from './components/CodeDiffViewer';
 import { FileHeader } from './components/FileHeader';
@@ -31,6 +31,7 @@ export default function App() {
   const [threads, setThreads] = React.useState<ReviewThread[]>([]);
   const [selectedPath, setSelectedPath] = React.useState<string>('');
   const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('split');
+  const [focusedThreadId, setFocusedThreadId] = React.useState<string | null>(null);
   const selectedFile = files.find((file) => file.path === selectedPath) ?? files[0];
 
   const unresolvedThreadsCount = threads.filter((thread) => thread.status !== 'resolved').length;
@@ -55,6 +56,9 @@ export default function App() {
     const res = await fetch('/api/threads');
     const store = (await res.json()) as CommentStore;
     setThreads(store.threads);
+    if (focusedThreadId && !store.threads.some((thread) => thread.id === focusedThreadId)) {
+      setFocusedThreadId(null);
+    }
   }
 
   async function createThread(anchor: CommentAnchor, body: string) {
@@ -75,6 +79,15 @@ export default function App() {
     await refreshThreads();
   }
 
+  async function replyThread(id: string, body: string) {
+    await fetch(`/api/threads/${id}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body, author: 'user' })
+    });
+    await refreshThreads();
+  }
+
   async function copyPrompt(scope: { type: 'thread'; threadId: string } | { type: 'file-unresolved'; filePath: string } | { type: 'all-unresolved' }) {
     const res = await fetch('/api/prompt', {
       method: 'POST',
@@ -85,6 +98,14 @@ export default function App() {
     await navigator.clipboard.writeText(data.prompt);
     void message.success('提示词已复制到剪贴板');
   }
+
+  function locateThread(threadId: string) {
+    setFocusedThreadId(threadId);
+  }
+
+  React.useEffect(() => {
+    setFocusedThreadId(null);
+  }, [selectedPath]);
 
   return (
     <Layout className={styles.shell}>
@@ -112,6 +133,7 @@ export default function App() {
           dataSource={files}
           renderItem={(file) => {
             const isActive = file.path === selectedFile?.path;
+             const fileThreads = threads.filter((thread) => thread.filePath === file.path);
             return (
               <List.Item className={isActive ? `${styles.fileItem} ${styles.fileItemActive}` : styles.fileItem} onClick={() => setSelectedPath(file.path)}>
                 <div className={styles.fileMeta}>
@@ -125,6 +147,13 @@ export default function App() {
                 <Typography.Text className={styles.fileStats} type="secondary">
                   <span className={styles.fileStatAdd}>+{file.additions}</span> / <span className={styles.fileStatDelete}>-{file.deletions}</span>
                 </Typography.Text>
+                {
+                  fileThreads.length > 0 ? (
+                    <Tag className={styles.fileThreadCount} icon={<MessageOutlined />}>
+                      {fileThreads.length}
+                    </Tag>
+                  ) : null
+                }
               </List.Item>
             );
           }}
@@ -151,9 +180,26 @@ export default function App() {
             <div className={styles.reviewSurface}>
               <FileHeader file={selectedFile} threads={threads} onCreate={createThread} onCopy={copyPrompt} />
               {selectedFile.isMarkdown ? (
-                <MarkdownPreviewPanel file={selectedFile} threads={threads} onCreate={createThread} />
+                <MarkdownPreviewPanel
+                  file={selectedFile}
+                  threads={threads}
+                  onCreate={createThread}
+                  onLocateThread={locateThread}
+                  onPatchThread={patchThread}
+                  onReplyThread={replyThread}
+                  onCopyThread={copyPrompt}
+                />
               ) : (
-                <CodeDiffViewer file={selectedFile} threads={threads} onCreate={createThread} viewMode={diffViewMode} />
+                 <CodeDiffViewer
+                  file={selectedFile}
+                  threads={threads}
+                  onCreate={createThread}
+                  onLocateThread={locateThread}
+                  onPatchThread={patchThread}
+                  onReplyThread={replyThread}
+                  onCopyThread={copyPrompt}
+                  viewMode={diffViewMode}
+                />
               )}
             </div>
           </>
@@ -172,7 +218,7 @@ export default function App() {
           </Button>
         </div>
         <div className={styles.threadRailBody}>
-          <ThreadList threads={threads} onPatch={patchThread} onCopy={copyPrompt} />
+          <ThreadList threads={threads} focusedThreadId={focusedThreadId} onPatch={patchThread} onReply={replyThread} onCopy={copyPrompt} />
         </div>
       </aside>
     </Layout>
