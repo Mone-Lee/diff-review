@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
 import { startServer } from '../server';
@@ -8,7 +9,7 @@ import type { ReviewSession } from '../shared/types';
 
 async function main() {
   // CLI 参数只负责确定审查模式，真正的数据都来自当前仓库状态。
-  const { dev, reviewArgs } = parseCliOptions(process.argv.slice(2));
+  const { dev, reviewArgs, comments } = parseCliOptions(process.argv.slice(2));
   const mode = parseReviewMode(reviewArgs);
   const repoRoot = await getRepoRoot(process.cwd());
   const diff = await getDiff(mode, repoRoot);
@@ -21,6 +22,7 @@ async function main() {
     createdAt: new Date().toISOString()
   };
 
+  const importResult = await importAgentComments(repoRoot, diffFiles, comments);
   const apiUrl = await startServer({ session, diffFiles });
   // 非 --dev 模式下优先复用已构建的静态页面，避免每次都起 Vite。
   const hasBuiltWeb = existsSync(join(process.cwd(), 'dist', 'web', 'index.html'));
@@ -35,13 +37,43 @@ async function main() {
   console.log(`Diff Review is running: ${uiUrl}`);
   console.log(`Mode: ${modeLabel(mode)}`);
   console.log(`Files: ${diffFiles.length}`);
+  if (comments.length > 0) {
+    console.log(`Agent comments imported: ${importResult.imported}`);
+    for (const skipped of importResult.skipped) {
+      console.warn(`Skipped ${skipped}`);
+    }
+  }
 }
 
-function parseCliOptions(args: string[]): { dev: boolean; reviewArgs: string[] } {
-  return {
-    dev: args.includes('--dev'),
-    reviewArgs: args.filter((arg) => arg !== '--dev')
-  };
+function parseCliOptions(args: string[]): { dev: boolean; reviewArgs: string[]; comments: string[] } {
+  const reviewArgs: string[] = [];
+  const comments: string[] = [];
+  let dev = false;
+
+  // CLI 自身消费 --dev/--comment，其余参数才交给 parseReviewMode 判断审查范围。
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--dev') {
+      dev = true;
+      continue;
+    }
+    if (arg === '--comment') {
+      const comment = args[index + 1];
+      if (!comment) throw new Error('--comment requires a JSON value');
+      comments.push(comment);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--comment=')) {
+      const comment = arg.slice('--comment='.length);
+      if (!comment) throw new Error('--comment requires a JSON value');
+      comments.push(comment);
+      continue;
+    }
+    reviewArgs.push(arg);
+  }
+
+  return { dev, reviewArgs, comments };
 }
 
 function modeLabel(mode: ReviewSession['mode']): string {

@@ -8,7 +8,8 @@ AI chat 里的本地代码审查工具。产品入口是 skill slash command：`
 - 代码文件使用 GitHub 风格 unified diff。
 - Markdown 文件只展示 Preview，不提供 Diff / Preview 切换。
 - 支持文件级评论、代码行级评论、Markdown source line 评论。
-- 支持 unresolved / resolved 评论状态。
+- 支持 submit / replied / resolved 评论状态。
+- 支持通过内部 `--comment` 参数预置 agent findings / replies。
 - 支持复制极简 AI prompt。
 
 ## 评论定位原理（新手友好版）
@@ -42,9 +43,10 @@ AI chat 里的本地代码审查工具。产品入口是 skill slash command：`
 
 这样做的好处是：避免评论“串行”到语义完全不同的内容上，减少误导。
 
-复制出的 prompt 只包含：
+复制出的 prompt 包含 thread id、定位信息和评论内容。thread id 用于让 agent 后续通过 `--comment '{"type":"reply",...}'` 精确回复原评论：
 
 ```text
+[thread:<thread-id>]
 文件路径:行号
 评论内容
 ```
@@ -52,6 +54,7 @@ AI chat 里的本地代码审查工具。产品入口是 skill slash command：`
 文件级评论不包含行号：
 
 ```text
+[thread:<thread-id>]
 文件路径
 评论内容
 ```
@@ -79,6 +82,46 @@ node skill/diff-review/scripts/start-review.mjs [args...]
 ```
 
 这个脚本是 skill 实现细节，不作为用户侧产品入口。
+
+### 预置 agent 评论
+
+内部脚本支持重复传入 `--comment <json>`，用于在打开 UI 前把 agent 审查结果写入评论存储。
+
+代码 diff 行评论：
+
+```bash
+node skill/diff-review/scripts/start-review.mjs \
+  --comment '{"type":"thread","filePath":"src/foo.ts","position":{"side":"new","line":36},"body":"这里没有处理空数组，可能导致运行时报错。"}'
+```
+
+Markdown source line 评论：
+
+```bash
+node skill/diff-review/scripts/start-review.mjs \
+  --comment '{"type":"thread","filePath":"README.md","position":{"type":"markdown","line":22},"body":"这里可以补充 old/new side 的例子。"}'
+```
+
+文件级评论：
+
+```bash
+node skill/diff-review/scripts/start-review.mjs \
+  --comment '{"type":"thread","filePath":"src/foo.ts","body":"这个文件的错误处理策略需要统一。"}'
+```
+
+回复已有 thread：
+
+```bash
+node skill/diff-review/scripts/start-review.mjs \
+  --comment '{"type":"reply","threadId":"<thread-id>","body":"同意，这里应该按 repoRoot 隔离评论存储。"}'
+```
+
+`thread` 评论会以 `author: "agent"` 创建 replied thread；`reply` 会向目标 thread 追加一条 agent 回复并把状态切到 replied。若路径不在当前 diff 中、行号无法定位或内容重复，脚本会跳过并在终端打印 warning。
+
+评论状态含义：
+
+- `submit`：只有用户提交的评论，还没有 agent finding / reply。
+- `replied`：已有 agent 内容，或从 resolved 重新打开。
+- `resolved`：用户确认完成后的状态。
 
 ## 本地开发
 

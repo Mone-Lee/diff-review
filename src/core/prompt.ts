@@ -14,7 +14,7 @@ export function formatPrompt(threads: ReviewThread[]): string {
         })
         .join('\n');
 
-      return [location, firstComment?.body.trim(), replyText].filter(Boolean).join('\n');
+      return [`[thread:${thread.id}]`, location, firstComment?.body.trim(), replyText].filter(Boolean).join('\n');
     })
     .join('\n\n');
 }

@@ -22,6 +22,14 @@ Do not ask the user to run a shell CLI manually. Run the bundled internal script
 node skill/diff-review/scripts/start-review.mjs [args...]
 ```
 
+When you have concrete review findings or answers to existing review comments, preload them with one `--comment` JSON argument per comment before launching the viewer:
+
+```bash
+node skill/diff-review/scripts/start-review.mjs [args...] \
+  --comment '{"type":"thread","filePath":"src/foo.ts","position":{"side":"new","line":36},"body":"Explain the finding in the user language."}' \
+  --comment '{"type":"reply","threadId":"existing-thread-id","body":"Answer the existing thread as the agent."}'
+```
+
 After the script prints a local URL, open it in the Codex browser when available. If browser automation is not available, report the URL.
 
 ## Review Scope
@@ -29,9 +37,22 @@ After the script prints a local URL, open it in the Codex browser when available
 - Code files render as GitHub-style unified diffs.
 - Markdown files (`.md`, `.mdx`) render only as preview, not as a Diff / Preview toggle.
 - Markdown line comments anchor to source Markdown line numbers.
-- Comments support unresolved/resolved state.
-- AI prompt copy output must contain only file path, line number or Markdown source line, and comment body.
+- Comments support submit/replied/resolved state.
+- AI prompt copy output includes `[thread:<id>]`, file path, line number or Markdown source line, and comment body.
+- Agent findings can be preloaded as comments with `--comment`.
+
+## Comment Arguments
+
+- Use `type: "thread"` for each new finding.
+- Use `type: "reply"` only when replying to an existing `threadId`.
+- Write comment bodies in the language the user is using.
+- Use `position.side: "new"` for lines that exist on the target side of the diff.
+- Use `position.side: "old"` for lines that exist only on the deleted side.
+- Omit `position` for file-level comments.
+- Use `position: {"type":"markdown","line":N}` for Markdown source line comments.
+- Use range comments only by passing `line: {"start":N,"end":M}`; the viewer anchors to the start line.
+- Never copy secrets, tokens, passwords, API keys, private keys, or other credential-like material from the diff into `--comment` bodies or any command-line argument.
 
 ## Exclusions
 
-Do not implement or offer unresolved review thread import, GitHub PR integration, TUI, cloud sync, automatic AI calls, or a user-facing CLI.
+Do not implement or offer GitHub PR integration, TUI, cloud sync, automatic AI calls, or a user-facing CLI.
