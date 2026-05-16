@@ -46,6 +46,7 @@ export type CommentAnchor =
 export type ReviewComment = {
   id: string;
   body: string;
+  author?: 'user' | 'agent';
   createdAt: string;
   updatedAt: string;
 };

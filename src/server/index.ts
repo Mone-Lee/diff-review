@@ -1,7 +1,7 @@
 import express from 'express';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { DiffFile, MarkdownPreview, PromptScope, ReviewSession, ReviewThread } from '../shared/types';
+import type { DiffFile, MarkdownPreview, PromptScope, ReviewComment, ReviewSession, ReviewThread } from '../shared/types';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
 import { readFileForPreview } from '../core/git';
@@ -69,6 +69,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
           {
             id: crypto.randomUUID(),
             body: body.body,
+            author: 'user',
             createdAt: now,
             updatedAt: now
           }
@@ -79,6 +80,39 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       store.threads.push(thread);
       await writeComments(state.session.repoRoot, store);
       res.status(201).json(thread);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/threads/:id/comments', async (req, res, next) => {
+    try {
+      const now = new Date().toISOString();
+      const store = await readComments(state.session.repoRoot);
+      const thread = store.threads.find((item) => item.id === req.params.id);
+      if (!thread) {
+        res.status(404).json({ error: 'Thread not found' });
+        return;
+      }
+
+      const body = req.body as { body?: string; author?: 'user' | 'agent' };
+      const commentBody = body.body?.trim();
+      if (!commentBody) {
+        res.status(400).json({ error: 'Comment body is required' });
+        return;
+      }
+
+      const comment: ReviewComment = {
+        id: crypto.randomUUID(),
+        body: commentBody,
+        author: body.author === 'agent' ? 'agent' : 'user',
+        createdAt: now,
+        updatedAt: now
+      };
+      thread.comments.push(comment);
+      thread.updatedAt = now;
+      await writeComments(state.session.repoRoot, store);
+      res.status(201).json(comment);
     } catch (error) {
       next(error);
     }
