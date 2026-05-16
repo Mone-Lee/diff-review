@@ -51,11 +51,13 @@ export type ReviewComment = {
   updatedAt: string;
 };
 
+export type ReviewThreadStatus = 'submit' | 'replied' | 'resolved';
+
 export type ReviewThread = {
   id: string;
   filePath: string;
   anchor: CommentAnchor;
-  status: 'unresolved' | 'resolved';
+  status: ReviewThreadStatus;
   comments: ReviewComment[];
   createdAt: string;
   updatedAt: string;

@@ -71,11 +71,15 @@ export default function App() {
   }
 
   async function patchThread(id: string, status: ReviewThread['status']) {
-    await fetch(`/api/threads/${id}`, {
+    const res = await fetch(`/api/threads/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
     });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({ error: '更新评论状态失败' }))) as { error?: string };
+      throw new Error(data.error ?? '更新评论状态失败');
+    }
     await refreshThreads();
   }
 

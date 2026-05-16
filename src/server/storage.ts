@@ -11,7 +11,7 @@ export type CommentStore = {
 export async function readComments(repoRoot: string): Promise<CommentStore> {
   const path = commentsPath(repoRoot);
   try {
-    return JSON.parse(await readFile(path, 'utf8')) as CommentStore;
+    return normalizeStore(JSON.parse(await readFile(path, 'utf8')) as CommentStore);
   } catch {
     return readLegacyComments(repoRoot);
   }
@@ -38,8 +38,24 @@ function commentLogsDir(): string {
 
 async function readLegacyComments(repoRoot: string): Promise<CommentStore> {
   try {
-    return JSON.parse(await readFile(join(repoRoot, '.diff-review', 'comments.json'), 'utf8')) as CommentStore;
+    return normalizeStore(JSON.parse(await readFile(join(repoRoot, '.diff-review', 'comments.json'), 'utf8')) as CommentStore);
   } catch {
     return { threads: [] };
   }
+}
+
+function normalizeStore(store: CommentStore): CommentStore {
+  return {
+    threads: store.threads.map((thread) => {
+      const status = (thread as { status?: string }).status;
+      return {
+        ...thread,
+        status: status === 'resolved' ? 'resolved' : getOpenThreadStatus(thread)
+      };
+    })
+  };
+}
+
+function getOpenThreadStatus(thread: ReviewThread): ReviewThread['status'] {
+  return thread.comments.some((comment) => comment.author === 'agent') ? 'replied' : 'submit';
 }

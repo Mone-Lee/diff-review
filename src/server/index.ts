@@ -64,7 +64,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         id: crypto.randomUUID(),
         filePath: body.filePath,
         anchor: body.anchor,
-        status: 'unresolved',
+        status: 'submit',
         comments: [
           {
             id: crypto.randomUUID(),
@@ -110,6 +110,9 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         updatedAt: now
       };
       thread.comments.push(comment);
+      if (thread.status !== 'resolved') {
+        thread.status = getOpenThreadStatus(thread);
+      }
       thread.updatedAt = now;
       await writeComments(state.session.repoRoot, store);
       res.status(201).json(comment);
@@ -126,8 +129,8 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         res.status(404).json({ error: 'Thread not found' });
         return;
       }
-      if (req.body.status === 'resolved' || req.body.status === 'unresolved') {
-        thread.status = req.body.status;
+      if (req.body.status === 'resolved' || req.body.status === 'replied' || req.body.status === 'submit') {
+        thread.status = req.body.status === 'resolved' ? 'resolved' : getOpenThreadStatus(thread);
         thread.updatedAt = new Date().toISOString();
       }
       await writeComments(state.session.repoRoot, store);
@@ -157,13 +160,17 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         res.status(404).json({ error: 'Thread not found' });
         return;
       }
-      if (thread.status === 'resolved') {
-        res.status(400).json({ error: 'Resolved thread comments cannot be edited' });
+      if (getThreadStatus(thread) !== 'submit') {
+        res.status(400).json({ error: 'Only submitted comments can be edited' });
         return;
       }
       const comment = thread.comments.find((item) => item.id === req.params.commentId);
       if (!comment) {
         res.status(404).json({ error: 'Comment not found' });
+        return;
+      }
+      if (comment.author === 'agent') {
+        res.status(400).json({ error: 'Agent comments are read-only' });
         return;
       }
       const nextBody = String(req.body?.body ?? '').trim();
@@ -190,16 +197,20 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         res.status(404).json({ error: 'Thread not found' });
         return;
       }
-      if (thread.status === 'resolved') {
-        res.status(400).json({ error: 'Resolved thread comments cannot be deleted' });
+      if (getThreadStatus(thread) !== 'submit') {
+        res.status(400).json({ error: 'Only submitted comments can be deleted' });
         return;
       }
-      const previousLength = thread.comments.length;
-      thread.comments = thread.comments.filter((item) => item.id !== req.params.commentId);
-      if (thread.comments.length === previousLength) {
+      const comment = thread.comments.find((item) => item.id === req.params.commentId);
+      if (!comment) {
         res.status(404).json({ error: 'Comment not found' });
         return;
       }
+      if (comment.author === 'agent') {
+        res.status(400).json({ error: 'Agent comments are read-only' });
+        return;
+      }
+      thread.comments = thread.comments.filter((item) => item.id !== req.params.commentId);
       thread.updatedAt = now;
       store.threads = store.threads.filter((item) => item.id !== thread.id || thread.comments.length > 0);
       await writeComments(state.session.repoRoot, store);
@@ -244,7 +255,16 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
 function selectPromptThreads(threads: ReviewThread[], scope: PromptScope): ReviewThread[] {
   if (scope.type === 'thread') return threads.filter((thread) => thread.id === scope.threadId);
   if (scope.type === 'file-unresolved') {
-    return threads.filter((thread) => thread.filePath === scope.filePath && thread.status === 'unresolved');
+    return threads.filter((thread) => thread.filePath === scope.filePath && thread.status !== 'resolved');
   }
-  return threads.filter((thread) => thread.status === 'unresolved');
+  return threads.filter((thread) => thread.status !== 'resolved');
+}
+
+function getThreadStatus(thread: ReviewThread): ReviewThread['status'] {
+  if (thread.status === 'resolved') return 'resolved';
+  return getOpenThreadStatus(thread);
+}
+
+function getOpenThreadStatus(thread: ReviewThread): ReviewThread['status'] {
+  return thread.comments.some((comment) => comment.author === 'agent') ? 'replied' : 'submit';
 }
