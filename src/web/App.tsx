@@ -79,12 +79,45 @@ export default function App() {
     await refreshThreads();
   }
 
+  async function deleteThread(id: string) {
+    await fetch(`/api/threads/${id}`, { method: 'DELETE' });
+    await refreshThreads();
+  }
+
   async function replyThread(id: string, body: string) {
     await fetch(`/api/threads/${id}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ body, author: 'user' })
     });
+    await refreshThreads();
+  }
+
+  async function patchComment(threadId: string, commentId: string, body: string) {
+    if (!commentId) {
+      throw new Error('Comment id is required');
+    }
+    const res = await fetch(`/api/threads/${threadId}/comments/${commentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body })
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({ error: '编辑评论失败' }))) as { error?: string };
+      throw new Error(data.error ?? '编辑评论失败');
+    }
+    await refreshThreads();
+  }
+
+  async function deleteComment(threadId: string, commentId: string) {
+    if (!commentId) {
+      throw new Error('Comment id is required');
+    }
+    const res = await fetch(`/api/threads/${threadId}/comments/${commentId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({ error: '删除评论失败' }))) as { error?: string };
+      throw new Error(data.error ?? '删除评论失败');
+    }
     await refreshThreads();
   }
 
@@ -133,7 +166,8 @@ export default function App() {
           dataSource={files}
           renderItem={(file) => {
             const isActive = file.path === selectedFile?.path;
-             const fileThreads = threads.filter((thread) => thread.filePath === file.path);
+            const fileThreads = threads.filter((thread) => thread.filePath === file.path && thread.status !== 'resolved');
+
             return (
               <List.Item className={isActive ? `${styles.fileItem} ${styles.fileItemActive}` : styles.fileItem} onClick={() => setSelectedPath(file.path)}>
                 <div className={styles.fileMeta}>
@@ -178,7 +212,19 @@ export default function App() {
             ) : null}
 
             <div className={styles.reviewSurface}>
-              <FileHeader file={selectedFile} threads={threads} onCreate={createThread} onCopy={copyPrompt} />
+              <FileHeader
+                file={selectedFile}
+                threads={threads}
+                onCreate={createThread}
+                onCopy={copyPrompt}
+                onLocateThread={locateThread}
+                onPatchThread={patchThread}
+                onDeleteThread={deleteThread}
+                onReplyThread={replyThread}
+                onPatchComment={patchComment}
+                onDeleteComment={deleteComment}
+                onCopyThread={copyPrompt}
+              />
               {selectedFile.isMarkdown ? (
                 <MarkdownPreviewPanel
                   file={selectedFile}
@@ -186,7 +232,10 @@ export default function App() {
                   onCreate={createThread}
                   onLocateThread={locateThread}
                   onPatchThread={patchThread}
+                  onDeleteThread={deleteThread}
                   onReplyThread={replyThread}
+                  onPatchComment={patchComment}
+                  onDeleteComment={deleteComment}
                   onCopyThread={copyPrompt}
                 />
               ) : (
@@ -196,7 +245,10 @@ export default function App() {
                   onCreate={createThread}
                   onLocateThread={locateThread}
                   onPatchThread={patchThread}
+                  onDeleteThread={deleteThread}
                   onReplyThread={replyThread}
+                  onPatchComment={patchComment}
+                  onDeleteComment={deleteComment}
                   onCopyThread={copyPrompt}
                   viewMode={diffViewMode}
                 />
@@ -218,7 +270,16 @@ export default function App() {
           </Button>
         </div>
         <div className={styles.threadRailBody}>
-          <ThreadList threads={threads} focusedThreadId={focusedThreadId} onPatch={patchThread} onReply={replyThread} onCopy={copyPrompt} />
+          <ThreadList
+            threads={threads}
+            focusedThreadId={focusedThreadId}
+            onPatch={patchThread}
+            onDeleteThread={deleteThread}
+            onReply={replyThread}
+            onPatchComment={patchComment}
+            onDeleteComment={deleteComment}
+            onCopy={copyPrompt}
+          />
         </div>
       </aside>
     </Layout>

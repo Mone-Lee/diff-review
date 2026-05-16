@@ -228,6 +228,31 @@
   margin-top: 8px;
 }
 
+.fileLevelInlineThreads {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.fileLevelInlineThreads .inlineThread {
+  border-color: rgba(201, 212, 228, 0.72);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: none;
+}
+
+.fileLevelInlineThreads .inlineThreadHeader {
+  margin-bottom: 6px;
+}
+
+.fileLevelInlineThreads .inlineThreadBody {
+  margin-bottom: 8px !important;
+  white-space: pre-wrap;
+}
+
+.fileLevelInlineThreads .inlineThreadActions {
+  padding-top: 6px;
+}
+
 .diffCard,
 .markdownShell {
   flex: 1 1 auto;
@@ -702,7 +727,7 @@
 }
 
 .threadBody {
-  margin-bottom: 6px !important;
+  margin-bottom: 0 !important;
   font-size: 13px;
   line-height: 1.5;
   color: #1f2937;
@@ -793,6 +818,34 @@
   min-width: 0;
 }
 
+.inlineThreadCommentActions {
+  display: inline-flex;
+  align-items: flex-start;
+  // gap: 2px;
+  flex: 0 0 auto;
+  margin-top: -2px;
+}
+
+.threadIconBtn {
+  width: 22px;
+  height: 24px;
+  max-width: 22px;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.commentRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.commentContent {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .inlineThreadReply {
   margin-top: 8px;
   padding-left: 10px;
@@ -809,6 +862,17 @@
 
 .inlineThreadComposer {
   margin-top: 10px;
+}
+
+.inlineThreadEdit {
+  margin-top: 6px;
+}
+
+.inlineThreadEditActions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .inlineThreadActions {

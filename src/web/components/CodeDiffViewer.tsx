@@ -14,7 +14,10 @@ type Props = {
   onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
   onLocateThread: (threadId: string) => void;
   onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
+  onDeleteThread: (id: string) => Promise<void>;
   onReplyThread: (id: string, body: string) => Promise<void>;
+  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
+  onDeleteComment: (threadId: string, commentId: string) => Promise<void>;
   onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
   viewMode: 'inline' | 'split';
 };
@@ -38,7 +41,19 @@ type SplitRow = {
   newCell: SplitCell;
 };
 
-export function CodeDiffViewer({ file, threads, onCreate, onLocateThread, onPatchThread, onReplyThread, onCopyThread, viewMode }: Props) {
+export function CodeDiffViewer({
+  file,
+  threads,
+  onCreate,
+  onLocateThread,
+  onPatchThread,
+  onDeleteThread,
+  onReplyThread,
+  onPatchComment,
+  onDeleteComment,
+  onCopyThread,
+  viewMode
+}: Props) {
   const [activeLine, setActiveLine] = React.useState<string | null>(null);
 
   function renderInlineThreads(lineThreads: ReviewThread[]) {
@@ -52,7 +67,10 @@ export function CodeDiffViewer({ file, threads, onCreate, onLocateThread, onPatc
             thread={thread}
             onFocus={onLocateThread}
             onPatch={onPatchThread}
+            onDeleteThread={onDeleteThread}
             onReply={onReplyThread}
+            onPatchComment={onPatchComment}
+            onDeleteComment={onDeleteComment}
             onCopy={onCopyThread}
           />
         ))}

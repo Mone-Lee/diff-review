@@ -25,7 +25,10 @@ type Props = {
   onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
   onLocateThread: (threadId: string) => void;
   onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
+  onDeleteThread: (id: string) => Promise<void>;
   onReplyThread: (id: string, body: string) => Promise<void>;
+  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
+  onDeleteComment: (threadId: string, commentId: string) => Promise<void>;
   onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
@@ -88,7 +91,18 @@ function getCodeTextFromHast(node: unknown) {
   return extractTextFromHast(codeNode);
 }
 
-export function MarkdownPreviewPanel({ file, threads, onCreate, onLocateThread, onPatchThread, onReplyThread, onCopyThread }: Props) {
+export function MarkdownPreviewPanel({
+  file,
+  threads,
+  onCreate,
+  onLocateThread,
+  onPatchThread,
+  onDeleteThread,
+  onReplyThread,
+  onPatchComment,
+  onDeleteComment,
+  onCopyThread
+}: Props) {
   // preview 为 null 表示加载中或加载失败；当前 UI 统一展示 loading 态。
   const [preview, setPreview] = React.useState<MarkdownPreview | null>(null);
   const [activeLine, setActiveLine] = React.useState<number | null>(null);
@@ -141,7 +155,10 @@ export function MarkdownPreviewPanel({ file, threads, onCreate, onLocateThread, 
                 thread={thread}
                 onFocus={onLocateThread}
                 onPatch={onPatchThread}
+                onDeleteThread={onDeleteThread}
                 onReply={onReplyThread}
+                onPatchComment={onPatchComment}
+                onDeleteComment={onDeleteComment}
                 onCopy={onCopyThread}
               />
             ))}
