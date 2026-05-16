@@ -148,6 +148,67 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     }
   });
 
+  app.patch('/api/threads/:id/comments/:commentId', async (req, res, next) => {
+    try {
+      const now = new Date().toISOString();
+      const store = await readComments(state.session.repoRoot);
+      const thread = store.threads.find((item) => item.id === req.params.id);
+      if (!thread) {
+        res.status(404).json({ error: 'Thread not found' });
+        return;
+      }
+      if (thread.status === 'resolved') {
+        res.status(400).json({ error: 'Resolved thread comments cannot be edited' });
+        return;
+      }
+      const comment = thread.comments.find((item) => item.id === req.params.commentId);
+      if (!comment) {
+        res.status(404).json({ error: 'Comment not found' });
+        return;
+      }
+      const nextBody = String(req.body?.body ?? '').trim();
+      if (!nextBody) {
+        res.status(400).json({ error: 'Comment body is required' });
+        return;
+      }
+      comment.body = nextBody;
+      comment.updatedAt = now;
+      thread.updatedAt = now;
+      await writeComments(state.session.repoRoot, store);
+      res.json(comment);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete('/api/threads/:id/comments/:commentId', async (req, res, next) => {
+    try {
+      const now = new Date().toISOString();
+      const store = await readComments(state.session.repoRoot);
+      const thread = store.threads.find((item) => item.id === req.params.id);
+      if (!thread) {
+        res.status(404).json({ error: 'Thread not found' });
+        return;
+      }
+      if (thread.status === 'resolved') {
+        res.status(400).json({ error: 'Resolved thread comments cannot be deleted' });
+        return;
+      }
+      const previousLength = thread.comments.length;
+      thread.comments = thread.comments.filter((item) => item.id !== req.params.commentId);
+      if (thread.comments.length === previousLength) {
+        res.status(404).json({ error: 'Comment not found' });
+        return;
+      }
+      thread.updatedAt = now;
+      store.threads = store.threads.filter((item) => item.id !== thread.id || thread.comments.length > 0);
+      await writeComments(state.session.repoRoot, store);
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/api/prompt', async (req, res, next) => {
     try {
       const scope = req.body as PromptScope;
