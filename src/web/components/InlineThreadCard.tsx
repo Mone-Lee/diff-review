@@ -128,10 +128,11 @@ export function InlineThreadCard({ thread, onFocus, onPatch, onDeleteThread, onR
       <div className={styles.inlineThreadActions}>
         {!isResolved ? (
           <>
+          <Tooltip title="要求再改">
             <Button className={styles.threadActionBtn} icon={<RedoOutlined />} onClick={() => setIsReplying(true)}>
-              要求再改
             </Button>
-            <Button className={styles.threadActionBtn} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'thread', threadId: thread.id })}>
+          </Tooltip>
+            <Button type='primary' className={styles.threadActionBtn} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'thread', threadId: thread.id })}>
             </Button>
           </>
         ) : null}
@@ -139,13 +140,17 @@ export function InlineThreadCard({ thread, onFocus, onPatch, onDeleteThread, onR
           <Button className={styles.threadActionBtn} icon={<DeleteOutlined />} danger onClick={(event) => event.stopPropagation()}>
           </Button>
         </Popconfirm>
-        <Button
-          className={styles.threadActionBtn}
-          icon={isResolved ? <ReloadOutlined /> : <CheckOutlined />}
-          onClick={() => void onPatch(thread.id, isResolved ? 'unresolved' : 'resolved')}
-        >
-          {isResolved ? '重新打开' : '完成'}
-        </Button>
+        <Tooltip title={isResolved ? '重新打开' : '确认完成'}>
+          <Button
+            className={styles.threadActionBtn}
+            icon={isResolved ? <ReloadOutlined /> : <CheckOutlined />}
+            onClick={(event) => {
+              event.stopPropagation();
+              void onPatch(thread.id, isResolved ? 'unresolved' : 'resolved');
+            }}
+          >
+          </Button>
+        </Tooltip>
       </div>
     </div>
   );

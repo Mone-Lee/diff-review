@@ -145,10 +145,11 @@ export function ThreadList({ threads, focusedThreadId, onPatch, onDeleteThread, 
             {
               thread.status === 'resolved' ? null : (
                 <>
-                  <Button className={styles.threadActionBtn} icon={<RedoOutlined />} onClick={() => setExpandedComposer((prev) => ({ ...prev, [thread.id]: true }))}>
-                    要求再改
-                  </Button>
-                  <Button className={styles.threadActionBtn} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'thread', threadId: thread.id })}>
+                  <Tooltip title="要求再改">
+                    <Button className={styles.threadActionBtn} icon={<RedoOutlined />} onClick={() => setExpandedComposer((prev) => ({ ...prev, [thread.id]: true }))}>
+                    </Button>
+                  </Tooltip>
+                  <Button type="primary" className={styles.threadActionBtn} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'thread', threadId: thread.id })}>
                   </Button>
                 </>
               )
@@ -157,13 +158,14 @@ export function ThreadList({ threads, focusedThreadId, onPatch, onDeleteThread, 
               <Button className={styles.threadActionBtn} icon={<DeleteOutlined />} danger>
               </Button>
             </Popconfirm>
-            <Button
-              className={styles.threadActionBtn}
-              icon={thread.status === 'resolved' ? <ReloadOutlined /> : <CheckOutlined />}
-              onClick={() => void onPatch(thread.id, thread.status === 'resolved' ? 'unresolved' : 'resolved')}
-            >
-              {thread.status === 'resolved' ? '重新打开' : '完成'}
-            </Button>
+            <Tooltip title={thread.status === 'resolved' ? '重新打开' : '确认完成'}>
+              <Button
+                className={styles.threadActionBtn}
+                icon={thread.status === 'resolved' ? <ReloadOutlined /> : <CheckOutlined />}
+                onClick={() => void onPatch(thread.id, thread.status === 'resolved' ? 'unresolved' : 'resolved')}
+              >
+              </Button>
+            </Tooltip>
           </div>
         </Card>
       ))}
