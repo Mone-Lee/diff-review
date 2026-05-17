@@ -5,6 +5,8 @@ import React from 'react';
 import { Button, Input, Popconfirm, Tag, Tooltip, Typography } from 'antd';
 import { CheckOutlined, CopyOutlined, DeleteOutlined, EditOutlined, ReloadOutlined, RedoOutlined } from '@ant-design/icons';
 import type { ReviewThread } from '../../shared/types';
+import { COMMENT_STATUS_TEXT_MAP } from '../../shared/types';
+import { getMergedThreadStatus, getThreadStatus } from '../../shared/thread-utils';
 import { CommentComposer } from './CommentComposer';
 import styles from '../styles.module.less';
 
@@ -32,9 +34,8 @@ export function InlineThreadGroup({ threads, onFocus, onPatch, onDeleteThread, o
   const [replyingThreadId, setReplyingThreadId] = React.useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null);
   const [editingBody, setEditingBody] = React.useState('');
-  const isResolved = threads.every((thread) => getThreadStatus(thread) === 'resolved');
   const firstThread = threads[0];
-  const groupStatus = getGroupStatus(threads);
+  const groupStatus = getMergedThreadStatus(threads);
   const actionThread = getActionThread(threads);
   const actionThreadStatus = actionThread ? getThreadStatus(actionThread) : groupStatus;
   const actionThreadResolved = actionThreadStatus === 'resolved';
@@ -45,22 +46,18 @@ export function InlineThreadGroup({ threads, onFocus, onPatch, onDeleteThread, o
   return (
     <div className={`${styles.inlineThread} ${inlineThreadStatusClass(groupStatus)}`} onClick={() => onFocus(firstThread.id)}>
       <div className={styles.inlineThreadHeader}>
-        {showStatusTag && isResolved ? <Tag className={`${styles.threadTag} ${styles.threadTagResolved}`}>resolved</Tag> : null}
+        {
+          showStatusTag && groupStatus !== 'replied' ? (
+            <Tag className={`${styles.threadTag} ${inlineThreadStatusClass(groupStatus)}`}>{COMMENT_STATUS_TEXT_MAP[groupStatus]}</Tag>
+          ) : null
+        }
       </div>
 
-      {threads.map((thread, threadIndex) => {
+      {threads.map((thread) => {
         const threadStatus = getThreadStatus(thread);
-        const firstComment = thread.comments[0];
-        const isAgentThread = firstComment?.author === 'agent';
         return (
           <div
-            className={
-              isAgentThread
-                ? styles.inlineThreadSection
-                : threadIndex === 0
-                  ? styles.inlineThreadSection
-                  : `${styles.inlineThreadSection} ${styles.inlineThreadSectionUser}`
-            }
+            className={styles.inlineThreadSection}
             key={thread.id}
             onClick={(event) => {
               event.stopPropagation();
@@ -74,9 +71,13 @@ export function InlineThreadGroup({ threads, onFocus, onPatch, onDeleteThread, o
                 <div className={`${styles.inlineThreadCommentItem} ${isAgentComment ? styles.inlineThreadCommentItemAgent : ''}`} key={comment.id}>
                   <div className={styles.commentRow}>
                     <div className={styles.commentContent}>
-                      <Typography.Text className={isAgentComment ? styles.inlineThreadAgentLabel : styles.threadCommentAuthor} strong>
-                        {isAgentComment ? 'Agent' : 'User'}
-                      </Typography.Text>
+                      {
+                        isAgentComment ? (
+                          <Typography.Text className={styles.inlineThreadAgentLabel} strong>
+                            Agent
+                          </Typography.Text>
+                        ) : null
+                      }
                       {editingCommentId === comment.id ? (
                         <div className={styles.inlineThreadEdit}>
                           <Input.TextArea
@@ -195,7 +196,7 @@ export function InlineThreadGroup({ threads, onFocus, onPatch, onDeleteThread, o
           {
             actionThreadStatus !== 'replied' ? (
               <Popconfirm
-                title="删除这组评论？"
+                title={threads.length > 1 ? '删除这组评论？' : '删除这条评论线程？'}
                 okText="删除"
                 cancelText="取消"
                 onConfirm={async () => {
@@ -210,7 +211,7 @@ export function InlineThreadGroup({ threads, onFocus, onPatch, onDeleteThread, o
               </Popconfirm>
             ) : null
           }
-        
+
           {actionThreadResolved ? (
             <Tooltip title="重新打开">
               <Button
@@ -245,25 +246,10 @@ export function InlineThreadGroup({ threads, onFocus, onPatch, onDeleteThread, o
   );
 }
 
-function getGroupStatus(threads: ReviewThread[]): ReviewThread['status'] {
-  if (threads.every((thread) => getThreadStatus(thread) === 'resolved')) return 'resolved';
-  if (threads.some((thread) => getThreadStatus(thread) === 'replied')) return 'replied';
-  return 'submit';
-}
-
 function inlineThreadStatusClass(status: ReviewThread['status']): string {
   if (status === 'submit') return styles.inlineThreadSubmit;
   if (status === 'replied') return styles.inlineThreadReplied;
   return styles.inlineThreadResolved;
-}
-
-function getThreadStatus(thread: ReviewThread): ReviewThread['status'] {
-  if (thread.status === 'resolved') return 'resolved';
-  return getOpenThreadStatus(thread);
-}
-
-function getOpenThreadStatus(thread: ReviewThread): ReviewThread['status'] {
-  return thread.comments.some((comment) => comment.author === 'agent') ? 'replied' : 'submit';
 }
 
 function getActionThread(threads: ReviewThread[]): ReviewThread | undefined {

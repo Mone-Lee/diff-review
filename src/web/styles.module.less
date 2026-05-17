@@ -382,8 +382,8 @@
   z-index: 4;
   right: 10px;
   top: 2px;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 1px solid var(--line-strong);
   border-radius: 4px;
@@ -649,6 +649,60 @@
   gap: 8px;
 }
 
+.threadListToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.threadFilterWrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.threadFilterWrap :global(.ant-segmented) {
+  max-width: 100%;
+}
+
+.threadFilterWrap :global(.ant-segmented-group) {
+  min-width: 0;
+}
+
+.threadBatchButton {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+  .threadListToolbar {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .threadFilterWrap {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .threadFilterWrap :global(.ant-segmented) {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: thin;
+  }
+
+  .threadFilterWrap :global(.ant-segmented-group) {
+    display: inline-flex;
+  }
+
+  .threadBatchButton {
+    margin-left: auto;
+  }
+}
+
 .threadRailBody {
   flex: 1 1 auto;
   min-height: 0;
@@ -750,13 +804,13 @@
   margin-bottom: 6px;
 }
 
-.threadCommentAuthor {
-  display: block;
-  margin-bottom: 4px;
-  color: #2f6fed;
-  font-size: 12px;
-  line-height: 1.3;
-}
+// .threadCommentAuthor {
+//   display: block;
+//   margin-bottom: 4px;
+//   color: #2f6fed;
+//   font-size: 12px;
+//   line-height: 1.3;
+// }
 
 .threadAgentComment {
   padding: 8px 10px;
