@@ -1,5 +1,6 @@
 import type { CommentAnchor, DiffFile, ReviewThread } from '../shared/types';
 import { readComments, writeComments } from '../server/storage';
+import { getOpenThreadStatus, sameAnchor } from '../shared/thread-utils';
 
 type ImportPosition =
   | { side?: 'old' | 'new'; line?: number | { start: number; end?: number } }
@@ -44,12 +45,19 @@ export async function importAgentComments(repoRoot: string, diffFiles: DiffFile[
 
     const thread = buildAgentThread(parsed, diffFiles, result, label);
     if (!thread) continue;
-    if (hasDuplicateAgentThread(store.threads, thread)) {
+    const existingThread = store.threads.find((item) => sameAnchor(item.anchor, thread.anchor));
+    if (hasDuplicateAgentComment(store.threads, thread)) {
       result.skipped.push(`${label}: duplicate agent comment skipped`);
       continue;
     }
 
-    store.threads.push(thread);
+    if (existingThread) {
+      existingThread.comments.push(thread.comments[0]);
+      existingThread.status = getOpenThreadStatus(existingThread);
+      existingThread.updatedAt = thread.updatedAt;
+    } else {
+      store.threads.push(thread);
+    }
     result.imported += 1;
   }
 
@@ -185,29 +193,15 @@ function buildAnchor(file: DiffFile, comment: ImportThreadComment, result: Impor
   return { type: 'diff-line', filePath: file.path, side, lineNumber: line };
 }
 
-function hasDuplicateAgentThread(threads: ReviewThread[], nextThread: ReviewThread): boolean {
+function hasDuplicateAgentComment(threads: ReviewThread[], nextThread: ReviewThread): boolean {
   const nextComment = nextThread.comments[0]?.body.trim();
   return threads.some((thread) => {
-    const firstComment = thread.comments[0];
     return (
-      firstComment?.author === 'agent' &&
-      firstComment.body.trim() === nextComment &&
+      thread.comments.some((comment) => comment.author === 'agent' && comment.body.trim() === nextComment) &&
       thread.filePath === nextThread.filePath &&
       sameAnchor(thread.anchor, nextThread.anchor)
     );
   });
-}
-
-function sameAnchor(left: CommentAnchor, right: CommentAnchor): boolean {
-  if (left.type !== right.type || left.filePath !== right.filePath) return false;
-  if (left.type === 'file' && right.type === 'file') return true;
-  if (left.type === 'diff-line' && right.type === 'diff-line') {
-    return left.side === right.side && left.lineNumber === right.lineNumber;
-  }
-  if (left.type === 'markdown-line' && right.type === 'markdown-line') {
-    return left.lineNumber === right.lineNumber;
-  }
-  return false;
 }
 
 function diffLineExists(file: DiffFile, side: 'old' | 'new', lineNumber: number): boolean {

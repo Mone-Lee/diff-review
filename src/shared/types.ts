@@ -90,3 +90,10 @@ export type PromptScope =
   | { type: 'thread'; threadId: string }
   | { type: 'file-unresolved'; filePath: string }
   | { type: 'all-unresolved' };
+
+
+export const COMMENT_STATUS_TEXT_MAP: Record<ReviewThreadStatus, string> = {
+  submit: '待提交',
+  replied: '已回复',
+  resolved: '已解决'
+};

@@ -32,6 +32,8 @@ node skill/diff-review/scripts/start-review.mjs [args...] \
 
 After the script prints a local URL, open it in the Codex browser when available. If browser automation is not available, report the URL.
 
+When the user gives you copied prompt text containing `[thread:<id>]`, treat it as an existing review thread. After you answer or make code/doc changes for that thread, append a concise agent reply to the same thread with `--comment '{"type":"reply","threadId":"<id>","body":"..."}'` the next time you launch or refresh the viewer. If the viewer is already running and you can reach the API, post the same reply to `/api/threads/<id>/comments` with `author: "agent"`. Do this for every handled thread unless the user explicitly asks you not to write back. The reply should say what changed or why no change was made, not repeat the full diff.
+
 ## Review Scope
 
 - Code files render as GitHub-style unified diffs.
@@ -40,11 +42,13 @@ After the script prints a local URL, open it in the Codex browser when available
 - Comments support submit/replied/resolved state.
 - AI prompt copy output includes `[thread:<id>]`, file path, line number or Markdown source line, and comment body.
 - Agent findings can be preloaded as comments with `--comment`.
+- A thread can contain multiple comments. New findings for the same anchor are appended to the existing thread, and repeated agent comments with identical bodies in the same thread are skipped.
 
 ## Comment Arguments
 
 - Use `type: "thread"` for each new finding.
 - Use `type: "reply"` only when replying to an existing `threadId`.
+- When handling copied `[thread:<id>]` prompt text, use `type: "reply"` for the completion/status response so the answer is preserved as an agent comment in the original thread.
 - Write comment bodies in the language the user is using.
 - Use `position.side: "new"` for lines that exist on the target side of the diff.
 - Use `position.side: "old"` for lines that exist only on the deleted side.

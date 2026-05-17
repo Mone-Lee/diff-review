@@ -6,6 +6,7 @@ import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
 import { readFileForPreview } from '../core/git';
 import { readComments, writeComments } from './storage';
+import { getOpenThreadStatus, getThreadStatus, sameAnchor } from '../shared/thread-utils';
 
 export type ReviewServerState = {
   session: ReviewSession;
@@ -58,22 +59,35 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     try {
       const now = new Date().toISOString();
       const body = req.body as Pick<ReviewThread, 'filePath' | 'anchor'> & { body: string };
+      const commentBody = body.body?.trim();
+      if (!commentBody) {
+        res.status(400).json({ error: 'Comment body is required' });
+        return;
+      }
       const store = await readComments(state.session.repoRoot);
-      // 新建线程时默认仅包含一条初始评论，后续回复可在此基础扩展。
+      const existingThread = store.threads.find((thread) => sameAnchor(thread.anchor, body.anchor));
+      const comment: ReviewComment = {
+        id: crypto.randomUUID(),
+        body: commentBody,
+        author: 'user',
+        createdAt: now,
+        updatedAt: now
+      };
+      if (existingThread) {
+        existingThread.comments.push(comment);
+        existingThread.status = getOpenThreadStatus(existingThread);
+        existingThread.updatedAt = now;
+        await writeComments(state.session.repoRoot, store);
+        res.status(201).json(existingThread);
+        return;
+      }
+
       const thread: ReviewThread = {
         id: crypto.randomUUID(),
         filePath: body.filePath,
         anchor: body.anchor,
         status: 'submit',
-        comments: [
-          {
-            id: crypto.randomUUID(),
-            body: body.body,
-            author: 'user',
-            createdAt: now,
-            updatedAt: now
-          }
-        ],
+        comments: [comment],
         createdAt: now,
         updatedAt: now
       };
@@ -258,13 +272,4 @@ function selectPromptThreads(threads: ReviewThread[], scope: PromptScope): Revie
     return threads.filter((thread) => thread.filePath === scope.filePath && thread.status !== 'resolved');
   }
   return threads.filter((thread) => thread.status !== 'resolved');
-}
-
-function getThreadStatus(thread: ReviewThread): ReviewThread['status'] {
-  if (thread.status === 'resolved') return 'resolved';
-  return getOpenThreadStatus(thread);
-}
-
-function getOpenThreadStatus(thread: ReviewThread): ReviewThread['status'] {
-  return thread.comments.some((comment) => comment.author === 'agent') ? 'replied' : 'submit';
 }

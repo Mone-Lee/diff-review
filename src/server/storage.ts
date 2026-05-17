@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { homedir, platform } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import type { ReviewThread } from '../shared/types';
+import { anchorKey, getMergedThreadStatus } from '../shared/thread-utils';
 
 export type CommentStore = {
   threads: ReviewThread[];
@@ -45,17 +46,34 @@ async function readLegacyComments(repoRoot: string): Promise<CommentStore> {
 }
 
 function normalizeStore(store: CommentStore): CommentStore {
+  const groups = new Map<string, ReviewThread[]>();
+  for (const thread of store.threads) {
+    const key = anchorKey(thread.anchor);
+    groups.set(key, [...(groups.get(key) ?? []), thread]);
+  }
+
   return {
-    threads: store.threads.map((thread) => {
-      const status = (thread as { status?: string }).status;
+    threads: Array.from(groups.values()).map((threads) => {
+      const [firstThread, ...restThreads] = threads;
+      const merged: ReviewThread = {
+        ...firstThread,
+        comments: threads.flatMap((thread) => thread.comments),
+        status: getMergedThreadStatus(threads),
+        updatedAt: latestTimestamp(threads.map((thread) => thread.updatedAt))
+      };
+      if (restThreads.length === 0) return merged;
       return {
-        ...thread,
-        status: status === 'resolved' ? 'resolved' : getOpenThreadStatus(thread)
+        ...merged,
+        createdAt: earliestTimestamp(threads.map((thread) => thread.createdAt))
       };
     })
   };
 }
 
-function getOpenThreadStatus(thread: ReviewThread): ReviewThread['status'] {
-  return thread.comments.some((comment) => comment.author === 'agent') ? 'replied' : 'submit';
+function latestTimestamp(values: string[]): string {
+  return values.reduce((latest, value) => (value > latest ? value : latest), values[0] ?? new Date().toISOString());
+}
+
+function earliestTimestamp(values: string[]): string {
+  return values.reduce((earliest, value) => (value < earliest ? value : earliest), values[0] ?? new Date().toISOString());
 }

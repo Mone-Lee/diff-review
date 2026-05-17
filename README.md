@@ -9,6 +9,7 @@ AI chat 里的本地代码审查工具。产品入口是 skill slash command：`
 - Markdown 文件只展示 Preview，不提供 Diff / Preview 切换。
 - 支持文件级评论、代码行级评论、Markdown source line 评论。
 - 支持 submit / replied / resolved 评论状态。
+- 一条 thread 下可以包含多条 comment；同一锚点的新评论会追加到已有 thread。
 - 支持通过内部 `--comment` 参数预置 agent findings / replies。
 - 支持复制极简 AI prompt。
 
@@ -115,7 +116,9 @@ node skill/diff-review/scripts/start-review.mjs \
   --comment '{"type":"reply","threadId":"<thread-id>","body":"同意，这里应该按 repoRoot 隔离评论存储。"}'
 ```
 
-`thread` 评论会以 `author: "agent"` 创建 replied thread；`reply` 会向目标 thread 追加一条 agent 回复并把状态切到 replied。若路径不在当前 diff 中、行号无法定位或内容重复，脚本会跳过并在终端打印 warning。
+`thread` 评论会以 `author: "agent"` 写入：如果同一锚点已经存在 thread，会作为新的 comment 追加进去；否则创建 replied thread。`reply` 会向目标 thread 追加一条 agent 回复并把状态切到 replied。为避免 agent finding 反复注入导致刷屏，同一 thread 内相同正文的 agent comment 会被视为重复并跳过。若路径不在当前 diff 中、行号无法定位或内容重复，脚本会跳过并在终端打印 warning。
+
+当 agent 收到从 UI 复制出的 `[thread:<id>]` prompt 并完成处理后，应使用 `type: "reply"` 把处理结果写回原 thread，作为 `author: "agent"` 的 comment 保留在评论流里。回复内容应简要说明已修改什么，或说明为什么没有修改。
 
 评论状态含义：
 
