@@ -1,6 +1,27 @@
 # diff-review
 
-AI chat 里的本地代码审查工具。产品入口是 skill slash command：`/diff-review`。
+AI chat 里的本地代码审查工具。可以直接用 CLI 打开，也可以安装成 agent skill。
+
+## Quick Start
+
+Try it first:
+
+```bash
+npx local-diff-reviewer
+```
+
+Install and use:
+
+```bash
+npm install -g local-diff-reviewer
+local-diff-reviewer
+```
+
+Enable use from AI agents:
+
+```bash
+npx skills add limengyi/diff-review
+```
 
 ## 功能边界
 
@@ -60,6 +81,20 @@ AI chat 里的本地代码审查工具。产品入口是 skill slash command：`
 评论内容
 ```
 
+## CLI 使用方式
+
+```bash
+local-diff-reviewer
+local-diff-reviewer staged
+local-diff-reviewer HEAD~1 HEAD
+```
+
+这三种模式分别表示：
+
+- `working`：审查当前工作区里尚未 `git add` 的改动。
+- `staged`：审查已经 `git add`、但还没有提交的改动。
+- `revision`：审查两个 revision 之间的差异，例如 `local-diff-reviewer HEAD~1 HEAD` 会比较 `HEAD~1..HEAD`。
+
 ## Skill 使用方式
 
 在 AI chat 中使用：
@@ -70,49 +105,43 @@ AI chat 里的本地代码审查工具。产品入口是 skill slash command：`
 /diff-review HEAD~1 HEAD
 ```
 
-这三种模式分别表示：
-
-- `working`：审查当前工作区里尚未 `git add` 的改动。
-- `staged`：审查已经 `git add`、但还没有提交的改动。
-- `revision`：审查两个 revision 之间的差异，例如 `/diff-review HEAD~1 HEAD` 会比较 `HEAD~1..HEAD`。
-
-内部脚本位于：
+安装 skill：
 
 ```bash
-node skill/diff-review/scripts/start-review.mjs [args...]
+npx skills add limengyi/diff-review
 ```
 
-这个脚本是 skill 实现细节，不作为用户侧产品入口。
+skill 会从目标 workspace 运行 `npx local-diff-reviewer [args...]`。
 
 ### 预置 agent 评论
 
-内部脚本支持重复传入 `--comment <json>`，用于在打开 UI 前把 agent 审查结果写入评论存储。
+CLI 支持重复传入 `--comment <json>`，用于在打开 UI 前把 agent 审查结果写入评论存储。
 
 代码 diff 行评论：
 
 ```bash
-node skill/diff-review/scripts/start-review.mjs \
+npx local-diff-reviewer \
   --comment '{"type":"thread","filePath":"src/foo.ts","position":{"side":"new","line":36},"body":"这里没有处理空数组，可能导致运行时报错。"}'
 ```
 
 Markdown source line 评论：
 
 ```bash
-node skill/diff-review/scripts/start-review.mjs \
+npx local-diff-reviewer \
   --comment '{"type":"thread","filePath":"README.md","position":{"type":"markdown","line":22},"body":"这里可以补充 old/new side 的例子。"}'
 ```
 
 文件级评论：
 
 ```bash
-node skill/diff-review/scripts/start-review.mjs \
+npx local-diff-reviewer \
   --comment '{"type":"thread","filePath":"src/foo.ts","body":"这个文件的错误处理策略需要统一。"}'
 ```
 
 回复已有 thread：
 
 ```bash
-node skill/diff-review/scripts/start-review.mjs \
+npx local-diff-reviewer \
   --comment '{"type":"reply","threadId":"<thread-id>","body":"同意，这里应该按 repoRoot 隔离评论存储。"}'
 ```
 
