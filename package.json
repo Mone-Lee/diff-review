@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "private": false,
   "description": "Open a local GitHub-style diff review Web UI for the current repository.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mone-Lee/diff-review.git"
+  },
+  "homepage": "https://github.com/Mone-Lee/diff-review#readme",
+  "bugs": {
+    "url": "https://github.com/Mone-Lee/diff-review/issues"
+  },
   "type": "module",
   "bin": {
     "local-diff-reviewer": "./dist/cli/start.js"
@@ -19,6 +27,8 @@
     "web:dev": "vite --host 127.0.0.1 --open",
     "build": "npm run typecheck && vite build && node scripts/build-cli.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "skill:check": "node scripts/validate-skill.mjs",
+    "release:check": "node scripts/release-check.mjs",
     "prepack": "npm run build"
   },
   "dependencies": {
