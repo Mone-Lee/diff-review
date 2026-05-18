@@ -11,6 +11,7 @@ import { getOpenThreadStatus, getThreadStatus, sameAnchor } from '../shared/thre
 export type ReviewServerState = {
   session: ReviewSession;
   diffFiles: DiffFile[];
+  webDist?: string;
 };
 
 export async function startServer(state: ReviewServerState, port = 4966): Promise<string> {
@@ -246,7 +247,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     }
   });
 
-  const webDist = join(process.cwd(), 'dist', 'web');
+  const webDist = state.webDist ?? join(process.cwd(), 'dist', 'web');
   if (existsSync(webDist)) {
     // 生产模式使用静态资源托管并回退到 SPA 入口。
     app.use(express.static(webDist));

@@ -1,14 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const scriptDir = dirname(fileURLToPath(import.meta.url));
-const projectRoot = resolve(scriptDir, '../../..');
 const args = process.argv.slice(2);
-
-const child = spawn('npm', ['run', 'review', '--', ...args], {
-  cwd: projectRoot,
+const child = spawn('npx', ['local-diff-reviewer', ...args], {
+  cwd: process.cwd(),
   stdio: 'inherit',
   shell: process.platform === 'win32'
 });

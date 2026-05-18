@@ -1,11 +1,15 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
 import { startServer } from '../server';
 import type { ReviewSession } from '../shared/types';
+
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const builtWebDist = join(packageRoot, 'dist', 'web');
 
 async function main() {
   // CLI 参数只负责确定审查模式，真正的数据都来自当前仓库状态。
@@ -23,9 +27,9 @@ async function main() {
   };
 
   const importResult = await importAgentComments(repoRoot, diffFiles, comments);
-  const apiUrl = await startServer({ session, diffFiles });
+  const hasBuiltWeb = existsSync(join(builtWebDist, 'index.html'));
+  const apiUrl = await startServer({ session, diffFiles, webDist: hasBuiltWeb ? builtWebDist : undefined });
   // 非 --dev 模式下优先复用已构建的静态页面，避免每次都起 Vite。
-  const hasBuiltWeb = existsSync(join(process.cwd(), 'dist', 'web', 'index.html'));
   const useVite = dev || !hasBuiltWeb;
   const uiUrl = useVite ? 'http://127.0.0.1:5173' : apiUrl;
 

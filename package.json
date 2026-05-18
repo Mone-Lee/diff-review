@@ -1,37 +1,48 @@
 {
-  "name": "diff-review",
-  "version": "0.1.0",
-  "private": true,
+  "name": "local-diff-reviewer",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Open a local GitHub-style diff review Web UI for the current repository.",
   "type": "module",
+  "bin": {
+    "local-diff-reviewer": "./dist/cli/start.js"
+  },
+  "files": [
+    "dist",
+    "SKILL.md",
+    "README.md"
+  ],
   "scripts": {
     "review": "tsx src/cli/start.ts",
     "review:dev": "tsx src/cli/start.ts --dev",
     "dev": "npm run review:dev",
     "web:dev": "vite --host 127.0.0.1 --open",
-    "build": "tsc -p tsconfig.json && vite build",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "npm run typecheck && vite build && node scripts/build-cli.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build"
   },
   "dependencies": {
+    "express": "^5.2.1",
+    "github-slugger": "^2.0.0"
+  },
+  "devDependencies": {
     "@ant-design/icons": "^6.2.3",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.0.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "antd": "^6.3.7",
-    "express": "^5.2.1",
-    "github-slugger": "^2.0.0",
+    "esbuild": "^0.27.7",
+    "less": "^4.6.4",
     "mermaid": "^11.15.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-markdown": "^10.1.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
-    "vite": "^8.0.12"
-  },
-  "devDependencies": {
-    "@types/express": "^5.0.6",
-    "@types/node": "^25.0.1",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "less": "^4.6.4",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^8.0.12"
   }
 }

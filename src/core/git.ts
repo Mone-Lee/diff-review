@@ -59,7 +59,7 @@ export function parseReviewMode(args: string[]): ReviewMode {
   if (filtered.length === 0 || filtered[0] === 'working') return { kind: 'working' };
   if (filtered[0] === 'staged') return { kind: 'staged' };
   if (filtered.length === 2) return { kind: 'revision', base: filtered[0], target: filtered[1] };
-  throw new Error('Usage: /diff-review [working|staged|<base> <target>]');
+  throw new Error('Usage: local-diff-reviewer [working|staged|<base> <target>]');
 }
 
 export function diffHash(diff: string): string {
