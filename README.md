@@ -36,53 +36,6 @@ npx skills add Mone-Lee/diff-review
 - 支持通过内部 `--comment` 参数预置 agent findings / replies。
 - 支持复制极简 AI prompt。
 
-## 评论定位原理（新手友好版）
-
-很多人会直觉认为：评论只和“第几行”绑定。  
-比如删掉第 10 行后，原来第 11 行顶上来变成第 10 行，评论也应该跟着走。
-
-这个工具不是这样做的。它用的是“锚点”定位，锚点至少包含：
-
-- 文件路径（`filePath`）
-- 行号（`lineNumber`）
-- 行所在版本（`side`：旧版本 `old` / 新版本 `new`，代码 Diff 专用）
-
-这意味着评论绑定的是“哪一个版本里的哪一行”，而不是“屏幕上现在第几行”。
-
-### 为什么删除内容后评论可能不显示？
-
-- 对代码 Diff 行评论：
-  - 如果评论当时加在被删除的旧行上，它的锚点是 `old + 行号`。
-  - 删除后右侧展示的是新版本内容（`new`），`old` 锚点找不到对应渲染位置时，就不会显示在行内。
-- 对 Markdown 行评论：
-  - 评论绑定的是 source line（源文件行号）。
-  - 被评论的那段 Markdown 真被删掉后，预览里没有对应块可挂载，行内自然不显示。
-
-### 一个非常短的例子
-
-1. 你在 `old` 版本第 20 行加了评论。  
-2. 后续改动把第 20 行删除，并让后面内容上移。  
-3. 新内容虽然“占了第 20 行的位置”，但它属于 `new` 版本，不是原来的 `old` 行。  
-4. 所以系统不会把旧评论自动贴到新内容上。
-
-这样做的好处是：避免评论“串行”到语义完全不同的内容上，减少误导。
-
-复制出的 prompt 包含 thread id、定位信息和评论内容。thread id 用于让 agent 后续通过 `--comment '{"type":"reply",...}'` 精确回复原评论：
-
-```text
-[thread:<thread-id>]
-文件路径:行号
-评论内容
-```
-
-文件级评论不包含行号：
-
-```text
-[thread:<thread-id>]
-文件路径
-评论内容
-```
-
 ## CLI 使用方式
 
 ```bash
@@ -156,6 +109,21 @@ npx local-diff-reviewer \
 - `submit`：只有用户提交的评论，还没有 agent finding / reply。
 - `replied`：已有 agent 内容，或从 resolved 重新打开。
 - `resolved`：用户确认完成后的状态。
+
+## 发布流程
+
+```bash
+npm run release
+```
+
+该命令会按顺序执行：
+
+- `npm run release:check`
+- `npm publish`
+- `git push`
+- `git push --tags`
+
+只有在 `npm publish` 成功后，才会自动推送提交和标签到 GitHub。
 
 ## 本地开发
 
