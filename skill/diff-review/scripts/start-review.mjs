@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process';
 
 const args = process.argv.slice(2);
-const child = spawn('npx', ['local-diff-reviewer', ...args], {
+const child = spawn('npx', ['--yes', 'local-diff-reviewer', ...args], {
   cwd: process.cwd(),
   stdio: 'inherit',
   shell: process.platform === 'win32'

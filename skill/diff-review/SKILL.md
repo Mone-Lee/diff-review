@@ -19,13 +19,13 @@ Use this skill when the user asks for `/diff-review`, wants to inspect current w
 Do not ask the user to run a shell CLI manually. Run the package command from the workspace root:
 
 ```bash
-npx local-diff-reviewer [args...]
+npx --yes local-diff-reviewer [args...]
 ```
 
 When you have concrete review findings or answers to existing review comments, preload them with one `--comment` JSON argument per comment before launching the viewer:
 
 ```bash
-npx local-diff-reviewer [args...] \
+npx --yes local-diff-reviewer [args...] \
   --comment '{"type":"thread","filePath":"src/foo.ts","position":{"side":"new","line":36},"body":"Explain the finding in the user language."}' \
   --comment '{"type":"reply","threadId":"existing-thread-id","body":"Answer the existing thread as the agent."}'
 ```
