@@ -12,11 +12,15 @@
     "url": "https://github.com/Mone-Lee/diff-review/issues"
   },
   "type": "module",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "bin": {
-    "local-diff-reviewer": "./dist/cli/start.js"
+    "local-diff-reviewer": "dist/cli/start.js"
   },
   "files": [
     "dist",
+    "docs/images",
     "SKILL.md",
     "README.md"
   ],

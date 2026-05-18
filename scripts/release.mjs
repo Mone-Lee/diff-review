@@ -53,7 +53,7 @@ const version = readVersion();
 run('git add package.json package-lock.json 2>/dev/null || git add package.json');
 run(`git commit -m "release: v${version}"`);
 run(`git tag v${version}`);
-run('npm publish');
+run('npm publish --registry=https://registry.npmjs.org/');
 
 console.log('\nnpm publish succeeded, pushing commits and tags to GitHub...');
 run('git push');
