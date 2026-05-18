@@ -114,11 +114,14 @@ npx --yes local-diff-reviewer \
 
 ```bash
 npm run release
+npm run release minor
+npm run release major
 ```
 
 该命令会按顺序执行：
 
 - `npm run release:check`
+- `npm version <patch|minor|major>`（默认 `patch`）
 - `npm publish`
 - `git push`
 - `git push --tags`

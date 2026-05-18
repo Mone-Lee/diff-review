@@ -24,8 +24,12 @@ if (!/^description:\s*.+/m.test(frontmatter)) {
   fail('frontmatter must include a non-empty description field.');
 }
 
-if (!content.includes('npx local-diff-reviewer') && !content.includes('npx --yes local-diff-reviewer')) {
-  fail('SKILL.md must reference `npx local-diff-reviewer` or `npx --yes local-diff-reviewer`.');
+if (!content.includes('npx --yes local-diff-reviewer')) {
+  fail('SKILL.md must reference `npx --yes local-diff-reviewer`.');
+}
+
+if (content.includes('npx local-diff-reviewer')) {
+  fail('SKILL.md must not reference `npx local-diff-reviewer` without `--yes`.');
 }
 
 console.log('SKILL.md validation passed.');
