@@ -1,5 +1,7 @@
 # diff-review
 
+![Diff 审查台界面截图](./docs/images/diff-review-ui.jpg)
+
 AI chat 里的本地代码审查工具。可以直接用 CLI 打开，也可以安装成 agent skill。
 
 ## Quick Start
@@ -20,7 +22,7 @@ local-diff-reviewer
 Enable use from AI agents:
 
 ```bash
-npx skills add limengyi/diff-review
+npx skills add Mone-Lee/diff-review
 ```
 
 ## 功能边界
@@ -108,7 +110,7 @@ local-diff-reviewer HEAD~1 HEAD
 安装 skill：
 
 ```bash
-npx skills add limengyi/diff-review
+npx skills add Mone-Lee/diff-review
 ```
 
 skill 会从目标 workspace 运行 `npx local-diff-reviewer [args...]`。
