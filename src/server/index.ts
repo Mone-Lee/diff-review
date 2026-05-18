@@ -277,11 +277,22 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     res.status(500).json({ error: error.message });
   });
 
-  return new Promise((resolve) => {
+  return listen(app, port);
+}
+
+function listen(app: express.Express, port: number): Promise<string> {
+  return new Promise((resolve, reject) => {
     const server = app.listen(port, '127.0.0.1', () => {
       const address = server.address();
       const actualPort = typeof address === 'object' && address ? address.port : port;
       resolve(`http://127.0.0.1:${actualPort}`);
+    });
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE' && port !== 0) {
+        listen(app, 0).then(resolve, reject);
+        return;
+      }
+      reject(error);
     });
   });
 }

@@ -13,9 +13,9 @@ const builtWebDist = join(packageRoot, 'dist', 'web');
 
 async function main() {
   // CLI 参数只负责确定审查模式，真正的数据都来自当前仓库状态。
-  const { dev, reviewArgs, comments } = parseCliOptions(process.argv.slice(2));
+  const { dev, repo, reviewArgs, comments } = parseCliOptions(process.argv.slice(2));
   const mode = parseReviewMode(reviewArgs);
-  const repoRoot = await getRepoRoot(process.cwd());
+  const repoRoot = await getRepoRoot(repo ?? process.cwd());
   const diff = await getDiff(mode, repoRoot);
   const diffFiles = parseUnifiedDiff(diff);
   const session: ReviewSession = {
@@ -49,9 +49,10 @@ async function main() {
   }
 }
 
-function parseCliOptions(args: string[]): { dev: boolean; reviewArgs: string[]; comments: string[] } {
+function parseCliOptions(args: string[]): { dev: boolean; repo: string | undefined; reviewArgs: string[]; comments: string[] } {
   const reviewArgs: string[] = [];
   const comments: string[] = [];
+  let repo: string | undefined;
   let dev = false;
 
   // CLI 自身消费 --dev/--comment，其余参数才交给 parseReviewMode 判断审查范围。
@@ -59,6 +60,19 @@ function parseCliOptions(args: string[]): { dev: boolean; reviewArgs: string[]; 
     const arg = args[index];
     if (arg === '--dev') {
       dev = true;
+      continue;
+    }
+    if (arg === '--repo') {
+      const value = args[index + 1];
+      if (!value) throw new Error('--repo requires a path value');
+      repo = resolve(value);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--repo=')) {
+      const value = arg.slice('--repo='.length);
+      if (!value) throw new Error('--repo requires a path value');
+      repo = resolve(value);
       continue;
     }
     if (arg === '--comment') {
@@ -77,7 +91,7 @@ function parseCliOptions(args: string[]): { dev: boolean; reviewArgs: string[]; 
     reviewArgs.push(arg);
   }
 
-  return { dev, reviewArgs, comments };
+  return { dev, repo, reviewArgs, comments };
 }
 
 function modeLabel(mode: ReviewSession['mode']): string {
@@ -88,7 +102,7 @@ function modeLabel(mode: ReviewSession['mode']): string {
 function startVite() {
   // 由 review 进程托管 Vite 子进程，便于 Ctrl+C 一并退出。
   const child = spawn('npm', ['run', 'web:dev'], {
-    cwd: process.cwd(),
+    cwd: packageRoot,
     stdio: 'inherit',
     shell: process.platform === 'win32',
     env: { ...process.env, BROWSER: 'none' }
