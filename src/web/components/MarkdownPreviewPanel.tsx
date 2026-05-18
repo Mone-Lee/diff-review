@@ -37,6 +37,32 @@ function isSafeUrl(url: string) {
   return /^(https?:|mailto:|#|\.{0,2}\/|\/)/i.test(url.trim());
 }
 
+function normalizePathSegments(path: string) {
+  const segments = path.split('/').filter((segment) => segment.length > 0 && segment !== '.');
+  const normalized: string[] = [];
+  for (const segment of segments) {
+    if (segment === '..') {
+      normalized.pop();
+      continue;
+    }
+    normalized.push(segment);
+  }
+  return normalized;
+}
+
+function resolveAssetPath(markdownPath: string, rawUrl: string) {
+  if (!rawUrl || /^https?:|^mailto:|^#/i.test(rawUrl)) return rawUrl;
+  if (rawUrl.startsWith('/')) return rawUrl;
+
+  const cleanUrl = rawUrl.split('#')[0]?.split('?')[0] ?? rawUrl;
+  const fileSegments = normalizePathSegments(markdownPath);
+  fileSegments.pop();
+  const targetSegments = normalizePathSegments(cleanUrl);
+  const resolvedPath = [...fileSegments, ...targetSegments].join('/');
+  if (!resolvedPath) return rawUrl;
+  return `/api/markdown-asset?path=${encodeURIComponent(resolvedPath)}`;
+}
+
 function extractText(node: React.ReactNode): string {
   // 从 ReactNode 递归提取纯文本，用于读取 code/pre 的真实文本内容。
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -262,8 +288,9 @@ export function MarkdownPreviewPanel({
         return null;
       }
 
+      const resolvedSrc = resolveAssetPath(file.path, safeSrc);
       return (
-        <img src={safeSrc} alt={alt ?? ''} loading="lazy" {...props} />
+        <img src={resolvedSrc} alt={alt ?? ''} loading="lazy" {...props} />
       );
     }
   };

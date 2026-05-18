@@ -1,6 +1,6 @@
 import express from 'express';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, normalize, resolve, sep } from 'node:path';
 import type { DiffFile, MarkdownPreview, PromptScope, ReviewComment, ReviewSession, ReviewThread } from '../shared/types';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
@@ -46,6 +46,25 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     } catch (error) {
       next(error);
     }
+  });
+
+  app.get('/api/markdown-asset', (req, res) => {
+    const relativePath = String(req.query.path ?? '').trim();
+    if (!relativePath) {
+      res.status(400).json({ error: 'Asset path is required' });
+      return;
+    }
+
+    const repoRoot = resolve(state.session.repoRoot);
+    const normalizedRelativePath = normalize(relativePath);
+    const absolutePath = resolve(repoRoot, normalizedRelativePath);
+    const inRepo = absolutePath === repoRoot || absolutePath.startsWith(`${repoRoot}${sep}`);
+    if (!inRepo || !existsSync(absolutePath)) {
+      res.status(404).json({ error: 'Asset not found' });
+      return;
+    }
+
+    res.sendFile(absolutePath);
   });
 
   app.get('/api/threads', async (_req, res, next) => {
