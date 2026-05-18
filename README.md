@@ -1,6 +1,6 @@
 # diff-review
 
-![Diff 审查台界面截图](./docs/images/diff-review-ui.jpg)
+![Diff 审查台界面截图](https://cdn.jsdelivr.net/npm/local-diff-reviewer@latest/docs/images/diff-review-ui.jpg)
 
 AI chat 里的本地代码审查工具。可以直接用 CLI 打开，也可以安装成 agent skill。
 
@@ -42,6 +42,7 @@ npx skills add Mone-Lee/diff-review
 local-diff-reviewer
 local-diff-reviewer staged
 local-diff-reviewer HEAD~1 HEAD
+local-diff-reviewer --repo /path/to/project
 ```
 
 这三种模式分别表示：
@@ -49,6 +50,22 @@ local-diff-reviewer HEAD~1 HEAD
 - `working`：审查当前工作区里尚未 `git add` 的改动。
 - `staged`：审查已经 `git add`、但还没有提交的改动。
 - `revision`：审查两个 revision 之间的差异，例如 `local-diff-reviewer HEAD~1 HEAD` 会比较 `HEAD~1..HEAD`。
+
+如果命令不是在目标项目目录里启动，可以用 `--repo <path>` 显式指定要审查的 Git 仓库：
+
+```bash
+local-diff-reviewer --repo /path/to/project
+local-diff-reviewer --repo /path/to/project staged
+```
+
+每次启动都会创建独立的本地 review 会话。多个项目里分别执行 `local-diff-reviewer` 或 `/diff-review` 时，打开的页面会分别绑定启动时的项目，不会被最后一次启动覆盖。默认优先使用 `127.0.0.1:4966`；如果端口已被占用，会自动选择一个空闲端口。
+
+```text
+项目 A /diff-review -> http://127.0.0.1:4966  -> 项目 A diff
+项目 B /diff-review -> http://127.0.0.1:<空闲端口> -> 项目 B diff
+```
+
+注意：本地开发的 `--dev` 模式仍使用 Vite dev server，端口和 API proxy 是固定的；多项目并行审查请使用默认的构建页面模式。
 
 ## Skill 使用方式
 
@@ -66,7 +83,7 @@ local-diff-reviewer HEAD~1 HEAD
 npx skills add Mone-Lee/diff-review
 ```
 
-skill 会从目标 workspace 运行 `npx --yes local-diff-reviewer [args...]`。
+skill 会针对目标 workspace 运行 `npx --yes local-diff-reviewer --repo <workspace> [args...]`。
 
 ### 预置 agent 评论
 

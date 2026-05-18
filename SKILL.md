@@ -16,16 +16,18 @@ Use this skill when the user asks for `/diff-review`, wants to inspect current w
 - `/diff-review staged`: review staged diff.
 - `/diff-review <base> <target>`: review diff between two Git revisions.
 
-Do not ask the user to run a shell CLI manually. Run the package command from the workspace root:
+Do not ask the user to run a shell CLI manually. Determine the target workspace/repository from the user's active environment context, then pass it explicitly with `--repo`:
 
 ```bash
-npx --yes local-diff-reviewer [args...]
+npx --yes local-diff-reviewer --repo /absolute/path/to/target/workspace [args...]
 ```
+
+Do not use the skill package directory or this skill's install directory as the review target unless that is the workspace the user asked to review.
 
 When you have concrete review findings or answers to existing review comments, preload them with one `--comment` JSON argument per comment before launching the viewer:
 
 ```bash
-npx --yes local-diff-reviewer [args...] \
+npx --yes local-diff-reviewer --repo /absolute/path/to/target/workspace [args...] \
   --comment '{"type":"thread","filePath":"src/foo.ts","position":{"side":"new","line":36},"body":"Explain the finding in the user language."}' \
   --comment '{"type":"reply","threadId":"existing-thread-id","body":"Answer the existing thread as the agent."}'
 ```
