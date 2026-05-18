@@ -48,7 +48,7 @@ export function InlineThreadGroup({ threads, onFocus, onPatch, onDeleteThread, o
       <div className={styles.inlineThreadHeader}>
         {
           showStatusTag && groupStatus !== 'replied' ? (
-            <Tag className={`${styles.threadTag} ${inlineThreadStatusClass(groupStatus)}`}>{COMMENT_STATUS_TEXT_MAP[groupStatus]}</Tag>
+            <Tag className={`${styles.threadTag} ${statusTagClass(groupStatus)}`}>{COMMENT_STATUS_TEXT_MAP[groupStatus]}</Tag>
           ) : null
         }
       </div>
@@ -250,6 +250,12 @@ function inlineThreadStatusClass(status: ReviewThread['status']): string {
   if (status === 'submit') return styles.inlineThreadSubmit;
   if (status === 'replied') return styles.inlineThreadReplied;
   return styles.inlineThreadResolved;
+}
+
+function statusTagClass(status: ReviewThread['status']): string {
+  if (status === 'submit') return styles.threadTagSubmit;
+  if (status === 'replied') return styles.threadTagReplied;
+  return styles.threadTagResolved;
 }
 
 function getActionThread(threads: ReviewThread[]): ReviewThread | undefined {

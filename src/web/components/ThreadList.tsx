@@ -143,7 +143,7 @@ export function ThreadList({ threads, focusedThreadId, onPatch, onDeleteThread, 
               <Card
                 className={[
                   styles.thread,
-                  threadStatus === 'resolved' ? styles.resolved : '',
+                  statusCardClass(threadStatus),
                   isFocused ? (threadStatus === 'resolved' ? `${styles.threadFocused} ${styles.threadFocusedResolved}` : `${styles.threadFocused} ${styles.threadFocusedPending}`) : ''
                 ]
                   .filter(Boolean)
@@ -189,4 +189,11 @@ function statusTagClass(status: ReviewThread['status']): string {
   if (status === 'submit') return styles.threadTagSubmit;
   if (status === 'replied') return styles.threadTagReplied;
   return styles.threadTagResolved;
+}
+
+
+function statusCardClass(status: ReviewThread['status']): string {
+  if (status === 'submit') return styles.submit;
+  if (status === 'replied') return styles.replied;
+  return styles.resolved;
 }
