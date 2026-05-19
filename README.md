@@ -83,7 +83,7 @@ local-diff-reviewer --repo /path/to/project staged
 npx skills add Mone-Lee/diff-review
 ```
 
-skill 会针对目标 workspace 运行 `npx --yes local-diff-reviewer --repo <workspace> [args...]`。
+skill 会以目标 workspace 作为命令工作目录运行 `npx --yes local-diff-reviewer [args...]`，因此 `/diff-review` 会审查当前项目，而不是 skill 安装目录。
 
 ### 预置 agent 评论
 
