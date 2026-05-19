@@ -24,6 +24,11 @@ function middleEllipsis(text: string, maxLength: number, suffixLength: number) {
   return `${text.slice(0, prefixLength)}...${text.slice(-safeSuffixLength)}`;
 }
 
+function sessionRepoName(session: ReviewSession | null) {
+  if (!session) return '正在加载仓库';
+  return session.repoName || session.repoRoot.split(/[\\/]/).filter(Boolean).at(-1) || session.repoRoot;
+}
+
 export default function App() {
   const { message } = AntApp.useApp();
   const [session, setSession] = React.useState<ReviewSession | null>(null);
@@ -40,8 +45,26 @@ export default function App() {
     void loadInitial();
   }, []);
 
+  React.useEffect(() => {
+    const syncVisibleThreads = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshThreads();
+      }
+    };
+
+    const interval = window.setInterval(syncVisibleThreads, 2500);
+    window.addEventListener('focus', syncVisibleThreads);
+    document.addEventListener('visibilitychange', syncVisibleThreads);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', syncVisibleThreads);
+      document.removeEventListener('visibilitychange', syncVisibleThreads);
+    };
+  }, [focusedThreadId]);
+
   async function loadInitial() {
-    // 首次进入页面并行拉取会话、diff 与评论线程，降低加载等待时间。
+    // Diff 内容是本次 review 启动时的快照；后续仅同步评论线程。
     const [sessionRes, diffRes, threadRes] = await Promise.all([fetch('/api/session'), fetch('/api/diff'), fetch('/api/threads')]);
     const nextSession = (await sessionRes.json()) as ReviewSession;
     const diff = (await diffRes.json()) as { files: DiffFile[] };
@@ -149,8 +172,11 @@ export default function App() {
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
           <div className={styles.brandMark}>DR</div>
-          <div>
-            <Typography.Title level={3}>Diff 审查台</Typography.Title>
+          <div className={styles.brandCopy}>
+            <Typography.Text className={styles.repoName} title={session?.repoRoot}>
+              {sessionRepoName(session)}
+            </Typography.Text>
+            <Typography.Text className={styles.productName}>Diff 审查台</Typography.Text>
             <Typography.Text type="secondary">{session ? modeLabel(session) : '正在加载会话'}</Typography.Text>
           </div>
         </div>

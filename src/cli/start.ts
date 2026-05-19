@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
@@ -20,6 +20,7 @@ async function main() {
   const diffFiles = parseUnifiedDiff(diff);
   const session: ReviewSession = {
     id: crypto.randomUUID(),
+    repoName: basename(repoRoot),
     repoRoot,
     mode,
     diffHash: diffHash(diff),
@@ -39,6 +40,10 @@ async function main() {
   openBrowser(uiUrl);
 
   console.log(`Diff Review is running: ${uiUrl}`);
+  console.log(`Repo: ${session.repoName} (${repoRoot})`);
+  if (!useVite && uiUrl !== 'http://127.0.0.1:4966') {
+    console.log(`Default port 4966 is busy; using ${uiUrl}`);
+  }
   console.log(`Mode: ${modeLabel(mode)}`);
   console.log(`Files: ${diffFiles.length}`);
   if (comments.length > 0) {

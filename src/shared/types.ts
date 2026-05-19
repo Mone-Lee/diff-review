@@ -65,6 +65,7 @@ export type ReviewThread = {
 
 export type ReviewSession = {
   id: string;
+  repoName: string;
   repoRoot: string;
   mode: ReviewMode;
   diffHash: string;
