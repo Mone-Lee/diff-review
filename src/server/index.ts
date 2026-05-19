@@ -1,10 +1,11 @@
 import express from 'express';
 import { existsSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
 import type { DiffFile, MarkdownPreview, PromptScope, ReviewComment, ReviewSession, ReviewThread } from '../shared/types';
+import { readFileForPreview } from '../core/git';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
-import { readFileForPreview } from '../core/git';
 import { readComments, writeComments } from './storage';
 import { getOpenThreadStatus, getThreadStatus, sameAnchor } from '../shared/thread-utils';
 
@@ -15,6 +16,7 @@ export type ReviewServerState = {
 };
 
 export async function startServer(state: ReviewServerState, port = 4966): Promise<string> {
+  const markdownPreviews = await buildMarkdownPreviewCache(state);
   const app = express();
   app.use(express.json({ limit: '2mb' }));
 
@@ -26,22 +28,24 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     res.json({ files: state.diffFiles });
   });
 
+  app.get('/api/review-state', async (_req, res, next) => {
+    try {
+      const comments = await readComments(state.session.repoRoot);
+      res.json({ session: state.session, files: state.diffFiles, threads: comments.threads });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/api/markdown-preview', async (req, res, next) => {
     try {
       // path 既可能是新路径，也可能是 rename/delete 场景下的旧路径。
       const filePath = String(req.query.path ?? '');
-      const file = state.diffFiles.find((item) => item.path === filePath || item.oldPath === filePath);
-      if (!file || !file.isMarkdown) {
+      const preview = markdownPreviews.get(filePath);
+      if (!preview) {
         res.status(404).json({ error: 'Markdown file not found in diff' });
         return;
       }
-      const { content, deleted } = await readFileForPreview(file, state.session.mode, state.session.repoRoot);
-      const preview: MarkdownPreview = {
-        filePath: file.path,
-        content,
-        deleted,
-        blocks: buildMarkdownBlocks(content)
-      };
       res.json(preview);
     } catch (error) {
       next(error);
@@ -280,19 +284,42 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   return listen(app, port);
 }
 
+async function buildMarkdownPreviewCache(state: ReviewServerState): Promise<Map<string, MarkdownPreview>> {
+  const previews = new Map<string, MarkdownPreview>();
+  await Promise.all(
+    state.diffFiles
+      .filter((file) => file.isMarkdown)
+      .map(async (file) => {
+        const { content, deleted } = await readFileForPreview(file, state.session.mode, state.session.repoRoot);
+        const preview: MarkdownPreview = {
+          filePath: file.path,
+          content,
+          deleted,
+          blocks: buildMarkdownBlocks(content)
+        };
+        previews.set(file.path, preview);
+        previews.set(file.oldPath, preview);
+      })
+  );
+  return previews;
+}
+
 function listen(app: express.Express, port: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const server = app.listen(port, '127.0.0.1', () => {
-      const address = server.address();
-      const actualPort = typeof address === 'object' && address ? address.port : port;
-      resolve(`http://127.0.0.1:${actualPort}`);
-    });
+    const server = createServer(app);
+
     server.once('error', (error: NodeJS.ErrnoException) => {
       if (error.code === 'EADDRINUSE' && port !== 0) {
         listen(app, 0).then(resolve, reject);
         return;
       }
       reject(error);
+    });
+
+    server.listen(port, '127.0.0.1', () => {
+      const address = server.address();
+      const actualPort = typeof address === 'object' && address ? address.port : port;
+      resolve(`http://127.0.0.1:${actualPort}`);
     });
   });
 }

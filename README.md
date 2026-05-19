@@ -65,6 +65,8 @@ local-diff-reviewer --repo /path/to/project staged
 项目 B /diff-review -> http://127.0.0.1:<空闲端口> -> 项目 B diff
 ```
 
+页面打开后，代码 diff 和 Markdown 预览会固定为本次启动时的快照；工作区继续变动不会改写已打开页面里的代码内容。评论线程会在页面可见时持续同步。若需要审查最新工作区内容，请再次执行 `local-diff-reviewer` 或 `/diff-review` 打开新的 review 会话。
+
 注意：本地开发的 `--dev` 模式仍使用 Vite dev server，端口和 API proxy 是固定的；多项目并行审查请使用默认的构建页面模式。
 
 ## Skill 使用方式
