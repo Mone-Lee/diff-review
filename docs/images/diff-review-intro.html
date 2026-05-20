@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diff-review intro poster</title>
+    <style>
+      :root {
+        --ink: #071945;
+        --muted: #52617e;
+        --blue: #0f63ff;
+        --blue-2: #2f7cff;
+        --line: #dce7f7;
+        --soft: #f4f8ff;
+        --green: #2ca260;
+        --green-soft: #edf9f1;
+        --gold: #f1a600;
+        --red: #ef6b73;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #eaf1fb;
+        color: var(--ink);
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display",
+          "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      .poster {
+        position: relative;
+        width: 1440px;
+        min-height: 2048px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 83% 7%, rgba(15, 99, 255, 0.13), transparent 29%),
+          linear-gradient(180deg, #ffffff 0%, #f7fbff 52%, #ffffff 100%);
+        padding: 54px 34px 42px;
+      }
+
+      .poster::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(15, 99, 255, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(15, 99, 255, 0.035) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: linear-gradient(180deg, #000 0%, transparent 46%);
+      }
+
+      .content {
+        position: relative;
+        z-index: 1;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 0 8px 26px;
+      }
+
+      .release {
+        color: var(--blue);
+        font-size: 36px;
+        font-weight: 900;
+        letter-spacing: 2px;
+      }
+
+      .pill {
+        border-radius: 999px;
+        background: #eaf2ff;
+        color: var(--blue);
+        font-size: 24px;
+        font-weight: 800;
+        padding: 14px 28px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 604px 1fr;
+        gap: 26px;
+        align-items: start;
+      }
+
+      h1 {
+        margin: 0;
+        color: #061747;
+        font-size: 96px;
+        line-height: 0.96;
+        letter-spacing: -1px;
+        font-weight: 950;
+      }
+
+      .subtitle {
+        margin: 30px 0 72px;
+        color: #39476b;
+        font-size: 25px;
+        line-height: 1.45;
+        font-weight: 600;
+      }
+
+      .intro-card {
+        display: grid;
+        grid-template-columns: 80px 1fr;
+        gap: 26px;
+        align-items: start;
+        border: 2px solid #d8e6fb;
+        border-radius: 22px;
+        background: linear-gradient(180deg, #f7fbff 0%, #f0f6ff 100%);
+        padding: 34px 38px;
+        box-shadow: 0 18px 50px rgba(10, 42, 99, 0.08);
+      }
+
+      .spark {
+        width: 76px;
+        height: 76px;
+        display: grid;
+        place-items: center;
+        border-radius: 18px;
+        background: linear-gradient(145deg, #0757ff, #1478ff);
+        color: white;
+        font-size: 42px;
+        font-weight: 900;
+        box-shadow: 0 18px 34px rgba(15, 99, 255, 0.26);
+      }
+
+      .intro-card p {
+        margin: 0 0 20px;
+        color: #263657;
+        font-size: 25px;
+        line-height: 1.72;
+        font-weight: 650;
+      }
+
+      .visual-stage {
+        position: relative;
+        height: 692px;
+      }
+
+      .browser-shot {
+        position: absolute;
+        border: 1px solid #d8e1ee;
+        border-radius: 20px;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 30px 70px rgba(7, 25, 69, 0.15);
+      }
+
+      .browser-bar {
+        height: 42px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 18px;
+        background: #f8fbff;
+        border-bottom: 1px solid #dce5f2;
+      }
+
+      .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+      }
+
+      .red { background: #ff5d57; }
+      .yellow { background: #ffbd2e; }
+      .green { background: #28c840; }
+
+      .shot-one {
+        right: 0;
+        top: 0;
+        width: 648px;
+        height: 458px;
+      }
+
+      .shot-two {
+        right: 42px;
+        top: 388px;
+        width: 560px;
+        height: 338px;
+      }
+
+      .mock-ui {
+        height: calc(100% - 42px);
+        display: grid;
+        grid-template-columns: 168px 1fr 190px;
+        background: #fff;
+        color: #18213a;
+        font-size: 13px;
+      }
+
+      .mock-side {
+        border-right: 1px solid #dde6f3;
+        padding: 16px 14px;
+        background: #f9fbff;
+      }
+
+      .mock-brand {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 18px;
+        font-weight: 900;
+      }
+
+      .mark {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        border-radius: 12px;
+        color: #fff;
+        background: linear-gradient(150deg, #174bd0, #2c7dff);
+        font-weight: 900;
+      }
+
+      .file-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 11px 10px;
+        border-radius: 8px;
+        color: #34415f;
+        font-weight: 700;
+      }
+
+      .file-row.active {
+        background: #e8f0ff;
+        color: #0c3f9c;
+        border-left: 4px solid var(--blue);
+      }
+
+      .mock-code {
+        padding: 18px 18px 0;
+      }
+
+      .mock-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        font-size: 20px;
+        font-weight: 900;
+      }
+
+      .tiny-btn {
+        border: 1px solid #d4ddea;
+        border-radius: 6px;
+        padding: 7px 10px;
+        background: #fff;
+        color: #35425c;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .code-line {
+        display: grid;
+        grid-template-columns: 44px 1fr;
+        gap: 12px;
+        height: 29px;
+        align-items: center;
+        border-top: 1px solid #edf2f8;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      .ln {
+        color: #7a8aa4;
+        text-align: right;
+      }
+
+      .add { background: #e9faee; color: #12833f; }
+      .del { background: #fff0f0; color: #bf2638; }
+
+      .thread {
+        margin-top: 10px;
+        border: 2px solid #7bb5ff;
+        border-left: 7px solid var(--blue);
+        border-radius: 8px;
+        padding: 14px;
+        background: #fbfdff;
+      }
+
+      .agent-note {
+        margin-top: 10px;
+        border-radius: 8px;
+        background: #ddfae6;
+        color: #1d6539;
+        padding: 12px 14px;
+        line-height: 1.45;
+        font-weight: 700;
+      }
+
+      .mock-comments {
+        border-left: 1px solid #dde6f3;
+        padding: 16px 12px;
+        background: #fbfdff;
+      }
+
+      .comment-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        font-size: 18px;
+        font-weight: 900;
+      }
+
+      .comment-card {
+        margin-bottom: 10px;
+        border: 1px solid #d6e0ef;
+        border-radius: 10px;
+        padding: 10px;
+        background: #fff;
+        line-height: 1.45;
+        color: #2f3b56;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 7px;
+        padding: 3px 8px;
+        background: #fff7db;
+        color: #a66a00;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .screenshot-img {
+        width: 100%;
+        height: calc(100% - 42px);
+        object-fit: cover;
+        object-position: center top;
+        display: block;
+      }
+
+      section {
+        margin-top: 46px;
+      }
+
+      h2 {
+        margin: 0 0 20px;
+        color: var(--blue);
+        font-size: 38px;
+        line-height: 1;
+        font-weight: 950;
+      }
+
+      .why-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+      }
+
+      .reason-card,
+      .value-card,
+      .cap-card,
+      .scene-card {
+        border: 1.5px solid var(--line);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 10px 30px rgba(11, 40, 92, 0.06);
+      }
+
+      .reason-card {
+        display: grid;
+        grid-template-columns: 78px 1fr;
+        gap: 16px;
+        align-items: center;
+        min-height: 118px;
+        padding: 22px 24px;
+      }
+
+      .icon {
+        width: 64px;
+        height: 64px;
+        display: grid;
+        place-items: center;
+        border-radius: 15px;
+        background: #edf5ff;
+        color: var(--blue);
+        font-size: 34px;
+        font-weight: 950;
+      }
+
+      .reason-card strong {
+        display: block;
+        margin-bottom: 5px;
+        color: #15244b;
+        font-size: 24px;
+      }
+
+      .reason-card span {
+        color: #45536f;
+        font-size: 22px;
+        font-weight: 650;
+      }
+
+      .blue-band {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 24px;
+        align-items: center;
+        margin-top: 24px;
+        border-radius: 15px;
+        background: linear-gradient(135deg, #075bff 0%, #0a69ff 100%);
+        color: #fff;
+        padding: 22px 48px;
+        box-shadow: 0 22px 42px rgba(15, 99, 255, 0.22);
+      }
+
+      .check {
+        width: 86px;
+        height: 86px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #fff;
+        color: var(--blue);
+        font-size: 54px;
+        font-weight: 950;
+      }
+
+      .blue-band p {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1.32;
+        font-weight: 900;
+      }
+
+      .value-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+      }
+
+      .value-card {
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        gap: 18px;
+        align-items: center;
+        min-height: 118px;
+        padding: 22px 24px;
+      }
+
+      .value-card strong {
+        display: block;
+        color: #26365f;
+        font-size: 22px;
+        line-height: 1.35;
+      }
+
+      .value-card.green-card {
+        border: 3px solid var(--green);
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .green-card .icon {
+        background: #dff5e7;
+        color: var(--green);
+      }
+
+      .green-card strong {
+        color: var(--green);
+        font-size: 27px;
+      }
+
+      .green-card span {
+        display: block;
+        margin-top: 5px;
+        font-size: 20px;
+        font-weight: 850;
+      }
+
+      .scene-grid {
+        display: grid;
+        grid-template-columns: 1fr 1.26fr;
+        gap: 28px;
+      }
+
+      .scene-card {
+        min-height: 260px;
+        padding: 28px 34px;
+      }
+
+      .scene-title {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        margin-bottom: 16px;
+        color: #12234e;
+        font-size: 28px;
+        font-weight: 950;
+      }
+
+      .scene-card ul {
+        margin: 10px 0 22px 112px;
+        padding: 0;
+        color: #2d3d62;
+        font-size: 21px;
+        line-height: 1.58;
+        font-weight: 650;
+      }
+
+      .scene-note {
+        margin: 0 0 0 68px;
+        border-radius: 999px;
+        background: #eef5ff;
+        color: var(--blue);
+        text-align: center;
+        padding: 12px 24px;
+        font-size: 23px;
+        font-weight: 950;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0;
+        align-items: start;
+        margin-top: 18px;
+      }
+
+      .flow-step {
+        position: relative;
+        text-align: center;
+        color: #213457;
+        font-size: 20px;
+        font-weight: 850;
+      }
+
+      .flow-step:not(:last-child)::after {
+        content: "→";
+        position: absolute;
+        top: 26px;
+        right: -14px;
+        color: #8a98ad;
+        font-size: 34px;
+        font-weight: 500;
+      }
+
+      .flow-icon {
+        width: 66px;
+        height: 66px;
+        margin: 0 auto 10px;
+        display: grid;
+        place-items: center;
+        border: 4px solid #aeb8c8;
+        border-radius: 14px;
+        color: var(--blue);
+        font-size: 32px;
+        background: #fff;
+      }
+
+      .flow-step:first-child .flow-icon,
+      .flow-step:last-child .flow-icon {
+        border-color: var(--green);
+        color: var(--green);
+      }
+
+      .flow-note {
+        margin: 24px auto 0;
+        width: 520px;
+        border-radius: 999px;
+        background: #edf9f1;
+        color: var(--green);
+        text-align: center;
+        padding: 12px 24px;
+        font-size: 24px;
+        font-weight: 950;
+      }
+
+      .cap-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+
+      .cap-card {
+        min-height: 136px;
+        display: grid;
+        grid-template-columns: 64px 1fr;
+        gap: 14px;
+        align-items: center;
+        padding: 18px 22px;
+      }
+
+      .cap-card.wide {
+        grid-column: span 2;
+      }
+
+      .cap-card.green-outline {
+        border: 3px solid var(--green);
+        background: var(--green-soft);
+      }
+
+      .cap-card strong {
+        display: block;
+        color: #24365d;
+        font-size: 23px;
+        line-height: 1.32;
+      }
+
+      .cap-card span {
+        display: block;
+        margin-top: 4px;
+        color: #5b6881;
+        font-size: 20px;
+        line-height: 1.32;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .cap-card.green-outline strong,
+      .cap-card.green-outline span {
+        color: var(--green);
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 34px;
+        padding: 20px 26px;
+        border-radius: 16px;
+        background: #061747;
+        color: #fff;
+        font-size: 19px;
+        font-weight: 800;
+      }
+
+      .footer b {
+        color: #7db0ff;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="poster">
+      <div class="content">
+        <div class="topbar">
+          <div class="release">【新工具发布】</div>
+          <div class="pill">LOCAL AI REVIEW TOOL</div>
+        </div>
+
+        <div class="hero">
+          <div>
+            <h1>diff-review</h1>
+            <p class="subtitle">让 coding agent 在关键节点停下来，给你一次真正的 code review</p>
+
+            <div class="intro-card">
+              <div class="spark">✦</div>
+              <div>
+                <p>Vibe coding 场景下的 AI 机协作 code review 工具。</p>
+                <p>Agent 把 diff / plan 推进浏览器给你看一眼，</p>
+                <p>你在行号上评评论，agent 读完评论自动改代码 — 直到你说 OK。</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="visual-stage">
+            <div class="browser-shot shot-one">
+              <div class="browser-bar">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+                <span style="margin-left: 16px; font-weight: 850; color: #283754">Diff 审查台</span>
+                <span style="margin-left: auto; color: #2d7c45; font-weight: 800">127.0.0.1</span>
+              </div>
+              <img class="screenshot-img" src="./diff-review-ui.jpg" alt="diff-review side-by-side review screenshot" />
+            </div>
+
+            <div class="browser-shot shot-two">
+              <div class="browser-bar">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+                <span style="margin-left: 16px; font-weight: 850; color: #283754">Review Comments</span>
+              </div>
+              <img class="screenshot-img" src="./image.png" alt="diff-review side-by-side review screenshot" />
+            </div>
+          </div>
+        </div>
+
+        <section>
+          <h2>为什么做这个</h2>
+          <div class="why-grid">
+            <div class="reason-card">
+              <div class="icon">↯</div>
+              <div><strong>Agent 跑完就 apply</strong><span>人来不及看</span></div>
+            </div>
+            <div class="reason-card">
+              <div class="icon">⌁</div>
+              <div><strong>终端跑 diff</strong><span>文本体验很差</span></div>
+            </div>
+            <div class="reason-card">
+              <div class="icon">☷</div>
+              <div><strong>修改路径分散</strong><span>难以查看脉络</span></div>
+            </div>
+          </div>
+          <div class="blue-band">
+            <div class="check">✓</div>
+            <p>让 agent 主动把 diff 推到浏览器里给你 review。你只负责读代码和打字。</p>
+          </div>
+        </section>
+
+        <section>
+          <h2>核心价值</h2>
+          <div class="value-grid">
+            <div class="value-card"><div class="icon">★</div><strong>把方向问题<br />拦在动手前</strong></div>
+            <div class="value-card"><div class="icon">✓</div><strong>把人工判断<br />嵌进 agent 迭代循环</strong></div>
+            <div class="value-card"><div class="icon">⏱</div><strong>一次 review<br />3-10 分钟</strong></div>
+          </div>
+        </section>
+
+        <section>
+          <h2>两个核心场景</h2>
+          <div class="scene-grid">
+            <div class="scene-card">
+              <div class="scene-title"><div class="icon">▤</div><span>场景 1：Plan / Spec Review</span></div>
+              <ul>
+                <li>先 review 方案，再动代码</li>
+                <li>plan markdown 预览，按需删评论</li>
+                <li>Agent 读评论 -> 改 plan -> 连续 review</li>
+              </ul>
+              <p class="scene-note">把推倒重来的成本挡在动手前</p>
+            </div>
+            <div class="scene-card">
+              <div class="scene-title"><div class="icon" style="color: var(--green)">⌘</div><span>场景 2：本地 diff review</span></div>
+              <div class="flow">
+                <div class="flow-step"><div class="flow-icon">&lt;/&gt;</div>生成 diff</div>
+                <div class="flow-step"><div class="flow-icon">▭</div>打开<br />浏览器</div>
+                <div class="flow-step"><div class="flow-icon">☰</div>行号<br />评论</div>
+                <div class="flow-step"><div class="flow-icon">◎</div>agent<br />自动改代码</div>
+                <div class="flow-step"><div class="flow-icon">✓</div>OK 后<br />提交</div>
+              </div>
+              <div class="flow-note">一次 review 3-10 分钟</div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>关键能力</h2>
+          <div class="cap-grid">
+            <div class="cap-card"><div class="icon">☰</div><strong>行级、文件级评论</strong><span>支持多行范围评论</span></div>
+            <div class="cap-card"><div class="icon">↻</div><strong>多轮状态流转</strong><span>submit -> replied -> resolved</span></div>
+            <div class="cap-card"><div class="icon">▧</div><strong>Agent findings</strong><span>自动提炼并回显</span></div>
+            <div class="cap-card wide"><div class="icon">▰</div><strong>评论记录自动归档</strong><span>~/.local/diff-review/logs</span></div>
+            <div class="cap-card green-outline"><div class="icon">✓</div><strong>纯本地：127.0.0.1</strong><span>代码不出本机</span></div>
+          </div>
+        </section>
+
+        <div class="footer">
+          <span><b>diff-review</b> · local GitHub-style diff review for AI coding agents</span>
+          <span>Browser review · Agent loop · Local first</span>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>
