@@ -1,8 +1,3 @@
-import { createHash } from 'node:crypto';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir, platform } from 'node:os';
-import { basename, dirname, join } from 'node:path';
-
 /**
  * 整体流程说明
  * 1. 启动 review 时，`recordRuntime` 会把当前仓库对应的运行信息写入本地注册表文件。
@@ -12,6 +7,11 @@ import { basename, dirname, join } from 'node:path';
  * 5. stop 执行后会清空该仓库注册表；无法终止或已失效的记录会归入 stale 结果用于提示。
  * 6. 读取注册表时遇到文件缺失或损坏，按空记录处理，确保主流程可继续执行。
  */
+
+import { createHash } from 'node:crypto';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir, platform } from 'node:os';
+import { basename, dirname, join } from 'node:path';
 
 // 运行时注册表按仓库隔离：每个 repoRoot hash 对应一个文件。
 // 这样 "local-diff-reviewer stop" 只会停止当前仓库创建的进程。

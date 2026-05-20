@@ -150,11 +150,19 @@ npm run release major
 
 该命令会按顺序执行：
 
+- 发布前检查 npmjs 认证与连通性（`npm whoami --registry=https://registry.npmjs.org/` + `npm ping --registry=https://registry.npmjs.org/`）
 - `npm run release:check`
 - `npm version <patch|minor|major>`（默认 `patch`）
 - `npm publish`
 - `git push`
 - `git push --tags`
+
+若 npmjs 认证缺失或过期，发布会在 preflight 阶段提前失败，并提示执行：
+
+```bash
+npm login --registry=https://registry.npmjs.org/
+npm whoami --registry=https://registry.npmjs.org/
+```
 
 只有在 `npm publish` 成功后，才会自动推送提交和标签到 GitHub。
 

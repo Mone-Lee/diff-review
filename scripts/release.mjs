@@ -1,9 +1,18 @@
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
+const NPMJS_REGISTRY = 'https://registry.npmjs.org/';
+
 function run(command) {
   console.log(`\n$ ${command}`);
   execSync(command, { stdio: 'inherit' });
+}
+
+function runCapture(command) {
+  return execSync(command, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8'
+  }).trim();
 }
 
 function readVersion() {
@@ -43,7 +52,36 @@ function commitReleaseChangesIfNeeded() {
   run(`git commit -m "${message}"`);
 }
 
+function ensureNpmPublishPreflight() {
+  const configuredRegistry = runCapture('npm config get registry');
+  if (configuredRegistry !== NPMJS_REGISTRY) {
+    console.warn(`\nWarning: current npm registry is ${configuredRegistry}`);
+    console.warn(`Release publish target is fixed to ${NPMJS_REGISTRY}`);
+  }
+
+  try {
+    const npmUser = runCapture(`npm whoami --registry=${NPMJS_REGISTRY}`);
+    console.log(`\nPublish preflight passed. npmjs user: ${npmUser}`);
+  } catch {
+    console.error('\nRelease preflight failed: npmjs authentication is missing or expired.');
+    console.error(`Please run: npm login --registry=${NPMJS_REGISTRY}`);
+    console.error(`Then verify: npm whoami --registry=${NPMJS_REGISTRY}`);
+    process.exit(1);
+  }
+
+  try {
+    runCapture(`npm ping --registry=${NPMJS_REGISTRY}`);
+    console.log(`Publish preflight passed. npmjs registry reachable: ${NPMJS_REGISTRY}`);
+  } catch {
+    console.error('\nRelease preflight failed: npmjs registry is not reachable from current network.');
+    console.error(`Please check proxy/network and retry: npm ping --registry=${NPMJS_REGISTRY}`);
+    process.exit(1);
+  }
+}
+
 const releaseType = getReleaseType();
+
+ensureNpmPublishPreflight();
 
 run('npm run release:check');
 commitReleaseChangesIfNeeded();
@@ -53,7 +91,7 @@ const version = readVersion();
 run('git add package.json package-lock.json 2>/dev/null || git add package.json');
 run(`git commit -m "release: v${version}"`);
 run(`git tag v${version}`);
-run('npm publish --registry=https://registry.npmjs.org/');
+run(`npm publish --registry=${NPMJS_REGISTRY}`);
 
 console.log('\nnpm publish succeeded, pushing commits and tags to GitHub...');
 run('git push');
