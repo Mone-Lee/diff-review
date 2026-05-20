@@ -15,6 +15,7 @@ Use this skill when the user asks for `/diff-review`, wants to inspect current w
 - `/diff-review working`: review current working tree diff.
 - `/diff-review staged`: review staged diff.
 - `/diff-review <base> <target>`: review diff between two Git revisions.
+- `/diff-review stop`: stop all review runtimes created for the current workspace repository.
 
 Do not ask the user to run a shell CLI manually. Determine the target workspace/repository from the user's active environment context, then run the package command with that repository as the command working directory:
 

@@ -42,6 +42,7 @@ npx skills add Mone-Lee/diff-review
 local-diff-reviewer
 local-diff-reviewer staged
 local-diff-reviewer HEAD~1 HEAD
+local-diff-reviewer stop
 local-diff-reviewer --repo /path/to/project
 ```
 
@@ -50,6 +51,15 @@ local-diff-reviewer --repo /path/to/project
 - `working`：审查当前工作区里尚未 `git add` 的改动。
 - `staged`：审查已经 `git add`、但还没有提交的改动。
 - `revision`：审查两个 revision 之间的差异，例如 `local-diff-reviewer HEAD~1 HEAD` 会比较 `HEAD~1..HEAD`。
+
+停止当前项目已启动的 review 进程：
+
+- `stop`：按当前 Git 仓库范围清理该仓库启动过的 review 运行进程（包含其 API 端口进程）。
+
+```bash
+local-diff-reviewer stop
+local-diff-reviewer --repo /path/to/project stop
+```
 
 如果命令不是在目标项目目录里启动，可以用 `--repo <path>` 显式指定要审查的 Git 仓库：
 
@@ -77,6 +87,7 @@ local-diff-reviewer --repo /path/to/project staged
 /diff-review
 /diff-review staged
 /diff-review HEAD~1 HEAD
+/diff-review stop
 ```
 
 安装 skill：

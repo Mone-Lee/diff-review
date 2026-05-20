@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
+import { hasRuntimeRecord, recordRuntime, stopRecordedRuntimes } from './runtime-registry';
 import { startServer } from '../server';
 import type { ReviewSession } from '../shared/types';
 
@@ -13,7 +14,11 @@ const builtWebDist = join(packageRoot, 'dist', 'web');
 
 async function main() {
   // CLI 参数只负责确定审查模式，真正的数据都来自当前仓库状态。
-  const { dev, repo, reviewArgs, comments } = parseCliOptions(process.argv.slice(2));
+  const { command, dev, repo, reviewArgs, comments } = parseCliOptions(process.argv.slice(2));
+  if (command === 'stop') {
+    await stopCommand(repo);
+    return;
+  }
   const mode = parseReviewMode(reviewArgs);
   const repoRoot = await getRepoRoot(repo ?? process.cwd());
   const diff = await getDiff(mode, repoRoot);
@@ -34,9 +39,16 @@ async function main() {
   const useVite = dev || !hasBuiltWeb;
   const uiUrl = useVite ? 'http://127.0.0.1:5173' : apiUrl;
 
-  if (useVite) {
-    startVite();
-  }
+  const vitePid = useVite ? startVite() : undefined;
+  await recordRuntime({
+    pid: process.pid,
+    vitePid,
+    repoRoot,
+    repoName: session.repoName,
+    startedAt: session.createdAt,
+    apiPort: parsePort(apiUrl),
+    usesVite: useVite
+  });
   openBrowser(uiUrl);
 
   console.log(`Diff Review is running: ${uiUrl}`);
@@ -54,7 +66,14 @@ async function main() {
   }
 }
 
-function parseCliOptions(args: string[]): { dev: boolean; repo: string | undefined; reviewArgs: string[]; comments: string[] } {
+function parseCliOptions(args: string[]): {
+  command: 'review' | 'stop';
+  dev: boolean;
+  repo: string | undefined;
+  reviewArgs: string[];
+  comments: string[];
+} {
+  let command: 'review' | 'stop' = 'review';
   const reviewArgs: string[] = [];
   const comments: string[] = [];
   let repo: string | undefined;
@@ -65,6 +84,10 @@ function parseCliOptions(args: string[]): { dev: boolean; repo: string | undefin
     const arg = args[index];
     if (arg === '--dev') {
       dev = true;
+      continue;
+    }
+    if (arg === 'stop') {
+      command = 'stop';
       continue;
     }
     if (arg === '--repo') {
@@ -96,7 +119,38 @@ function parseCliOptions(args: string[]): { dev: boolean; repo: string | undefin
     reviewArgs.push(arg);
   }
 
-  return { dev, repo, reviewArgs, comments };
+  return { command, dev, repo, reviewArgs, comments };
+}
+
+async function stopCommand(repo: string | undefined): Promise<void> {
+  const repoRoot = await getRepoRoot(repo ?? process.cwd());
+  const hasRecord = await hasRuntimeRecord(repoRoot);
+  const { stopped, stale } = await stopRecordedRuntimes(repoRoot);
+  const total = stopped.length + stale.length;
+  if (total === 0) {
+    if (hasRecord) {
+      console.log('No running review process found for this repo.');
+      return;
+    }
+    console.log('No review runtime record found for this repo.');
+    return;
+  }
+
+  console.log(`Stopped review runtimes: ${stopped.length}`);
+  for (const entry of stopped) {
+    console.log(
+      `- pid=${entry.pid} vitePid=${entry.vitePid ?? '-'} apiPort=${entry.apiPort} vite=${entry.usesVite ? 'yes' : 'no'} startedAt=${entry.startedAt}`
+    );
+  }
+  if (stale.length > 0) {
+    console.log(`Skipped stale records: ${stale.length}`);
+  }
+}
+
+function parsePort(url: string): number {
+  const parsed = new URL(url);
+  const port = parsed.port ? Number(parsed.port) : 80;
+  return Number.isNaN(port) ? 0 : port;
 }
 
 function modeLabel(mode: ReviewSession['mode']): string {
@@ -104,7 +158,7 @@ function modeLabel(mode: ReviewSession['mode']): string {
   return mode.kind;
 }
 
-function startVite() {
+function startVite(): number | undefined {
   // 由 review 进程托管 Vite 子进程，便于 Ctrl+C 一并退出。
   const child = spawn('npm', ['run', 'web:dev'], {
     cwd: packageRoot,
@@ -115,6 +169,7 @@ function startVite() {
 
   process.on('SIGINT', () => child.kill('SIGINT'));
   process.on('SIGTERM', () => child.kill('SIGTERM'));
+  return child.pid;
 }
 
 function openBrowser(url: string) {
