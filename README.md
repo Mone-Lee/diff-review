@@ -42,6 +42,7 @@ npx skills add Mone-Lee/diff-review
 local-diff-reviewer
 local-diff-reviewer staged
 local-diff-reviewer HEAD~1 HEAD
+local-diff-reviewer --new-session
 local-diff-reviewer stop
 local-diff-reviewer --repo /path/to/project
 ```
@@ -68,14 +69,19 @@ local-diff-reviewer --repo /path/to/project
 local-diff-reviewer --repo /path/to/project staged
 ```
 
-每次启动都会创建独立的本地 review 会话。多个项目里分别执行 `local-diff-reviewer` 或 `/diff-review` 时，打开的页面会分别绑定启动时的项目，不会被最后一次启动覆盖。默认优先使用 `127.0.0.1:4966`；如果端口已被占用，会自动选择一个空闲端口。
+同一项目里再次执行 `local-diff-reviewer` 或 `/diff-review` 时，默认会复用仍在运行的 review 页面和端口，并将该页面刷新为最新 diff。使用 `--new-session` 可以保留已有快照，再打开一个独立页面。不同项目的页面始终分别绑定各自的项目，不会被最后一次启动覆盖。首次启动默认优先使用 `127.0.0.1:4966`；独立页面或其他项目遇到端口占用时会自动选择空闲端口。
 
 ```text
 项目 A /diff-review -> http://127.0.0.1:4966  -> 项目 A diff
+项目 A /diff-review -> http://127.0.0.1:4966  -> 刷新为项目 A 最新 diff
+项目 A /diff-review --new-session -> http://127.0.0.1:<空闲端口> -> 项目 A 独立快照
 项目 B /diff-review -> http://127.0.0.1:<空闲端口> -> 项目 B diff
 ```
 
-页面打开后，代码 diff 和 Markdown 预览会固定为本次启动时的快照；工作区继续变动不会改写已打开页面里的代码内容。评论线程会在页面可见时持续同步。若需要审查最新工作区内容，请再次执行 `local-diff-reviewer` 或 `/diff-review` 打开新的 review 会话。
+页面打开后，代码 diff 和 Markdown 预览会固定为当前审查快照；工作区继续变动不会自行改写页面内容。再次执行 `local-diff-reviewer` 或 `/diff-review` 会让默认页面自动同步到新快照；使用 `--new-session` 打开的独立页面继续保留旧快照。评论线程与其创建时的 diff 快照绑定：旧线程会在评论侧栏中保留并标记为历史快照，但不会因另一份快照中恰好有相同行号而贴到错误代码上。
+
+评论、快照、代码行之间的绑定关系及页面更新判断详见
+[`docs/comment-snapshot-binding.md`](docs/comment-snapshot-binding.md)。
 
 注意：本地开发的 `--dev` 模式仍使用 Vite dev server，端口和 API proxy 是固定的；多项目并行审查请使用默认的构建页面模式。
 
@@ -87,6 +93,7 @@ local-diff-reviewer --repo /path/to/project staged
 /diff-review
 /diff-review staged
 /diff-review HEAD~1 HEAD
+/diff-review --new-session
 /diff-review stop
 ```
 

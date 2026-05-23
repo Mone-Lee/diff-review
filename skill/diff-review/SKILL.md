@@ -15,6 +15,7 @@ Use this skill when the user asks for `/diff-review`, wants to inspect current w
 - `/diff-review working`: review current working tree diff.
 - `/diff-review staged`: review staged diff.
 - `/diff-review <base> <target>`: review diff between two Git revisions.
+- `/diff-review --new-session`: preserve the current snapshot and open a separate review session.
 - `/diff-review stop`: stop all review runtimes created for the current workspace repository.
 
 Do not ask the user to run a shell CLI manually. Determine the target workspace/repository from the user's active environment context, then run the package command with that repository as the command working directory:
@@ -33,7 +34,7 @@ npx --yes local-diff-reviewer [args...] \
   --comment '{"type":"reply","threadId":"existing-thread-id","body":"Answer the existing thread as the agent."}'
 ```
 
-After the script prints a local URL, open it in the Codex browser when available. If browser automation is not available, report the URL.
+After a newly started script prints a local URL, open it in the Codex browser when available. If the script reports `Diff Review refreshed`, do not open another page: the already open review page updates automatically. If browser automation is not available, report the URL.
 
 When the user gives you copied prompt text containing `[thread:<id>]`, treat it as an existing review thread. After you answer or make code/doc changes for that thread, append a concise agent reply to the same thread with `--comment '{"type":"reply","threadId":"<id>","body":"..."}'` the next time you launch or refresh the viewer. If the viewer is already running and you can reach the API, post the same reply to `/api/threads/<id>/comments` with `author: "agent"`. Do this for every handled thread unless the user explicitly asks you not to write back. The reply should say what changed or why no change was made, not repeat the full diff.
 
@@ -46,6 +47,7 @@ When the user gives you copied prompt text containing `[thread:<id>]`, treat it 
 - AI prompt copy output includes `[thread:<id>]`, file path, line number or Markdown source line, and comment body.
 - Agent findings can be preloaded as comments with `--comment`.
 - A thread can contain multiple comments. New findings for the same anchor are appended to the existing thread, and repeated agent comments with identical bodies in the same thread are skipped.
+- Comments are associated with the diff snapshot where they were created. Refreshed workbenches retain older threads in the comment rail as history, without attaching old line comments to changed content.
 
 ## Comment Arguments
 
