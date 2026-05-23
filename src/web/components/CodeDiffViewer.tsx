@@ -22,6 +22,32 @@ type Props = {
   viewMode: 'inline' | 'split';
 };
 
+function threadAnchorOrder(thread: ReviewThread) {
+  if (thread.anchor.type === 'file') return 0;
+  return thread.anchor.lineNumber;
+}
+
+function getFirstFileThread(filePath: string, threads: ReviewThread[]) {
+  return threads
+    .filter((thread) => thread.filePath === filePath && thread.status !== 'resolved')
+    .sort((left, right) => threadAnchorOrder(left) - threadAnchorOrder(right) || left.createdAt.localeCompare(right.createdAt))[0];
+}
+
+function getDiffAnchorKey(thread: ReviewThread) {
+  if (thread.anchor.type !== 'diff-line') return null;
+  return `${thread.anchor.side}:${thread.anchor.lineNumber}`;
+}
+
+function scrollToContentTop(scrollContainer: HTMLElement) {
+  scrollContainer.scrollTop = 0;
+}
+
+function scrollToTarget(scrollContainer: HTMLElement, target: HTMLElement) {
+  const containerRect = scrollContainer.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  scrollContainer.scrollTop += targetRect.top - containerRect.top;
+}
+
 type SplitCell = {
   lineNumber?: number;
   content: string;
@@ -55,6 +81,36 @@ export function CodeDiffViewer({
   viewMode
 }: Props) {
   const [activeLine, setActiveLine] = React.useState<string | null>(null);
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const autoScrollKeyRef = React.useRef('');
+
+  React.useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer) return;
+
+    const autoScrollKey = `${file.path}:${viewMode}`;
+    if (autoScrollKeyRef.current === autoScrollKey) return;
+    autoScrollKeyRef.current = autoScrollKey;
+
+    const firstThread = getFirstFileThread(file.path, threads);
+    window.requestAnimationFrame(() => {
+      if (!firstThread || firstThread.anchor.type === 'file') {
+        scrollToContentTop(scrollContainer);
+        return;
+      }
+
+      const anchorKey = getDiffAnchorKey(firstThread);
+      const target = anchorKey
+        ? scrollContainer.querySelector<HTMLElement>(`[data-review-anchor="${CSS.escape(anchorKey)}"]`)
+        : null;
+      if (!target) {
+        scrollToContentTop(scrollContainer);
+        return;
+      }
+
+      scrollToTarget(scrollContainer, target);
+    });
+  }, [file.path, threads, viewMode]);
 
   function renderInlineThreads(lineThreads: ReviewThread[]) {
     if (lineThreads.length === 0) return null;
@@ -94,7 +150,7 @@ export function CodeDiffViewer({
       line.type === 'add' ? `${styles.diffRow} ${styles.add}` : line.type === 'remove' ? `${styles.diffRow} ${styles.remove}` : styles.diffRow;
 
     return (
-      <div className={rowClass} key={anchorKey}>
+      <div className={rowClass} key={anchorKey} data-review-anchor={`${side}:${lineNumber}`}>
         <button className={styles.lineNo} onClick={() => line.oldLineNumber && setActiveLine(anchorKey)}>
           {line.oldLineNumber ?? ''}
         </button>
@@ -201,7 +257,7 @@ export function CodeDiffViewer({
             : styles.splitCell;
 
     return (
-      <div className={className} key={cellKey}>
+      <div className={className} key={cellKey} data-review-anchor={cell.lineNumber ? `${cell.side}:${cell.lineNumber}` : undefined}>
         <button className={styles.lineNo} onClick={() => cell.lineNumber && setActiveLine(cellKey)}>{cell.lineNumber ?? ''}</button>
         <span className={cell.type === 'add' ? `${styles.lineSign} ${styles.signAdd}` : cell.type === 'remove' ? `${styles.lineSign} ${styles.signRemove}` : styles.lineSign}>
           {getLineSign(cell.type)}
@@ -227,7 +283,7 @@ export function CodeDiffViewer({
   }
 
   return (
-    <div className={styles.diffCard}>
+    <div className={styles.diffCard} ref={scrollRef}>
       {file.hunks.map((hunk) => (
         <div className={styles.hunk} key={hunk.header}>
           <div className={styles.hunkHeader}>{hunk.header}</div>

@@ -32,6 +32,42 @@ type Props = {
   onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
+function threadAnchorOrder(thread: ReviewThread) {
+  if (thread.anchor.type === 'file') return 0;
+  if (thread.anchor.type === 'markdown-line') return thread.anchor.lineNumber;
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function getFirstFileThread(filePath: string, threads: ReviewThread[]) {
+  return threads
+    .filter((thread) => thread.filePath === filePath && thread.status !== 'resolved')
+    .sort((left, right) => threadAnchorOrder(left) - threadAnchorOrder(right) || left.createdAt.localeCompare(right.createdAt))[0];
+}
+
+function scrollToContentTop(scrollContainer: HTMLElement) {
+  scrollContainer.scrollTop = 0;
+}
+
+function scrollToTarget(scrollContainer: HTMLElement, target: HTMLElement) {
+  const containerRect = scrollContainer.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  scrollContainer.scrollTop += targetRect.top - containerRect.top;
+}
+
+function findMarkdownAnchor(scrollContainer: HTMLElement, lineNumber: number) {
+  const anchors = [...scrollContainer.querySelectorAll<HTMLElement>('[data-review-line]')];
+  const previousAnchors = anchors.filter((anchor) => Number(anchor.dataset.reviewLine) <= lineNumber);
+  return previousAnchors.at(-1) ?? anchors.find((anchor) => Number(anchor.dataset.reviewLine) >= lineNumber) ?? null;
+}
+
+function getMarkdownScrollLine(preview: MarkdownPreview, lineNumber: number) {
+  const containingBlock = preview.blocks.find((block) => lineNumber >= block.startLine && lineNumber <= block.endLine);
+  if (containingBlock) return containingBlock.startLine;
+
+  const nextBlock = preview.blocks.find((block) => block.startLine >= lineNumber);
+  return nextBlock?.startLine ?? preview.blocks.at(-1)?.startLine ?? lineNumber;
+}
+
 function isSafeUrl(url: string) {
   // 仅允许常见安全协议与站内相对路径，拦截 javascript: 等危险链接。
   return /^(https?:|mailto:|#|\.{0,2}\/|\/)/i.test(url.trim());
@@ -131,6 +167,8 @@ export function MarkdownPreviewPanel({
 }: Props) {
   // preview 为 null 表示加载中或加载失败；当前 UI 统一展示 loading 态。
   const [preview, setPreview] = React.useState<MarkdownPreview | null>(null);
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const autoScrollKeyRef = React.useRef('');
 
   React.useEffect(() => {
     // 文件切换时重新拉取预览内容，确保右侧展示与当前文件同步。
@@ -141,16 +179,43 @@ export function MarkdownPreviewPanel({
       .catch(() => setPreview(null));
   }, [file.path]);
 
+  React.useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer || !preview || preview.filePath !== file.path) return;
+
+    if (autoScrollKeyRef.current === file.path) return;
+    autoScrollKeyRef.current = file.path;
+
+    const firstThread = getFirstFileThread(file.path, threads);
+    window.requestAnimationFrame(() => {
+      if (!firstThread || firstThread.anchor.type === 'file' || firstThread.anchor.type !== 'markdown-line') {
+        scrollToContentTop(scrollContainer);
+        return;
+      }
+
+      const scrollLine = getMarkdownScrollLine(preview, firstThread.anchor.lineNumber);
+      const target = scrollContainer.querySelector<HTMLElement>(`[data-review-line="${scrollLine}"]`) ?? findMarkdownAnchor(scrollContainer, scrollLine);
+      if (!target) {
+        scrollToContentTop(scrollContainer);
+        return;
+      }
+
+      scrollToTarget(scrollContainer, target);
+    });
+  }, [file.path, preview, threads]);
+
   const threadsByLine = React.useMemo(() => {
     const nextThreadsByLine = new Map<number, ReviewThread[]>();
     for (const thread of threads) {
       if (thread.anchor.type !== 'markdown-line' || thread.anchor.filePath !== file.path) continue;
-      const lineThreads = nextThreadsByLine.get(thread.anchor.lineNumber) ?? [];
+      const block = preview?.blocks.find((item) => thread.anchor.type === 'markdown-line' && thread.anchor.lineNumber >= item.startLine && thread.anchor.lineNumber <= item.endLine);
+      const displayLineNumber = block?.startLine ?? thread.anchor.lineNumber;
+      const lineThreads = nextThreadsByLine.get(displayLineNumber) ?? [];
       lineThreads.push(thread);
-      nextThreadsByLine.set(thread.anchor.lineNumber, lineThreads);
+      nextThreadsByLine.set(displayLineNumber, lineThreads);
     }
     return nextThreadsByLine;
-  }, [file.path, threads]);
+  }, [file.path, preview?.blocks, threads]);
 
   const renderCommentableBlock = React.useCallback((lineNumber: number | undefined, content: React.ReactNode) => {
     if (!lineNumber) return content;
@@ -298,7 +363,7 @@ export function MarkdownPreviewPanel({
   }
 
   return (
-    <div className={styles.markdownShell}>
+    <div className={styles.markdownShell} ref={scrollRef}>
       {preview.deleted ? <Alert className={styles.deletedBanner} message="该文件已删除，仅展示删除前预览" type="warning" showIcon /> : null}
       <article className={styles.markdownArticle}>
         <div className={styles.markdownBody}>

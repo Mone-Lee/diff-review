@@ -40,7 +40,7 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
   const [isComposerOpen, setIsComposerOpen] = React.useState(false);
 
   return (
-    <div className={styles.markdownCommentBlock}>
+    <div className={styles.markdownCommentBlock} data-review-anchor={`line:${lineNumber}`} data-review-line={lineNumber}>
       <div className={styles.markdownCommentContent}>{children}</div>
       {lineThreads.length === 0 ? (
         <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setIsComposerOpen(true)}>
