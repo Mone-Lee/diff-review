@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { DownOutlined } from '@ant-design/icons';
-import { Button, Card, Dropdown, Empty, Modal, Segmented, Space, Switch, Tag, Typography } from 'antd';
+import { Button, Card, Dropdown, Empty, Modal, Segmented, Space, Switch, Tag, Typography, Flex } from 'antd';
 import type { DiffFile, ReviewThread } from '../../shared/types';
 import { COMMENT_STATUS_TEXT_MAP } from '../../shared/types';
 import { getThreadStatus, isThreadOnFileSnapshot } from '../../shared/thread-utils';
@@ -16,11 +16,11 @@ type Props = {
   currentFiles: DiffFile[];
   currentFilePath: string;
   focusedThreadId: string | null;
+  onLocateThread: (threadId: string) => void;
   onPatch: (id: string, status: ReviewThread['status']) => Promise<void>;
   onDeleteThread: (id: string) => Promise<void>;
   onReply: (id: string, body: string) => Promise<void>;
   onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onDeleteComment: (threadId: string, commentId: string) => Promise<void>;
   onCopy: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
@@ -35,9 +35,10 @@ const GROUP_STATUS_ORDER: Record<ReviewThread['status'], number> = {
   resolved: 2
 };
 
-export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId, onPatch, onDeleteThread, onReply, onPatchComment, onDeleteComment, onCopy }: Props) {
+export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId, onLocateThread, onPatch, onDeleteThread, onReply, onPatchComment, onCopy }: Props) {
   const [filter, setFilter] = React.useState<ThreadFilter>('all');
   const [scope, setScope] = React.useState<ThreadScope>('current-file');
+  const [locateFlashThreadId, setLocateFlashThreadId] = React.useState<string | null>(null);
   const groupRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
   const currentFileThreadsCount = React.useMemo(() => {
     if (!currentFilePath) return 0;
@@ -112,6 +113,15 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
       groupRefs.current[group.key]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
   }, [focusedThreadId, visibleGroups]);
+
+  React.useEffect(() => {
+    if (!focusedThreadId) return;
+    setLocateFlashThreadId(focusedThreadId);
+    const timer = window.setTimeout(() => {
+      setLocateFlashThreadId((current) => (current === focusedThreadId ? null : current));
+    }, 1400);
+    return () => window.clearTimeout(timer);
+  }, [focusedThreadId]);
 
   return (
     <div>
@@ -194,7 +204,7 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                 className={[
                   styles.thread,
                   statusCardClass(threadStatus),
-                  isFocused ? (threadStatus === 'resolved' ? `${styles.threadFocused} ${styles.threadFocusedResolved}` : `${styles.threadFocused} ${styles.threadFocusedPending}`) : ''
+                  locateFlashThreadId === thread.id ? styles.threadLocateFlash : ''
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -203,27 +213,30 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                   groupRefs.current[group.key] = node;
                 }}
               >
-                <Space className={styles.threadTop} align="start" size={8}>
-                  <Typography.Text className={styles.threadAnchor} strong>
-                    {formatAnchor(thread)}
-                  </Typography.Text>
-                  {
-                    threadStatus !== 'replied' ? (
-                      <Tag className={`${styles.threadTag} ${statusTagClass(threadStatus)}`}>{COMMENT_STATUS_TEXT_MAP[threadStatus]}</Tag>
-                    ) : null
-                  }
-                  {isHistorical ? <Tag className={styles.threadTag}>历史快照</Tag> : null}
-                </Space>
+                <button type="button" className={styles.threadTopButton} onClick={() => onLocateThread(thread.id)}>
+                  <Space className={styles.threadTop} align="start" size={8}>
+                    <Typography.Text className={styles.threadAnchor} strong>
+                      {formatAnchor(thread)}
+                    </Typography.Text>
+                    <Flex gap="small">
+                      {
+                        threadStatus !== 'replied' ? (
+                          <Tag className={`${styles.threadTag} ${statusTagClass(threadStatus)}`}>{COMMENT_STATUS_TEXT_MAP[threadStatus]}</Tag>
+                        ) : null
+                      }
+                      {isHistorical ? <Tag className={styles.threadTag}>历史快照</Tag> : null}
+                    </Flex>
+                  </Space>
+                </button>
                 <div className={styles.threadListInlineBorderless}>
                   <InlineThreadGroup
                     threads={[thread]}
                     showStatusTag={false}
-                    onFocus={() => undefined}
+                    onFocus={onLocateThread}
                     onPatch={onPatch}
                     onDeleteThread={onDeleteThread}
                     onReply={onReply}
                     onPatchComment={onPatchComment}
-                    onDeleteComment={onDeleteComment}
                     onCopy={onCopy}
                   />
                 </div>

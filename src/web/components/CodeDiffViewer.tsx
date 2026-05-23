@@ -11,13 +11,13 @@ import styles from '../styles.module.less';
 type Props = {
   file: DiffFile;
   threads: ReviewThread[];
+  locateTarget: { threadId: string; anchor: CommentAnchor } | null;
   onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
   onLocateThread: (threadId: string) => void;
   onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
   onDeleteThread: (id: string) => Promise<void>;
   onReplyThread: (id: string, body: string) => Promise<void>;
   onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onDeleteComment: (threadId: string, commentId: string) => Promise<void>;
   onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
   viewMode: 'inline' | 'split';
 };
@@ -70,13 +70,13 @@ type SplitRow = {
 export function CodeDiffViewer({
   file,
   threads,
+  locateTarget,
   onCreate,
   onLocateThread,
   onPatchThread,
   onDeleteThread,
   onReplyThread,
   onPatchComment,
-  onDeleteComment,
   onCopyThread,
   viewMode
 }: Props) {
@@ -112,6 +112,42 @@ export function CodeDiffViewer({
     });
   }, [file.path, threads, viewMode]);
 
+  React.useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer || !locateTarget) return;
+    if (locateTarget.anchor.filePath !== file.path) return;
+    if (locateTarget.anchor.type === 'file') {
+      scrollToContentTop(scrollContainer);
+      return;
+    }
+    if (locateTarget.anchor.type !== 'diff-line') return;
+
+    const { side, lineNumber } = locateTarget.anchor;
+    const exact = scrollContainer.querySelector<HTMLElement>(`[data-review-anchor="${CSS.escape(`${side}:${lineNumber}`)}"]`);
+    if (exact) {
+      scrollToTarget(scrollContainer, exact);
+      return;
+    }
+
+    const candidates = [...scrollContainer.querySelectorAll<HTMLElement>('[data-review-anchor]')]
+      .map((node) => {
+        const key = node.dataset.reviewAnchor ?? '';
+        const [candidateSide, candidateLineText] = key.split(':');
+        const candidateLine = Number(candidateLineText);
+        if ((candidateSide !== 'old' && candidateSide !== 'new') || !Number.isFinite(candidateLine)) return null;
+        return { node, side: candidateSide as 'old' | 'new', lineNumber: candidateLine };
+      })
+      .filter((item): item is { node: HTMLElement; side: 'old' | 'new'; lineNumber: number } => Boolean(item))
+      .filter((item) => item.side === side)
+      .sort((a, b) => Math.abs(a.lineNumber - lineNumber) - Math.abs(b.lineNumber - lineNumber));
+
+    if (candidates[0]) {
+      scrollToTarget(scrollContainer, candidates[0].node);
+    } else {
+      scrollToContentTop(scrollContainer);
+    }
+  }, [file.path, locateTarget, viewMode]);
+
   function renderInlineThreads(lineThreads: ReviewThread[]) {
     if (lineThreads.length === 0) return null;
 
@@ -124,7 +160,6 @@ export function CodeDiffViewer({
           onDeleteThread={onDeleteThread}
           onReply={onReplyThread}
           onPatchComment={onPatchComment}
-          onDeleteComment={onDeleteComment}
           onCopy={onCopyThread}
         />
       </div>

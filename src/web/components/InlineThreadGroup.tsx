@@ -2,7 +2,7 @@
  * 内嵌评论组：承载同一锚点下的一组评论与回复/状态操作。
  */
 import React from 'react';
-import { Button, Input, Popconfirm, Tag, Tooltip, Typography } from 'antd';
+import { Button, Input, Popconfirm, Tag, Typography } from 'antd';
 import { CheckOutlined, CopyOutlined, DeleteOutlined, EditOutlined, ReloadOutlined, RedoOutlined } from '@ant-design/icons';
 import type { ReviewThread } from '../../shared/types';
 import { COMMENT_STATUS_TEXT_MAP } from '../../shared/types';
@@ -17,7 +17,6 @@ export type InlineThreadGroupProps = {
   onDeleteThread: (id: string) => Promise<void>;
   onReply: (id: string, body: string) => Promise<void>;
   onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onDeleteComment: (threadId: string, commentId: string) => Promise<void>;
   onCopy: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
   showStatusTag?: boolean;
 };
@@ -29,7 +28,6 @@ export function InlineThreadGroup({
   onDeleteThread,
   onReply,
   onPatchComment,
-  onDeleteComment,
   onCopy,
   showStatusTag = true
 }: InlineThreadGroupProps) {
@@ -167,18 +165,16 @@ export function InlineThreadGroup({
             </Button>
           ) : null}
           {actionThreadStatus === 'replied' ? (
-            <Tooltip title="要求再改">
-              <Button
-                className={styles.threadActionBtn}
-                icon={<RedoOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setReplyingThreadId(actionThread.id);
-                }}
-              >
-                要求再改
-              </Button>
-            </Tooltip>
+            <Button
+              className={styles.threadActionBtn}
+              icon={<RedoOutlined />}
+              onClick={(event) => {
+                event.stopPropagation();
+                setReplyingThreadId(actionThread.id);
+              }}
+            >
+              要求再改
+            </Button>
           ) : null}
           {actionThreadStatus !== 'replied' ? (
             <Popconfirm
@@ -198,32 +194,28 @@ export function InlineThreadGroup({
           ) : null}
 
           {actionThreadResolved ? (
-            <Tooltip title="重新打开">
-              <Button
-                className={styles.threadActionBtn}
-                icon={<ReloadOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void onPatch(actionThread.id, 'submit');
-                }}
-              >
-                重新打开
-              </Button>
-            </Tooltip>
+            <Button
+              className={styles.threadActionBtn}
+              icon={<ReloadOutlined />}
+              onClick={(event) => {
+                event.stopPropagation();
+                void onPatch(actionThread.id, 'submit');
+              }}
+            >
+              重新打开
+            </Button>
           ) : null}
           {actionThreadStatus === 'replied' ? (
-            <Tooltip title="确认完成">
-              <Button
-                className={styles.threadActionBtn}
-                icon={<CheckOutlined />}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void onPatch(actionThread.id, 'resolved');
-                }}
-              >
-                确认完成
-              </Button>
-            </Tooltip>
+            <Button
+              className={styles.threadActionBtn}
+              icon={<CheckOutlined />}
+              onClick={(event) => {
+                event.stopPropagation();
+                void onPatch(actionThread.id, 'resolved');
+              }}
+            >
+              确认完成
+            </Button>
           ) : null}
         </div>
       ) : null}

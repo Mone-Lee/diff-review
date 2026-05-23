@@ -256,12 +256,6 @@
   gap: 8px;
 }
 
-.fileLevelInlineThreads .inlineThread {
-  border-color: rgba(201, 212, 228, 0.72);
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: none;
-}
-
 .fileLevelInlineThreads .inlineThreadHeader {
   margin-bottom: 6px;
 }
@@ -859,31 +853,30 @@
   border-radius: 6px !important;
   background: #fffef8;
   box-shadow: none;
+  
+  &:hover {
+    cursor: pointer;
+  }
 }
 
-.threadFocused {
-  transform: translateY(-1px);
-  position: relative;
-}
-
-.threadFocusedPending {
-  border-color: #e5c774 !important;
-  background: linear-gradient(0deg, rgba(255, 246, 221, 0.82), rgba(255, 246, 221, 0.82));
-  box-shadow:
-    0 0 0 3px rgba(229, 199, 116, 0.68),
-    0 12px 28px rgba(229, 199, 116, 0.36);
-}
-
-.threadFocusedResolved {
-  border-color: #8fd2a6 !important;
-  background: linear-gradient(0deg, rgba(236, 250, 241, 0.9), rgba(236, 250, 241, 0.9));
-  box-shadow:
-    0 0 0 3px rgba(143, 210, 166, 0.7),
-    0 12px 28px rgba(143, 210, 166, 0.34);
+.threadLocateFlash {
+  animation: threadLocateFlash 1.4s ease-out 1;
 }
 
 .thread :global(.ant-card-body) {
   padding: 8px 10px !important;
+}
+
+.threadTopButton {
+  width: 100%;
+  margin: 0 0 4px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .threadTop {
@@ -891,7 +884,7 @@
   align-items: flex-start;
   justify-content: space-between;
   width: 100%;
-  margin-bottom: 4px;
+  margin-bottom: 0;
   gap: 8px;
 }
 
@@ -935,6 +928,24 @@
   color: #1e6b3b;
   background: #e9faef;
   border-color: #aee8c0;
+}
+
+@keyframes threadLocateFlash {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(47, 111, 237, 0.5),
+      0 0 0 0 rgba(47, 111, 237, 0.28);
+  }
+  40% {
+    box-shadow:
+      0 0 0 2px rgba(47, 111, 237, 0.42),
+      0 0 0 8px rgba(47, 111, 237, 0.22);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(47, 111, 237, 0),
+      0 0 0 0 rgba(47, 111, 237, 0);
+  }
 }
 
 .threadBody {
@@ -1128,6 +1139,10 @@
 
 .inlineThreadEdit {
   margin-top: 6px;
+
+  :global(.ant-input) {
+    border-radius: 6px;
+  }
 }
 
 .inlineThreadEditActions {

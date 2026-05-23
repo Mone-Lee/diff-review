@@ -19,7 +19,6 @@ type Props = {
   onDeleteThread: (id: string) => Promise<void>;
   onReplyThread: (id: string, body: string) => Promise<void>;
   onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onDeleteComment: (threadId: string, commentId: string) => Promise<void>;
   onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
@@ -33,7 +32,6 @@ export function FileHeader({
   onDeleteThread,
   onReplyThread,
   onPatchComment,
-  onDeleteComment,
   onCopyThread
 }: Props) {
   const [open, setOpen] = React.useState(false);
@@ -79,7 +77,6 @@ export function FileHeader({
             onDeleteThread={onDeleteThread}
             onReply={onReplyThread}
             onPatchComment={onPatchComment}
-            onDeleteComment={onDeleteComment}
             onCopy={onCopyThread}
           />
         </div>

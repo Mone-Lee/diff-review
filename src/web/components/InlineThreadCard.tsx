@@ -12,7 +12,6 @@ type Props = {
   onDeleteThread: (id: string) => Promise<void>;
   onReply: (id: string, body: string) => Promise<void>;
   onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onDeleteComment: (threadId: string, commentId: string) => Promise<void>;
   onCopy: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 

@@ -15,6 +15,7 @@ import styles from './styles.module.less';
 
 type ReviewState = { session: ReviewSession; files: DiffFile[]; threads: ReviewThread[] };
 type DiffViewMode = 'inline' | 'split';
+type LocateTarget = { threadId: string; anchor: CommentAnchor };
 const FILE_PATH_MAX_LENGTH = 36;
 const FILE_PATH_SUFFIX_LENGTH = 18;
 
@@ -44,6 +45,7 @@ export default function App() {
   const [selectedPath, setSelectedPath] = React.useState<string>('');
   const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('split');
   const [focusedThreadId, setFocusedThreadId] = React.useState<string | null>(null);
+  const [locateTarget, setLocateTarget] = React.useState<LocateTarget | null>(null);
   const selectedFile = files.find((file) => file.path === selectedPath) ?? files[0];
   const currentSnapshotThreads = React.useMemo(
     () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
@@ -173,6 +175,14 @@ export default function App() {
   }
 
   function locateThread(threadId: string) {
+    const target = threads.find((thread) => thread.id === threadId);
+    if (target) {
+      const fileExists = files.some((file) => file.path === target.filePath);
+      if (fileExists) {
+        setSelectedPath(target.filePath);
+      }
+      setLocateTarget({ threadId, anchor: target.anchor });
+    }
     setFocusedThreadId(threadId);
   }
 
@@ -265,7 +275,6 @@ export default function App() {
                 onDeleteThread={deleteThread}
                 onReplyThread={replyThread}
                 onPatchComment={patchComment}
-                onDeleteComment={deleteComment}
                 onCopyThread={copyPrompt}
               />
               {selectedFile.isMarkdown ? (
@@ -273,13 +282,13 @@ export default function App() {
                   key={session?.id}
                   file={selectedFile}
                   threads={selectedFileThreads}
+                  locateTarget={locateTarget}
                   onCreate={createThread}
                   onLocateThread={locateThread}
                   onPatchThread={patchThread}
                   onDeleteThread={deleteThread}
                   onReplyThread={replyThread}
                   onPatchComment={patchComment}
-                  onDeleteComment={deleteComment}
                   onCopyThread={copyPrompt}
                 />
               ) : (
@@ -287,13 +296,13 @@ export default function App() {
                   key={session?.id}
                   file={selectedFile}
                   threads={selectedFileThreads}
+                  locateTarget={locateTarget}
                   onCreate={createThread}
                   onLocateThread={locateThread}
                   onPatchThread={patchThread}
                   onDeleteThread={deleteThread}
                   onReplyThread={replyThread}
                   onPatchComment={patchComment}
-                  onDeleteComment={deleteComment}
                   onCopyThread={copyPrompt}
                   viewMode={diffViewMode}
                 />
@@ -320,11 +329,11 @@ export default function App() {
             currentFiles={files}
             currentFilePath={selectedFile?.path ?? ''}
             focusedThreadId={focusedThreadId}
+            onLocateThread={locateThread}
             onPatch={patchThread}
             onDeleteThread={deleteThread}
             onReply={replyThread}
             onPatchComment={patchComment}
-            onDeleteComment={deleteComment}
             onCopy={copyPrompt}
           />
         </div>

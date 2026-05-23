@@ -22,13 +22,13 @@ const MARKDOWN_REMARK_PLUGINS = [remarkFrontmatter, remarkGfm];
 type Props = {
   file: DiffFile;
   threads: ReviewThread[];
+  locateTarget: { threadId: string; anchor: CommentAnchor } | null;
   onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
   onLocateThread: (threadId: string) => void;
   onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
   onDeleteThread: (id: string) => Promise<void>;
   onReplyThread: (id: string, body: string) => Promise<void>;
   onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onDeleteComment: (threadId: string, commentId: string) => Promise<void>;
   onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
@@ -156,13 +156,13 @@ function getCodeTextFromHast(node: unknown) {
 export function MarkdownPreviewPanel({
   file,
   threads,
+  locateTarget,
   onCreate,
   onLocateThread,
   onPatchThread,
   onDeleteThread,
   onReplyThread,
   onPatchComment,
-  onDeleteComment,
   onCopyThread
 }: Props) {
   // preview 为 null 表示加载中或加载失败；当前 UI 统一展示 loading 态。
@@ -204,6 +204,25 @@ export function MarkdownPreviewPanel({
     });
   }, [file.path, preview, threads]);
 
+  React.useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer || !preview || !locateTarget) return;
+    if (locateTarget.anchor.filePath !== file.path) return;
+    if (locateTarget.anchor.type === 'file') {
+      scrollToContentTop(scrollContainer);
+      return;
+    }
+    if (locateTarget.anchor.type !== 'markdown-line') return;
+
+    const scrollLine = getMarkdownScrollLine(preview, locateTarget.anchor.lineNumber);
+    const target = scrollContainer.querySelector<HTMLElement>(`[data-review-line="${scrollLine}"]`) ?? findMarkdownAnchor(scrollContainer, scrollLine);
+    if (target) {
+      scrollToTarget(scrollContainer, target);
+    } else {
+      scrollToContentTop(scrollContainer);
+    }
+  }, [file.path, locateTarget, preview]);
+
   const threadsByLine = React.useMemo(() => {
     const nextThreadsByLine = new Map<number, ReviewThread[]>();
     for (const thread of threads) {
@@ -231,7 +250,6 @@ export function MarkdownPreviewPanel({
         onDeleteThread={onDeleteThread}
         onReplyThread={onReplyThread}
         onPatchComment={onPatchComment}
-        onDeleteComment={onDeleteComment}
         onCopyThread={onCopyThread}
       >
         {content}
@@ -241,7 +259,6 @@ export function MarkdownPreviewPanel({
     file.path,
     onCopyThread,
     onCreate,
-    onDeleteComment,
     onDeleteThread,
     onLocateThread,
     onPatchComment,
