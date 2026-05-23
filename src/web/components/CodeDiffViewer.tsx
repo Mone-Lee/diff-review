@@ -5,7 +5,7 @@ import React from 'react';
 import { MessageOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import { CommentPopover } from './CommentPopover';
-import { InlineThreadGroup } from './InlineThreadCard';
+import { InlineThreadGroup } from './InlineThreadGroup';
 import styles from '../styles.module.less';
 
 type Props = {

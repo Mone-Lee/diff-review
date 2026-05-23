@@ -6,7 +6,7 @@ import { Button, Card, Tag, Typography } from 'antd';
 import { CommentOutlined, CopyOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import { CommentComposer } from './CommentComposer';
-import { InlineThreadGroup } from './InlineThreadCard';
+import { InlineThreadGroup } from './InlineThreadGroup';
 import styles from '../styles.module.less';
 
 type Props = {

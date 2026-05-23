@@ -8,7 +8,7 @@ import type { ReviewThread } from '../../shared/types';
 import { COMMENT_STATUS_TEXT_MAP } from '../../shared/types';
 import { getThreadStatus } from '../../shared/thread-utils';
 import { formatAnchor } from '../utils';
-import { InlineThreadGroup } from './InlineThreadCard';
+import { InlineThreadGroup } from './InlineThreadGroup';
 import styles from '../styles.module.less';
 
 type Props = {
