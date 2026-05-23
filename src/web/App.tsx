@@ -9,6 +9,7 @@ import { CodeDiffViewer } from './components/CodeDiffViewer';
 import { FileHeader } from './components/FileHeader';
 import { MarkdownPreviewPanel } from './components/MarkdownPreviewPanel';
 import { ThreadList } from './components/ThreadList';
+import { isThreadOnFileSnapshot } from '../shared/thread-utils';
 import { formatFileStatus, modeLabel } from './utils';
 import styles from './styles.module.less';
 
@@ -44,12 +45,16 @@ export default function App() {
   const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('split');
   const [focusedThreadId, setFocusedThreadId] = React.useState<string | null>(null);
   const selectedFile = files.find((file) => file.path === selectedPath) ?? files[0];
-  const currentThreads = React.useMemo(
-    () => threads.filter((thread) => thread.diffHash === session?.diffHash),
-    [session?.diffHash, threads]
+  const currentSnapshotThreads = React.useMemo(
+    () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
+    [files, threads]
+  );
+  const selectedFileThreads = React.useMemo(
+    () => (selectedFile ? currentSnapshotThreads.filter((thread) => isThreadOnFileSnapshot(thread, selectedFile)) : []),
+    [currentSnapshotThreads, selectedFile]
   );
 
-  const unresolvedThreadsCount = threads.filter((thread) => thread.status !== 'resolved').length;
+  const unresolvedThreadsCount = currentSnapshotThreads.filter((thread) => thread.status !== 'resolved').length;
 
   React.useEffect(() => {
     void loadInitial();
@@ -204,7 +209,7 @@ export default function App() {
           dataSource={files}
           renderItem={(file) => {
             const isActive = file.path === selectedFile?.path;
-            const fileThreads = threads.filter((thread) => thread.filePath === file.path && thread.status !== 'resolved');
+            const fileThreads = currentSnapshotThreads.filter((thread) => isThreadOnFileSnapshot(thread, file) && thread.status !== 'resolved');
 
             return (
               <List.Item className={isActive ? `${styles.fileItem} ${styles.fileItemActive}` : styles.fileItem} onClick={() => setSelectedPath(file.path)}>
@@ -252,7 +257,7 @@ export default function App() {
             <div className={styles.reviewSurface}>
               <FileHeader
                 file={selectedFile}
-                threads={currentThreads}
+                threads={selectedFileThreads}
                 onCreate={createThread}
                 onCopy={copyPrompt}
                 onLocateThread={locateThread}
@@ -267,7 +272,7 @@ export default function App() {
                 <MarkdownPreviewPanel
                   key={session?.id}
                   file={selectedFile}
-                  threads={currentThreads}
+                  threads={selectedFileThreads}
                   onCreate={createThread}
                   onLocateThread={locateThread}
                   onPatchThread={patchThread}
@@ -281,7 +286,7 @@ export default function App() {
                  <CodeDiffViewer
                   key={session?.id}
                   file={selectedFile}
-                  threads={currentThreads}
+                  threads={selectedFileThreads}
                   onCreate={createThread}
                   onLocateThread={locateThread}
                   onPatchThread={patchThread}
@@ -305,14 +310,14 @@ export default function App() {
       <aside className={styles.threadRail}>
         <div className={styles.threadRailHeader}>
           <Typography.Title className={styles.threadRailTitle} level={4}>评论 ({unresolvedThreadsCount})</Typography.Title>
-          <Button icon={<CopyOutlined />} type="primary" onClick={() => void copyPrompt({ type: 'all-unresolved' })}>
+          <Button disabled={unresolvedThreadsCount === 0} icon={<CopyOutlined />} type="primary" onClick={() => void copyPrompt({ type: 'all-unresolved' })}>
             批量提交给 Agent
           </Button>
         </div>
         <div className={styles.threadRailBody}>
           <ThreadList
             threads={threads}
-            currentDiffHash={session?.diffHash}
+            currentFiles={files}
             currentFilePath={selectedFile?.path ?? ''}
             focusedThreadId={focusedThreadId}
             onPatch={patchThread}

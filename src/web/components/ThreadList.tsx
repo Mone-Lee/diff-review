@@ -4,16 +4,16 @@
 import React from 'react';
 import { DownOutlined } from '@ant-design/icons';
 import { Button, Card, Dropdown, Empty, Modal, Segmented, Space, Switch, Tag, Typography } from 'antd';
-import type { ReviewThread } from '../../shared/types';
+import type { DiffFile, ReviewThread } from '../../shared/types';
 import { COMMENT_STATUS_TEXT_MAP } from '../../shared/types';
-import { getThreadStatus } from '../../shared/thread-utils';
+import { getThreadStatus, isThreadOnFileSnapshot } from '../../shared/thread-utils';
 import { formatAnchor } from '../utils';
 import { InlineThreadGroup } from './InlineThreadGroup';
 import styles from '../styles.module.less';
 
 type Props = {
   threads: ReviewThread[];
-  currentDiffHash?: string;
+  currentFiles: DiffFile[];
   currentFilePath: string;
   focusedThreadId: string | null;
   onPatch: (id: string, status: ReviewThread['status']) => Promise<void>;
@@ -35,7 +35,7 @@ const GROUP_STATUS_ORDER: Record<ReviewThread['status'], number> = {
   resolved: 2
 };
 
-export function ThreadList({ threads, currentDiffHash, currentFilePath, focusedThreadId, onPatch, onDeleteThread, onReply, onPatchComment, onDeleteComment, onCopy }: Props) {
+export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId, onPatch, onDeleteThread, onReply, onPatchComment, onDeleteComment, onCopy }: Props) {
   const [filter, setFilter] = React.useState<ThreadFilter>('all');
   const [scope, setScope] = React.useState<ThreadScope>('current-file');
   const groupRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -187,7 +187,7 @@ export function ThreadList({ threads, currentDiffHash, currentFilePath, focusedT
             const thread = group.thread;
             const threadStatus = getThreadStatus(thread);
             const isFocused = focusedThreadId === thread.id;
-            const isHistorical = thread.diffHash !== currentDiffHash;
+            const isHistorical = !currentFiles.some((file) => isThreadOnFileSnapshot(thread, file));
 
             return (
               <Card
