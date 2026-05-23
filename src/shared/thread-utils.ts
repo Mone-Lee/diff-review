@@ -1,4 +1,4 @@
-import type { CommentAnchor, ReviewThread } from './types';
+import type { CommentAnchor, DiffFile, ReviewThread } from './types';
 
 export function sameAnchor(left: CommentAnchor, right: CommentAnchor): boolean {
   if (left.type !== right.type || left.filePath !== right.filePath) return false;
@@ -16,6 +16,10 @@ export function anchorKey(anchor: CommentAnchor): string {
   if (anchor.type === 'file') return `file:${anchor.filePath}`;
   if (anchor.type === 'diff-line') return `diff:${anchor.filePath}:${anchor.side}:${anchor.lineNumber}`;
   return `markdown:${anchor.filePath}:${anchor.lineNumber}`;
+}
+
+export function isThreadOnFileSnapshot(thread: ReviewThread, file: DiffFile): boolean {
+  return thread.filePath === file.path && thread.fileSnapshotHash === file.snapshotHash;
 }
 
 export function getThreadStatus(thread: ReviewThread): ReviewThread['status'] {

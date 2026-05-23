@@ -31,6 +31,8 @@ export type DiffFile = {
   oldPath: string;
   newPath: string;
   path: string;
+  /** 当前文件 diff 内容的摘要，用于保持未变化文件上的评论挂载。 */
+  snapshotHash: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed';
   additions: number;
   deletions: number;
@@ -54,14 +56,16 @@ export type ReviewComment = {
 export type ReviewThreadStatus = 'submit' | 'replied' | 'resolved';
 
 // review 页面刷新协议版本；CLI 与服务端通过它判断是否可以安全复用运行中的页面。
-export const REVIEW_REFRESH_PROTOCOL = 1;
+export const REVIEW_REFRESH_PROTOCOL = 3;
 
 export type ReviewThread = {
   id: string;
   filePath: string;
   anchor: CommentAnchor;
-  /** 此评论所属的 diff 快照；旧版本存储的评论在首次打开后补写。 */
+  /** 创建此评论时的整份 diff 快照，仅用于兼容旧存储和追溯来源。 */
   diffHash?: string;
+  /** 此评论所属文件的 diff 快照；其他文件变化不会影响当前文件评论挂载。 */
+  fileSnapshotHash?: string;
   status: ReviewThreadStatus;
   comments: ReviewComment[];
   createdAt: string;
