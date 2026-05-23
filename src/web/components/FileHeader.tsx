@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { Button, Card, Tag, Typography } from 'antd';
-import { CommentOutlined, CopyOutlined } from '@ant-design/icons';
+import { MessageOutlined, CopyOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import { CommentComposer } from './CommentComposer';
 import { InlineThreadGroup } from './InlineThreadGroup';
@@ -49,18 +49,20 @@ export function FileHeader({
           <Button type='primary' className={styles.headerAction} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'file-unresolved', filePath: file.path })}>
             批量提交当前文件的review
           </Button>
-          <Button className={styles.headerAction} icon={<CommentOutlined />} type={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>
+          <Button className={styles.headerAction} icon={<MessageOutlined />} type={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>
             文件级评论
           </Button>
         </div>
       </div>
       {open ? (
         <CommentComposer
+          style={{ marginTop: 16 }}
           placeholder="请输入文件级审查评论..."
           onSubmit={async (body) => {
             await onCreate({ type: 'file', filePath: file.path }, body);
             setOpen(false);
           }}
+          onCancel={() => setOpen(false)}
         />
       ) : null}
       {fileThreads.length > 0 ? (
