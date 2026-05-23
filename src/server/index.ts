@@ -16,7 +16,7 @@ export type ReviewServerState = {
 };
 
 export async function startServer(state: ReviewServerState, port = 4966): Promise<string> {
-  const markdownPreviews = await buildMarkdownPreviewCache(state);
+  let markdownPreviews = await buildMarkdownPreviewCache(state);
   const app = express();
   app.use(express.json({ limit: '2mb' }));
 
@@ -32,6 +32,27 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     try {
       const comments = await readComments(state.session.repoRoot);
       res.json({ session: state.session, files: state.diffFiles, threads: comments.threads });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/review-state', async (req, res, next) => {
+    try {
+      const nextState = req.body as Pick<ReviewServerState, 'session' | 'diffFiles'>;
+      if (!nextState.session || nextState.session.repoRoot !== state.session.repoRoot || !Array.isArray(nextState.diffFiles)) {
+        res.status(400).json({ error: 'Review state must target the running repository' });
+        return;
+      }
+      const nextReviewState: ReviewServerState = {
+        session: nextState.session,
+        diffFiles: nextState.diffFiles,
+        webDist: state.webDist
+      };
+      markdownPreviews = await buildMarkdownPreviewCache(nextReviewState);
+      state.session = nextReviewState.session;
+      state.diffFiles = nextReviewState.diffFiles;
+      res.json({ session: state.session, files: state.diffFiles });
     } catch (error) {
       next(error);
     }
@@ -89,7 +110,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         return;
       }
       const store = await readComments(state.session.repoRoot);
-      const existingThread = store.threads.find((thread) => sameAnchor(thread.anchor, body.anchor));
+      const existingThread = store.threads.find((thread) => thread.diffHash === state.session.diffHash && sameAnchor(thread.anchor, body.anchor));
       const comment: ReviewComment = {
         id: crypto.randomUUID(),
         body: commentBody,
@@ -110,6 +131,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         id: crypto.randomUUID(),
         filePath: body.filePath,
         anchor: body.anchor,
+        diffHash: state.session.diffHash,
         status: 'submit',
         comments: [comment],
         createdAt: now,

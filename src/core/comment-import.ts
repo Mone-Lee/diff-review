@@ -26,7 +26,7 @@ export type ImportCommentsResult = {
   skipped: string[];
 };
 
-export async function importAgentComments(repoRoot: string, diffFiles: DiffFile[], rawComments: string[]): Promise<ImportCommentsResult> {
+export async function importAgentComments(repoRoot: string, diffHash: string, diffFiles: DiffFile[], rawComments: string[]): Promise<ImportCommentsResult> {
   const result: ImportCommentsResult = { imported: 0, skipped: [] };
   if (rawComments.length === 0) return result;
 
@@ -43,9 +43,9 @@ export async function importAgentComments(repoRoot: string, diffFiles: DiffFile[
       continue;
     }
 
-    const thread = buildAgentThread(parsed, diffFiles, result, label);
+    const thread = buildAgentThread(parsed, diffHash, diffFiles, result, label);
     if (!thread) continue;
-    const existingThread = store.threads.find((item) => sameAnchor(item.anchor, thread.anchor));
+    const existingThread = store.threads.find((item) => item.diffHash === diffHash && sameAnchor(item.anchor, thread.anchor));
     if (hasDuplicateAgentComment(store.threads, thread)) {
       result.skipped.push(`${label}: duplicate agent comment skipped`);
       continue;
@@ -131,7 +131,7 @@ function appendAgentReply(threads: ReviewThread[], comment: ImportReplyComment, 
   return true;
 }
 
-function buildAgentThread(comment: ImportThreadComment, diffFiles: DiffFile[], result: ImportCommentsResult, label: string): ReviewThread | undefined {
+function buildAgentThread(comment: ImportThreadComment, diffHash: string, diffFiles: DiffFile[], result: ImportCommentsResult, label: string): ReviewThread | undefined {
   const file = diffFiles.find((item) => item.path === comment.filePath || item.oldPath === comment.filePath || item.newPath === comment.filePath);
   if (!file) {
     result.skipped.push(`${label}: ${comment.filePath} is not present in the current diff`);
@@ -146,6 +146,7 @@ function buildAgentThread(comment: ImportThreadComment, diffFiles: DiffFile[], r
     id: crypto.randomUUID(),
     filePath: anchor.filePath,
     anchor,
+    diffHash,
     status: 'replied',
     comments: [
       {
@@ -198,6 +199,7 @@ function hasDuplicateAgentComment(threads: ReviewThread[], nextThread: ReviewThr
   return threads.some((thread) => {
     return (
       thread.comments.some((comment) => comment.author === 'agent' && comment.body.trim() === nextComment) &&
+      thread.diffHash === nextThread.diffHash &&
       thread.filePath === nextThread.filePath &&
       sameAnchor(thread.anchor, nextThread.anchor)
     );

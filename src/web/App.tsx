@@ -12,7 +12,7 @@ import { ThreadList } from './components/ThreadList';
 import { formatFileStatus, modeLabel } from './utils';
 import styles from './styles.module.less';
 
-type CommentStore = { threads: ReviewThread[] };
+type ReviewState = { session: ReviewSession; files: DiffFile[]; threads: ReviewThread[] };
 type DiffViewMode = 'inline' | 'split';
 const FILE_PATH_MAX_LENGTH = 36;
 const FILE_PATH_SUFFIX_LENGTH = 18;
@@ -44,6 +44,10 @@ export default function App() {
   const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('split');
   const [focusedThreadId, setFocusedThreadId] = React.useState<string | null>(null);
   const selectedFile = files.find((file) => file.path === selectedPath) ?? files[0];
+  const currentThreads = React.useMemo(
+    () => threads.filter((thread) => thread.diffHash === session?.diffHash),
+    [session?.diffHash, threads]
+  );
 
   const unresolvedThreadsCount = threads.filter((thread) => thread.status !== 'resolved').length;
 
@@ -52,40 +56,38 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
-    const syncVisibleThreads = () => {
+    const syncVisibleReviewState = () => {
       if (document.visibilityState === 'visible') {
-        void refreshThreads();
+        void refreshReviewState();
       }
     };
 
-    const interval = window.setInterval(syncVisibleThreads, 2500);
-    window.addEventListener('focus', syncVisibleThreads);
-    document.addEventListener('visibilitychange', syncVisibleThreads);
+    const interval = window.setInterval(syncVisibleReviewState, 2500);
+    window.addEventListener('focus', syncVisibleReviewState);
+    document.addEventListener('visibilitychange', syncVisibleReviewState);
 
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener('focus', syncVisibleThreads);
-      document.removeEventListener('visibilitychange', syncVisibleThreads);
+      window.removeEventListener('focus', syncVisibleReviewState);
+      document.removeEventListener('visibilitychange', syncVisibleReviewState);
     };
-  }, [focusedThreadId]);
+  }, [focusedThreadId, session?.id]);
 
   async function loadInitial() {
-    // Diff 内容是本次 review 启动时的快照；后续仅同步评论线程。
-    const [sessionRes, diffRes, threadRes] = await Promise.all([fetch('/api/session'), fetch('/api/diff'), fetch('/api/threads')]);
-    const nextSession = (await sessionRes.json()) as ReviewSession;
-    const diff = (await diffRes.json()) as { files: DiffFile[] };
-    const store = (await threadRes.json()) as CommentStore;
-    setSession(nextSession);
-    setFiles(diff.files);
-    setThreads(store.threads);
-    setSelectedPath(diff.files[0]?.path ?? '');
+    await refreshReviewState(true);
   }
 
-  async function refreshThreads() {
-    const res = await fetch('/api/threads');
-    const store = (await res.json()) as CommentStore;
-    setThreads((currentThreads) => (areThreadsEqual(currentThreads, store.threads) ? currentThreads : store.threads));
-    if (focusedThreadId && !store.threads.some((thread) => thread.id === focusedThreadId)) {
+  async function refreshReviewState(forceSnapshot = false) {
+    const res = await fetch('/api/review-state');
+    const nextState = (await res.json()) as ReviewState;
+    const snapshotChanged = forceSnapshot || session?.id !== nextState.session.id;
+    if (snapshotChanged) {
+      setSession(nextState.session);
+      setFiles(nextState.files);
+      setSelectedPath((currentPath) => nextState.files.some((file) => file.path === currentPath) ? currentPath : nextState.files[0]?.path ?? '');
+    }
+    setThreads((currentThreads) => (areThreadsEqual(currentThreads, nextState.threads) ? currentThreads : nextState.threads));
+    if (focusedThreadId && !nextState.threads.some((thread) => thread.id === focusedThreadId)) {
       setFocusedThreadId(null);
     }
   }
@@ -96,7 +98,7 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filePath: anchor.filePath, anchor, body })
     });
-    await refreshThreads();
+    await refreshReviewState();
   }
 
   async function patchThread(id: string, status: ReviewThread['status']) {
@@ -109,12 +111,12 @@ export default function App() {
       const data = (await res.json().catch(() => ({ error: '更新评论状态失败' }))) as { error?: string };
       throw new Error(data.error ?? '更新评论状态失败');
     }
-    await refreshThreads();
+    await refreshReviewState();
   }
 
   async function deleteThread(id: string) {
     await fetch(`/api/threads/${id}`, { method: 'DELETE' });
-    await refreshThreads();
+    await refreshReviewState();
   }
 
   async function replyThread(id: string, body: string) {
@@ -123,7 +125,7 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ body, author: 'user' })
     });
-    await refreshThreads();
+    await refreshReviewState();
   }
 
   async function patchComment(threadId: string, commentId: string, body: string) {
@@ -139,7 +141,7 @@ export default function App() {
       const data = (await res.json().catch(() => ({ error: '编辑评论失败' }))) as { error?: string };
       throw new Error(data.error ?? '编辑评论失败');
     }
-    await refreshThreads();
+    await refreshReviewState();
   }
 
   async function deleteComment(threadId: string, commentId: string) {
@@ -151,7 +153,7 @@ export default function App() {
       const data = (await res.json().catch(() => ({ error: '删除评论失败' }))) as { error?: string };
       throw new Error(data.error ?? '删除评论失败');
     }
-    await refreshThreads();
+    await refreshReviewState();
   }
 
   async function copyPrompt(scope: { type: 'thread'; threadId: string } | { type: 'file-unresolved'; filePath: string } | { type: 'all-unresolved' }) {
@@ -250,7 +252,7 @@ export default function App() {
             <div className={styles.reviewSurface}>
               <FileHeader
                 file={selectedFile}
-                threads={threads}
+                threads={currentThreads}
                 onCreate={createThread}
                 onCopy={copyPrompt}
                 onLocateThread={locateThread}
@@ -263,8 +265,9 @@ export default function App() {
               />
               {selectedFile.isMarkdown ? (
                 <MarkdownPreviewPanel
+                  key={session?.id}
                   file={selectedFile}
-                  threads={threads}
+                  threads={currentThreads}
                   onCreate={createThread}
                   onLocateThread={locateThread}
                   onPatchThread={patchThread}
@@ -276,8 +279,9 @@ export default function App() {
                 />
               ) : (
                  <CodeDiffViewer
+                  key={session?.id}
                   file={selectedFile}
-                  threads={threads}
+                  threads={currentThreads}
                   onCreate={createThread}
                   onLocateThread={locateThread}
                   onPatchThread={patchThread}
@@ -308,6 +312,7 @@ export default function App() {
         <div className={styles.threadRailBody}>
           <ThreadList
             threads={threads}
+            currentDiffHash={session?.diffHash}
             currentFilePath={selectedFile?.path ?? ''}
             focusedThreadId={focusedThreadId}
             onPatch={patchThread}

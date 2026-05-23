@@ -5,16 +5,17 @@ import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
-import { hasRuntimeRecord, recordRuntime, stopRecordedRuntimes } from './runtime-registry';
+import { getLiveRuntimes, hasRuntimeRecord, recordRuntime, stopRecordedRuntimes } from './runtime-registry';
 import { startServer } from '../server';
-import type { ReviewSession } from '../shared/types';
+import { attachLegacyComments } from '../server/storage';
+import type { DiffFile, ReviewSession } from '../shared/types';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const builtWebDist = join(packageRoot, 'dist', 'web');
 
 async function main() {
   // CLI 参数只负责确定审查模式，真正的数据都来自当前仓库状态。
-  const { command, dev, repo, reviewArgs, comments } = parseCliOptions(process.argv.slice(2));
+  const { command, dev, newSession, repo, reviewArgs, comments } = parseCliOptions(process.argv.slice(2));
   if (command === 'stop') {
     await stopCommand(repo);
     return;
@@ -32,7 +33,21 @@ async function main() {
     createdAt: new Date().toISOString()
   };
 
-  const importResult = await importAgentComments(repoRoot, diffFiles, comments);
+  await attachLegacyComments(repoRoot, session.diffHash);
+  const importResult = await importAgentComments(repoRoot, session.diffHash, diffFiles, comments);
+  if (!newSession && !dev) {
+    const reusedUrl = await refreshRunningReview(session, diffFiles);
+    if (reusedUrl) {
+      console.log(`Diff Review refreshed: ${reusedUrl}`);
+      console.log(`Repo: ${session.repoName} (${repoRoot})`);
+      console.log(`Mode: ${modeLabel(mode)}`);
+      console.log(`Files: ${diffFiles.length}`);
+      console.log('The existing review page will update automatically.');
+      logImportResult(comments, importResult);
+      return;
+    }
+  }
+
   const hasBuiltWeb = existsSync(join(builtWebDist, 'index.html'));
   const apiUrl = await startServer({ session, diffFiles, webDist: hasBuiltWeb ? builtWebDist : undefined });
   // 非 --dev 模式下优先复用已构建的静态页面，避免每次都起 Vite。
@@ -58,17 +73,13 @@ async function main() {
   }
   console.log(`Mode: ${modeLabel(mode)}`);
   console.log(`Files: ${diffFiles.length}`);
-  if (comments.length > 0) {
-    console.log(`Agent comments imported: ${importResult.imported}`);
-    for (const skipped of importResult.skipped) {
-      console.warn(`Skipped ${skipped}`);
-    }
-  }
+  logImportResult(comments, importResult);
 }
 
 function parseCliOptions(args: string[]): {
   command: 'review' | 'stop';
   dev: boolean;
+  newSession: boolean;
   repo: string | undefined;
   reviewArgs: string[];
   comments: string[];
@@ -78,12 +89,17 @@ function parseCliOptions(args: string[]): {
   const comments: string[] = [];
   let repo: string | undefined;
   let dev = false;
+  let newSession = false;
 
   // CLI 自身消费 --dev/--comment，其余参数才交给 parseReviewMode 判断审查范围。
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--dev') {
       dev = true;
+      continue;
+    }
+    if (arg === '--new-session') {
+      newSession = true;
       continue;
     }
     if (arg === 'stop') {
@@ -119,7 +135,34 @@ function parseCliOptions(args: string[]): {
     reviewArgs.push(arg);
   }
 
-  return { command, dev, repo, reviewArgs, comments };
+  return { command, dev, newSession, repo, reviewArgs, comments };
+}
+
+async function refreshRunningReview(session: ReviewSession, diffFiles: DiffFile[]): Promise<string | undefined> {
+  const runtimes = await getLiveRuntimes(session.repoRoot);
+  for (const runtime of runtimes) {
+    const apiUrl = `http://127.0.0.1:${runtime.apiPort}`;
+    try {
+      const response = await fetch(`${apiUrl}/api/review-state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session, diffFiles })
+      });
+      if (!response.ok) continue;
+      return runtime.usesVite ? 'http://127.0.0.1:5173' : apiUrl;
+    } catch {
+      // Runtime records may outlive a process that has just exited; fall through to a new server.
+    }
+  }
+  return undefined;
+}
+
+function logImportResult(comments: string[], result: Awaited<ReturnType<typeof importAgentComments>>) {
+  if (comments.length === 0) return;
+  console.log(`Agent comments imported: ${result.imported}`);
+  for (const skipped of result.skipped) {
+    console.warn(`Skipped ${skipped}`);
+  }
 }
 
 async function stopCommand(repo: string | undefined): Promise<void> {

@@ -13,6 +13,7 @@ import styles from '../styles.module.less';
 
 type Props = {
   threads: ReviewThread[];
+  currentDiffHash?: string;
   currentFilePath: string;
   focusedThreadId: string | null;
   onPatch: (id: string, status: ReviewThread['status']) => Promise<void>;
@@ -34,7 +35,7 @@ const GROUP_STATUS_ORDER: Record<ReviewThread['status'], number> = {
   resolved: 2
 };
 
-export function ThreadList({ threads, currentFilePath, focusedThreadId, onPatch, onDeleteThread, onReply, onPatchComment, onDeleteComment, onCopy }: Props) {
+export function ThreadList({ threads, currentDiffHash, currentFilePath, focusedThreadId, onPatch, onDeleteThread, onReply, onPatchComment, onDeleteComment, onCopy }: Props) {
   const [filter, setFilter] = React.useState<ThreadFilter>('all');
   const [scope, setScope] = React.useState<ThreadScope>('current-file');
   const groupRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -138,7 +139,7 @@ export function ThreadList({ threads, currentFilePath, focusedThreadId, onPatch,
             onClick={() => setScope('all-diff')}
             disabled={!currentFilePath}
           >
-            全部 diff ({threads.length})
+            全部评论 ({threads.length})
           </button>
         </div>
       </div>
@@ -186,6 +187,7 @@ export function ThreadList({ threads, currentFilePath, focusedThreadId, onPatch,
             const thread = group.thread;
             const threadStatus = getThreadStatus(thread);
             const isFocused = focusedThreadId === thread.id;
+            const isHistorical = thread.diffHash !== currentDiffHash;
 
             return (
               <Card
@@ -210,6 +212,7 @@ export function ThreadList({ threads, currentFilePath, focusedThreadId, onPatch,
                       <Tag className={`${styles.threadTag} ${statusTagClass(threadStatus)}`}>{COMMENT_STATUS_TEXT_MAP[threadStatus]}</Tag>
                     ) : null
                   }
+                  {isHistorical ? <Tag className={styles.threadTag}>历史快照</Tag> : null}
                 </Space>
                 <div className={styles.threadListInlineBorderless}>
                   <InlineThreadGroup

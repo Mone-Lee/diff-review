@@ -9,7 +9,25 @@ export type CommentStore = {
   threads: ReviewThread[];
 };
 
-export async function readComments(repoRoot: string): Promise<CommentStore> {
+export async function readComments(repoRoot: string, diffHash?: string): Promise<CommentStore> {
+  const store = await readCommentStore(repoRoot);
+  if (!diffHash) return store;
+  return { threads: store.threads.filter((thread) => thread.diffHash === diffHash) };
+}
+
+export async function attachLegacyComments(repoRoot: string, diffHash: string): Promise<void> {
+  const store = await readCommentStore(repoRoot);
+  let changed = false;
+  for (const thread of store.threads) {
+    if (!thread.diffHash) {
+      thread.diffHash = diffHash;
+      changed = true;
+    }
+  }
+  if (changed) await writeComments(repoRoot, store);
+}
+
+async function readCommentStore(repoRoot: string): Promise<CommentStore> {
   const path = commentsPath(repoRoot);
   try {
     return normalizeStore(JSON.parse(await readFile(path, 'utf8')) as CommentStore);
@@ -48,7 +66,7 @@ async function readLegacyComments(repoRoot: string): Promise<CommentStore> {
 function normalizeStore(store: CommentStore): CommentStore {
   const groups = new Map<string, ReviewThread[]>();
   for (const thread of store.threads) {
-    const key = anchorKey(thread.anchor);
+    const key = `${thread.diffHash ?? 'legacy'}:${anchorKey(thread.anchor)}`;
     groups.set(key, [...(groups.get(key) ?? []), thread]);
   }
 

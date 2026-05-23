@@ -15,7 +15,7 @@ import { basename, dirname, join } from 'node:path';
 
 // 运行时注册表按仓库隔离：每个 repoRoot hash 对应一个文件。
 // 这样 "local-diff-reviewer stop" 只会停止当前仓库创建的进程。
-type RuntimeEntry = {
+export type RuntimeEntry = {
   pid: number;
   vitePid?: number;
   repoRoot: string;
@@ -37,6 +37,11 @@ export async function recordRuntime(entry: RuntimeEntry): Promise<void> {
   const deduped = aliveEntries.filter((item) => item.pid !== entry.pid);
   deduped.push(entry);
   await writeRuntime(path, { entries: deduped });
+}
+
+export async function getLiveRuntimes(repoRoot: string): Promise<RuntimeEntry[]> {
+  const store = await readRuntime(runtimePath(repoRoot));
+  return store.entries.filter((entry) => isPidAlive(entry.pid)).sort((left, right) => right.startedAt.localeCompare(left.startedAt));
 }
 
 export async function stopRecordedRuntimes(repoRoot: string): Promise<{ stopped: RuntimeEntry[]; stale: RuntimeEntry[] }> {

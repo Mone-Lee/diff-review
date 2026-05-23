@@ -57,6 +57,8 @@ export type ReviewThread = {
   id: string;
   filePath: string;
   anchor: CommentAnchor;
+  /** 此评论所属的 diff 快照；旧版本存储的评论在首次打开后补写。 */
+  diffHash?: string;
   status: ReviewThreadStatus;
   comments: ReviewComment[];
   createdAt: string;
@@ -64,11 +66,17 @@ export type ReviewThread = {
 };
 
 export type ReviewSession = {
+  /** 本次审查快照的唯一标识；每次启动 review 时重新生成。 */
   id: string;
+  /** 当前审查目标仓库的目录名，用于界面展示。 */
   repoName: string;
+  /** 当前审查目标仓库的绝对根路径，用于读取 diff 内容和关联评论存储。 */
   repoRoot: string;
+  /** 当前审查范围，例如工作区变更、暂存区变更或两个 revision 之间的差异。 */
   mode: ReviewMode;
+  /** 启动时 diff 内容的摘要，用于标识本次审查对应的代码快照。 */
   diffHash: string;
+  /** 本次审查快照创建时间，使用 ISO 时间字符串。 */
   createdAt: string;
 };
 
