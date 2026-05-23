@@ -33,7 +33,7 @@ async function main() {
     createdAt: new Date().toISOString()
   };
 
-  await attachLegacyComments(repoRoot, session.diffHash);
+  await attachLegacyComments(repoRoot, session.diffHash, diffFiles);
   const importResult = await importAgentComments(repoRoot, session.diffHash, diffFiles, comments);
   if (!newSession && !dev) {
     const reusedUrl = await refreshRunningReview(session, diffFiles);

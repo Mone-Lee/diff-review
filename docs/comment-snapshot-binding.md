@@ -16,6 +16,22 @@
 
 ## 核心对象
 
+### DiffFile：文件级快照标识
+
+每个 diff 文件都携带 `snapshotHash`，表示该文件在当前 diff 中的内容快照：
+
+```ts
+export type DiffFile = {
+  oldPath: string;
+  newPath: string;
+  path: string;
+  snapshotHash: string;
+  // ...
+};
+```
+
+后续线程挂载、导入合并与历史判断都优先使用这个文件级标识，而不是只看整份 diff 的 `diffHash`。
+
 ### ReviewSession：当前展示的 diff 快照
 
 每次启动 review 时，CLI 都读取一次 diff 并生成一个新的 `ReviewSession`：
@@ -49,6 +65,7 @@ export type ReviewThread = {
   filePath: string;
   anchor: CommentAnchor;
   diffHash?: string;
+  fileSnapshotHash?: string;
   status: ReviewThreadStatus;
   comments: ReviewComment[];
   createdAt: string;
@@ -59,9 +76,9 @@ export type ReviewThread = {
 一个 thread 表示某个评论位置上的讨论流。`comments` 中第一条通常是用户发现，
 后续可以是 agent 回复或用户追加内容。
 
-`thread.diffHash` 表明该讨论创建时对应的代码快照。旧数据没有该字段时，CLI 在
-首次重新打开该仓库时通过 `attachLegacyComments()` 将其补写为当次 session 的
-`diffHash`。
+`thread.diffHash` 主要用于追溯来源与兼容旧数据；实际用于文件挂载与同锚点合并的
+主键是 `thread.fileSnapshotHash`。旧数据没有该字段时，CLI 会在启动时通过
+`attachLegacyComments()` 尝试补写。
 
 ### CommentAnchor：快照内部的位置
 
@@ -78,8 +95,8 @@ export type CommentAnchor =
 | `diff-line` | 代码 diff 的 old/new 行 | `filePath + side + lineNumber` |
 | `markdown-line` | Markdown 源文件行 | `filePath + lineNumber` |
 
-锚点只在所属 `diffHash` 内有定位意义。相同行号出现在另一个快照时，不视为同一
-可行内挂载位置。
+锚点只在所属 `fileSnapshotHash` 内有定位意义。相同行号出现在另一个文件快照时，
+不视为同一可行内挂载位置。
 
 ## 绑定关系
 
@@ -88,26 +105,27 @@ export type CommentAnchor =
 ```text
 repoRoot
   └── comment store JSON
-        ├── thread A ── diffHash A ── anchor(src/web/App.tsx, new, 80)
-        └── thread B ── diffHash B ── anchor(src/web/App.tsx, new, 80)
+  ├── thread A ── fileSnapshotHash A ── anchor(src/web/App.tsx, new, 80)
+  └── thread B ── fileSnapshotHash B ── anchor(src/web/App.tsx, new, 80)
 
-session A ── diffHash A ── diffFiles A
-session B ── diffHash B ── diffFiles B
+session A ── diffHash A ── diffFiles A(含每个文件的 snapshotHash)
+session B ── diffHash B ── diffFiles B(含每个文件的 snapshotHash)
 ```
 
-即使 `thread A` 与 `thread B` 的锚点文本完全相同，只要 `diffHash` 不同，它们
+即使 `thread A` 与 `thread B` 的锚点文本完全相同，只要 `fileSnapshotHash` 不同，它们
 仍属于不同快照，不会被合并为同一个行内讨论。
 
 ## 评论写入规则
 
 ### 用户在页面新增评论
 
-`POST /api/threads` 会使用当前 `state.session.diffHash` 写入 thread。
+`POST /api/threads` 会先定位当前 `filePath` 对应的 `DiffFile.snapshotHash`，并写入
+`thread.fileSnapshotHash`。
 
 是否追加到已有 thread 的判断条件为：
 
 ```ts
-thread.diffHash === state.session.diffHash && sameAnchor(thread.anchor, body.anchor)
+thread.fileSnapshotHash === file.snapshotHash && sameAnchor(thread.anchor, body.anchor)
 ```
 
 因此，同一当前快照、同一锚点的评论会追加到同一 thread；历史快照上相同位置的
@@ -118,11 +136,11 @@ thread 不会被复用。
 CLI 的 `--comment '{"type":"thread", ...}'` 与页面新增评论采用相同原则：
 
 ```ts
-item.diffHash === diffHash && sameAnchor(item.anchor, thread.anchor)
+item.fileSnapshotHash === file.snapshotHash && sameAnchor(item.anchor, thread.anchor)
 ```
 
-新创建的 agent finding 写入本次启动 session 的 `diffHash`。去重同样要求
-`diffHash + filePath + anchor + agent comment body` 都一致。
+新创建的 agent finding 会记录当前文件的 `snapshotHash`。去重同样要求
+`fileSnapshotHash + filePath + anchor + agent comment body` 都一致。
 
 ### Agent 回复已有评论
 
@@ -144,13 +162,13 @@ item.diffHash === diffHash && sameAnchor(item.anchor, thread.anchor)
 读取存储时，`normalizeStore()` 使用如下键合并同一讨论位置的数据：
 
 ```ts
-`${thread.diffHash ?? 'legacy'}:${anchorKey(thread.anchor)}`
+`${thread.fileSnapshotHash ?? (thread.diffHash ? `diff:${thread.diffHash}` : 'legacy')}:${anchorKey(thread.anchor)}`
 ```
 
 这意味着：
 
-- 同一快照、同一 anchor 的多个旧 thread 会合并为一个讨论流。
-- 不同 `diffHash` 的相同 anchor 不会合并。
+- 同一文件快照、同一 anchor 的多个旧 thread 会合并为一个讨论流。
+- 不同 `fileSnapshotHash` 的相同 anchor 不会合并。
 - 还没有快照归属的旧数据暂以 `legacy` 分组，并在下次启动时补写归属。
 
 ## 页面展示判断
@@ -163,7 +181,7 @@ item.diffHash === diffHash && sameAnchor(item.anchor, thread.anchor)
 侧栏的历史标记判断为：
 
 ```ts
-thread.diffHash !== currentDiffHash
+!currentFiles.some((file) => isThreadOnFileSnapshot(thread, file))
 ```
 
 满足该条件时显示 `历史快照` 标签。侧栏中的历史 thread 仍可复制 prompt、
@@ -171,15 +189,23 @@ thread.diffHash !== currentDiffHash
 
 ### 内容区：只挂载当前快照线程
 
-前端在 `App.tsx` 中先筛选当前快照 thread：
+前端在 `App.tsx` 中先筛选“属于当前 diff 文件集合”的 thread：
 
 ```ts
-const currentThreads = threads.filter(
-  (thread) => thread.diffHash === session?.diffHash
+const currentSnapshotThreads = threads.filter(
+  (thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))
 );
 ```
 
-只有 `currentThreads` 会传给：
+随后内容区只接收当前选中文件对应的线程：
+
+```ts
+const selectedFileThreads = currentSnapshotThreads.filter(
+  (thread) => isThreadOnFileSnapshot(thread, selectedFile)
+);
+```
+
+只有 `selectedFileThreads` 会传给：
 
 - `FileHeader`
 - `CodeDiffViewer`
@@ -188,7 +214,7 @@ const currentThreads = threads.filter(
 因此行内评论展示必须同时满足：
 
 ```text
-thread.diffHash === session.diffHash
+thread.fileSnapshotHash === selectedFile.snapshotHash
 且
 thread.anchor 与当前文件/当前代码行或 Markdown 行匹配
 ```
@@ -197,9 +223,7 @@ thread.anchor 与当前文件/当前代码行或 Markdown 行匹配
 
 ### 文件列表徽标
 
-当前文件列表中的未解决评论数量直接按文件路径从全部 `threads` 统计，因此徽标
-包含该文件上的历史未解决 thread。它用于提示“这个文件仍有讨论记录”，并不表示
-这些评论都已行内挂载在当前代码快照上。
+当前文件列表中的未解决评论数量按“当前文件快照”统计，不再包含历史快照线程。
 
 ## 更新机制
 
@@ -263,6 +287,10 @@ POST /api/review-state
 请求携带新生成的 `session` 与 `diffFiles`。服务端更新内存中的当前 session、
 diff 文件及 Markdown 预览缓存，但保留按仓库存储的评论数据。
 
+CLI 在刷新前会先请求 `GET /api/capabilities`，仅当返回的
+`reviewRefreshProtocol` 与本地常量一致时才会复用运行中页面。当前协议版本为 `3`，
+用于阻止旧页面继续执行旧绑定规则。
+
 随后打开着的页面在下一次轮询或重新获得焦点时发现 `session.id` 已变化：
 
 1. 内容区切换为新的 diff 快照。
@@ -279,13 +307,22 @@ diff 文件及 Markdown 预览缓存，但保留按仓库存储的评论数据�
 
 | 场景 | 判断 | 结果 |
 | --- | --- | --- |
-| 新增评论是否追加到已有 thread | 当前 `diffHash` 相同且 anchor 相同 | 追加 comment |
-| 相同行号的新快照是否沿用旧 thread | `diffHash` 不同 | 不沿用、不行内挂载 |
+| 新增评论是否追加到已有 thread | 当前 `fileSnapshotHash` 相同且 anchor 相同 | 追加 comment |
+| 相同行号的新快照是否沿用旧 thread | `fileSnapshotHash` 不同 | 不沿用、不行内挂载 |
 | 侧栏是否展示旧评论 | 服务端返回全部 thread | 展示并标为历史快照 |
-| 内容区是否展示旧评论 | `thread.diffHash === session.diffHash` | 不满足则不展示 |
+| 内容区是否展示旧评论 | `thread.fileSnapshotHash === selectedFile.snapshotHash` | 不满足则不展示 |
 | agent 是否能回复旧评论 | 根据 `threadId` 查找 | 可以回复 |
 | 是否替换页面中的 diff | `forceSnapshot` 或 `session.id` 改变 | 替换文件快照 |
 | 是否同步新回复/状态 | 每次 `refreshReviewState()` | 始终同步 threads |
+| 是否复用运行中页面刷新 | `reviewRefreshProtocol` 一致 | 一致才复用 |
+
+## Prompt 作用域筛选
+
+`POST /api/prompt` 的筛选规则与页面展示规则保持一致：
+
+- `thread`：按 `threadId` 精确选择（不限制是否历史快照）。
+- `file-unresolved`：要求 `filePath` 命中、未解决，且属于当前文件快照。
+- `all-unresolved`：要求未解决，且属于当前 diff 的文件快照集合。
 
 ## 相关实现文件
 

@@ -126,7 +126,7 @@ setThreads(store.threads);
 ```ts
 async function refreshReviewState() {
   const res = await fetch('/api/review-state');
-  // session 变化时更新 diff，并同步当前 diffHash 的评论线程
+  // session 变化时更新 diff；评论始终全量同步，内容区按文件快照过滤展示
 }
 ```
 
@@ -162,8 +162,9 @@ return join(commentLogsDir(), `${repoName}-${repoHash}.comments.json`);
 
 ## 当前设计的关键特征
 
-`ReviewSession` 中的 `diffHash` 用于限定评论所属的代码快照。默认复用工作台
-刷新到新 session 时，前端会重新加载 diff 与当前 `diffHash` 对应的评论。
+`ReviewSession` 中的 `diffHash` 用于标识整份 diff 来源；真正用于行内挂载与同锚点
+合并的是 `ReviewThread.fileSnapshotHash`（对应 `DiffFile.snapshotHash`）。默认复用
+工作台刷新到新 session 时，前端会重新加载 diff，并按当前文件快照过滤内容区评论。
 
 当前关系可以表示为：
 
@@ -171,13 +172,14 @@ return join(commentLogsDir(), `${repoName}-${repoHash}.comments.json`);
 session A -> 固定展示 diff A
 session B -> 固定展示 diff B
 
-session A 与 session B -> 共用同一份 repo 评论文件，但按 diffHash 筛选展示
+session A 与 session B -> 共用同一份 repo 评论文件，侧栏保留历史，内容区按 fileSnapshotHash 挂载
 ```
 
-评论锚点仍由文件路径与行位置信息组成，而 thread 额外记录 `diffHash`。因此，
-同一仓库的两份快照即使出现相同文件路径和行号，也不会互相展示行评论。
+评论锚点仍由文件路径与行位置信息组成，而 thread 额外记录 `fileSnapshotHash`。
+因此，同一仓库的两份快照即使出现相同文件路径和行号，也不会互相展示行评论。
 
 同一仓库再次启动 review 时，默认会把新 session 提交给已运行服务并沿用原端口；
+提交前 CLI 会先检查 `/api/capabilities` 的 `reviewRefreshProtocol`，仅在版本一致时复用；
 前端轮询到 session 变化后自动替换 diff。显式传入 `--new-session` 时，则保留
 当前页面快照并启动新的独立页面。
 
@@ -185,4 +187,4 @@ session A 与 session B -> 共用同一份 repo 评论文件，但按 diffHash �
 
 `session` 是一次 review 启动时的 diff 快照标识与元数据集合，负责说明“当前页面
 展示的是哪个仓库、哪种审查范围、哪一份 diff”。评论文件仍按仓库归档，但 thread
-通过 `diffHash` 归属于对应快照。
+通过 `fileSnapshotHash` 绑定到文件级快照，并在内容区按该规则挂载。

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { DiffFile, DiffHunk, DiffLine } from '../shared/types';
 
 const hunkHeaderPattern = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
@@ -20,6 +21,7 @@ export function parseUnifiedDiff(input: string): DiffFile[] {
         oldPath: paths?.[1] ?? '',
         newPath: paths?.[2] ?? '',
         path: paths?.[2] ?? '',
+        snapshotHash: '',
         status: 'modified',
         additions: 0,
         deletions: 0,
@@ -123,7 +125,14 @@ export function parseUnifiedDiff(input: string): DiffFile[] {
     currentHunk.lines.push(synthetic);
   }
 
-  return files.filter((file) => file.path);
+  return files
+    .filter((file) => file.path)
+    .map((file) => ({ ...file, snapshotHash: fileSnapshotHash(file) }));
+}
+
+function fileSnapshotHash(file: DiffFile): string {
+  const snapshot = { ...file, snapshotHash: undefined };
+  return createHash('sha256').update(JSON.stringify(snapshot)).digest('hex').slice(0, 16);
 }
 
 function normalizeDiffPath(path: string): string {
