@@ -46,8 +46,8 @@ export function FileHeader({
       <div className={styles.headerTop}>
         <Typography.Text strong>{file.path}</Typography.Text>
         <div className={styles.headerActions}>
-          <Button className={styles.headerAction} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'file-unresolved', filePath: file.path })}>
-            复制文件提示词
+          <Button type='primary' className={styles.headerAction} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'file-unresolved', filePath: file.path })}>
+            批量提交当前文件的review
           </Button>
           <Button className={styles.headerAction} icon={<CommentOutlined />} type={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>
             文件级评论

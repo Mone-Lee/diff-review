@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { DownOutlined } from '@ant-design/icons';
-import { Button, Card, Dropdown, Empty, Modal, Segmented, Space, Tag, Typography } from 'antd';
+import { Button, Card, Dropdown, Empty, Modal, Segmented, Space, Switch, Tag, Typography } from 'antd';
 import type { ReviewThread } from '../../shared/types';
 import { COMMENT_STATUS_TEXT_MAP } from '../../shared/types';
 import { getThreadStatus } from '../../shared/thread-utils';
@@ -13,6 +13,7 @@ import styles from '../styles.module.less';
 
 type Props = {
   threads: ReviewThread[];
+  currentFilePath: string;
   focusedThreadId: string | null;
   onPatch: (id: string, status: ReviewThread['status']) => Promise<void>;
   onDeleteThread: (id: string) => Promise<void>;
@@ -23,6 +24,7 @@ type Props = {
 };
 
 type ThreadFilter = 'all' | 'pending' | 'resolved';
+type ThreadScope = 'current-file' | 'all-diff';
 
 type BatchAction = 'delete-resolved' | 'delete-submit' | 'delete-all';
 
@@ -32,10 +34,22 @@ const GROUP_STATUS_ORDER: Record<ReviewThread['status'], number> = {
   resolved: 2
 };
 
-export function ThreadList({ threads, focusedThreadId, onPatch, onDeleteThread, onReply, onPatchComment, onDeleteComment, onCopy }: Props) {
+export function ThreadList({ threads, currentFilePath, focusedThreadId, onPatch, onDeleteThread, onReply, onPatchComment, onDeleteComment, onCopy }: Props) {
   const [filter, setFilter] = React.useState<ThreadFilter>('all');
+  const [scope, setScope] = React.useState<ThreadScope>('current-file');
   const groupRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
-  const groups = React.useMemo(() => threads.map((thread) => ({ key: thread.id, thread })), [threads]);
+  const currentFileThreadsCount = React.useMemo(() => {
+    if (!currentFilePath) return 0;
+    return threads.filter((thread) => thread.filePath === currentFilePath).length;
+  }, [currentFilePath, threads]);
+
+  const scopeThreads = React.useMemo(() => {
+    if (scope === 'all-diff') return threads;
+    if (!currentFilePath) return [];
+    return threads.filter((thread) => thread.filePath === currentFilePath);
+  }, [currentFilePath, scope, threads]);
+
+  const groups = React.useMemo(() => scopeThreads.map((thread) => ({ key: thread.id, thread })), [scopeThreads]);
   const visibleGroups = React.useMemo(() => {
     const filtered = groups.filter((group) => {
       const status = getThreadStatus(group.thread);
@@ -51,27 +65,27 @@ export function ThreadList({ threads, focusedThreadId, onPatch, onDeleteThread, 
   }, [filter, groups]);
 
   const batchTargets = React.useMemo(() => {
-    const resolved = threads.filter((thread) => getThreadStatus(thread) === 'resolved');
-    const submit = threads.filter((thread) => getThreadStatus(thread) === 'submit');
+    const resolved = scopeThreads.filter((thread) => getThreadStatus(thread) === 'resolved');
+    const submit = scopeThreads.filter((thread) => getThreadStatus(thread) === 'submit');
     return { resolved, submit };
-  }, [threads]);
+  }, [scopeThreads]);
 
   const runBatchDelete = React.useCallback(
     async (action: BatchAction) => {
       let targets: ReviewThread[] = [];
       if (action === 'delete-resolved') targets = batchTargets.resolved;
       if (action === 'delete-submit') targets = batchTargets.submit;
-      if (action === 'delete-all') targets = threads;
+      if (action === 'delete-all') targets = scopeThreads;
       for (const thread of targets) {
         await onDeleteThread(thread.id);
       }
     },
-    [batchTargets.resolved, batchTargets.submit, onDeleteThread, threads]
+    [batchTargets.resolved, batchTargets.submit, onDeleteThread, scopeThreads]
   );
 
   const confirmBatchDelete = React.useCallback(
     (action: BatchAction) => {
-      const count = action === 'delete-resolved' ? batchTargets.resolved.length : action === 'delete-submit' ? batchTargets.submit.length : threads.length;
+      const count = action === 'delete-resolved' ? batchTargets.resolved.length : action === 'delete-submit' ? batchTargets.submit.length : scopeThreads.length;
       const title = action === 'delete-resolved' ? `删除全部已解决评论（${count}）？` : action === 'delete-submit' ? `删除全部 submit 评论（${count}）？` : `清空全部评论（${count}）？`;
       const okText = action === 'delete-all' ? '清空' : '删除';
       Modal.confirm({
@@ -82,8 +96,13 @@ export function ThreadList({ threads, focusedThreadId, onPatch, onDeleteThread, 
         onOk: async () => runBatchDelete(action)
       });
     },
-    [batchTargets.resolved.length, batchTargets.submit.length, runBatchDelete, threads.length]
+    [batchTargets.resolved.length, batchTargets.submit.length, runBatchDelete, scopeThreads.length]
   );
+
+  React.useEffect(() => {
+    if (currentFilePath) return;
+    setScope('all-diff');
+  }, [currentFilePath]);
 
   React.useEffect(() => {
     if (!focusedThreadId) return;
@@ -95,6 +114,35 @@ export function ThreadList({ threads, focusedThreadId, onPatch, onDeleteThread, 
 
   return (
     <div>
+      <div className={styles.threadScopeBar}>
+        <Typography.Text className={styles.threadScopeLabel}>查看范围</Typography.Text>
+        <div className={!currentFilePath ? `${styles.threadScopeSwitchRow} ${styles.threadScopeSwitchRowDisabled}` : styles.threadScopeSwitchRow}>
+          <button
+            type="button"
+            className={scope === 'current-file' ? `${styles.threadScopeOption} ${styles.threadScopeOptionActive}` : styles.threadScopeOption}
+            onClick={() => setScope('current-file')}
+            disabled={!currentFilePath}
+          >
+            当前文件 ({currentFileThreadsCount})
+          </button>
+          <Switch
+            className={styles.threadScopeSwitch}
+            checked={scope === 'all-diff'}
+            onChange={(checked) => setScope(checked ? 'all-diff' : 'current-file')}
+            disabled={!currentFilePath}
+            size="small"
+          />
+          <button
+            type="button"
+            className={scope === 'all-diff' ? `${styles.threadScopeOption} ${styles.threadScopeOptionActive}` : styles.threadScopeOption}
+            onClick={() => setScope('all-diff')}
+            disabled={!currentFilePath}
+          >
+            全部 diff ({threads.length})
+          </button>
+        </div>
+      </div>
+
       <div className={styles.threadListToolbar}>
         <div className={styles.threadFilterWrap}>
           <Segmented<ThreadFilter>
@@ -114,7 +162,7 @@ export function ThreadList({ threads, focusedThreadId, onPatch, onDeleteThread, 
               { key: 'delete-resolved', label: `删除已解决（${batchTargets.resolved.length}）`, disabled: batchTargets.resolved.length === 0 },
               { key: 'delete-submit', label: `删除待提交（${batchTargets.submit.length}）`, disabled: batchTargets.submit.length === 0 },
               { type: 'divider' },
-              { key: 'delete-all', label: `清空全部（${threads.length}）`, danger: true, disabled: threads.length === 0 }
+              { key: 'delete-all', label: `清空全部（${scopeThreads.length}）`, danger: true, disabled: scopeThreads.length === 0 }
             ],
             onClick: ({ key }) => {
               if (key === 'delete-resolved' || key === 'delete-submit' || key === 'delete-all') {

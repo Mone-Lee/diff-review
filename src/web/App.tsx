@@ -308,6 +308,7 @@ export default function App() {
         <div className={styles.threadRailBody}>
           <ThreadList
             threads={threads}
+            currentFilePath={selectedFile?.path ?? ''}
             focusedThreadId={focusedThreadId}
             onPatch={patchThread}
             onDeleteThread={deleteThread}
