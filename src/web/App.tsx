@@ -29,6 +29,12 @@ function sessionRepoName(session: ReviewSession | null) {
   return session.repoName || session.repoRoot.split(/[\\/]/).filter(Boolean).at(-1) || session.repoRoot;
 }
 
+function areThreadsEqual(left: ReviewThread[], right: ReviewThread[]) {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 export default function App() {
   const { message } = AntApp.useApp();
   const [session, setSession] = React.useState<ReviewSession | null>(null);
@@ -78,7 +84,7 @@ export default function App() {
   async function refreshThreads() {
     const res = await fetch('/api/threads');
     const store = (await res.json()) as CommentStore;
-    setThreads(store.threads);
+    setThreads((currentThreads) => (areThreadsEqual(currentThreads, store.threads) ? currentThreads : store.threads));
     if (focusedThreadId && !store.threads.some((thread) => thread.id === focusedThreadId)) {
       setFocusedThreadId(null);
     }

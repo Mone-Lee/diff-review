@@ -8,16 +8,16 @@
  */
 import React from 'react';
 import { Alert, Spin } from 'antd';
-import { MessageOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
 import type { CommentAnchor, DiffFile, MarkdownPreview, ReviewThread } from '../../shared/types';
 import styles from '../styles.module.less';
-import { CommentPopover } from './CommentPopover';
-import { InlineThreadGroup } from './InlineThreadCard';
+import { MarkdownCommentBlock } from './MarkdownCommentBlock';
 import { MermaidDiagram } from './MermaidDiagram';
+
+const MARKDOWN_REMARK_PLUGINS = [remarkFrontmatter, remarkGfm];
 
 type Props = {
   file: DiffFile;
@@ -131,67 +131,61 @@ export function MarkdownPreviewPanel({
 }: Props) {
   // preview 为 null 表示加载中或加载失败；当前 UI 统一展示 loading 态。
   const [preview, setPreview] = React.useState<MarkdownPreview | null>(null);
-  const [activeLine, setActiveLine] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     // 文件切换时重新拉取预览内容，确保右侧展示与当前文件同步。
     setPreview(null);
-    setActiveLine(null);
     fetch(`/api/markdown-preview?path=${encodeURIComponent(file.path)}`)
       .then((res) => res.json())
       .then((data: MarkdownPreview) => setPreview(data))
       .catch(() => setPreview(null));
   }, [file.path]);
 
-  function getMarkdownLineThreads(lineNumber: number) {
-    return threads.filter(
-      (thread) =>
-        thread.anchor.type === 'markdown-line' &&
-        thread.anchor.filePath === file.path &&
-        thread.anchor.lineNumber === lineNumber
-    );
-  }
+  const threadsByLine = React.useMemo(() => {
+    const nextThreadsByLine = new Map<number, ReviewThread[]>();
+    for (const thread of threads) {
+      if (thread.anchor.type !== 'markdown-line' || thread.anchor.filePath !== file.path) continue;
+      const lineThreads = nextThreadsByLine.get(thread.anchor.lineNumber) ?? [];
+      lineThreads.push(thread);
+      nextThreadsByLine.set(thread.anchor.lineNumber, lineThreads);
+    }
+    return nextThreadsByLine;
+  }, [file.path, threads]);
 
-  function renderCommentableBlock(lineNumber: number | undefined, content: React.ReactNode) {
+  const renderCommentableBlock = React.useCallback((lineNumber: number | undefined, content: React.ReactNode) => {
     if (!lineNumber) return content;
-    const lineThreads = getMarkdownLineThreads(lineNumber);
 
     return (
-      <div className={styles.markdownCommentBlock}>
-        <div className={styles.markdownCommentContent}>{content}</div>
-        {lineThreads.length === 0 ? (
-          <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setActiveLine(lineNumber)}>
-            <MessageOutlined />
-          </button>
-        ) : null}
-        {activeLine === lineNumber ? (
-          <CommentPopover
-            onCancel={() => setActiveLine(null)}
-            onSubmit={async (body) => {
-              await onCreate({ type: 'markdown-line', filePath: file.path, lineNumber, blockId: `line-${lineNumber}` }, body);
-              setActiveLine(null);
-            }}
-          />
-        ) : null}
-        {lineThreads.length > 0 ? (
-          <div className={styles.inlineThreadStack}>
-            <InlineThreadGroup
-              threads={lineThreads}
-              onFocus={onLocateThread}
-              onPatch={onPatchThread}
-              onDeleteThread={onDeleteThread}
-              onReply={onReplyThread}
-              onPatchComment={onPatchComment}
-              onDeleteComment={onDeleteComment}
-              onCopy={onCopyThread}
-            />
-          </div>
-        ) : null}
-      </div>
+      <MarkdownCommentBlock
+        lineNumber={lineNumber}
+        filePath={file.path}
+        lineThreads={threadsByLine.get(lineNumber) ?? []}
+        onCreate={onCreate}
+        onLocateThread={onLocateThread}
+        onPatchThread={onPatchThread}
+        onDeleteThread={onDeleteThread}
+        onReplyThread={onReplyThread}
+        onPatchComment={onPatchComment}
+        onDeleteComment={onDeleteComment}
+        onCopyThread={onCopyThread}
+      >
+        {content}
+      </MarkdownCommentBlock>
     );
-  }
+  }, [
+    file.path,
+    onCopyThread,
+    onCreate,
+    onDeleteComment,
+    onDeleteThread,
+    onLocateThread,
+    onPatchComment,
+    onPatchThread,
+    onReplyThread,
+    threadsByLine
+  ]);
 
-  const markdownComponents: Components = {
+  const markdownComponents = React.useMemo<Components>(() => ({
     h1({ children, node, ...props }) {
       return renderCommentableBlock(getNodeStartLine(node), <h1 {...props}>{children}</h1>);
     },
@@ -293,7 +287,7 @@ export function MarkdownPreviewPanel({
         <img src={resolvedSrc} alt={alt ?? ''} loading="lazy" {...props} />
       );
     }
-  };
+  }), [file.path, renderCommentableBlock]);
 
   if (!preview) {
     return (
@@ -308,7 +302,7 @@ export function MarkdownPreviewPanel({
       {preview.deleted ? <Alert className={styles.deletedBanner} message="该文件已删除，仅展示删除前预览" type="warning" showIcon /> : null}
       <article className={styles.markdownArticle}>
         <div className={styles.markdownBody}>
-          <ReactMarkdown remarkPlugins={[remarkFrontmatter, remarkGfm]} urlTransform={(url) => (isSafeUrl(url) ? url : '')} components={markdownComponents}>
+          <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} urlTransform={(url) => (isSafeUrl(url) ? url : '')} components={markdownComponents}>
             {preview.content}
           </ReactMarkdown>
         </div>
