@@ -2,25 +2,29 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { homedir, platform } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import type { ReviewThread } from '../shared/types';
-import { anchorKey, getMergedThreadStatus } from '../shared/thread-utils';
+import type { DiffFile, ReviewThread } from '../shared/types';
+import { anchorKey, getMergedThreadStatus, getThreadStatus } from '../shared/thread-utils';
 
 export type CommentStore = {
   threads: ReviewThread[];
 };
 
-export async function readComments(repoRoot: string, diffHash?: string): Promise<CommentStore> {
-  const store = await readCommentStore(repoRoot);
-  if (!diffHash) return store;
-  return { threads: store.threads.filter((thread) => thread.diffHash === diffHash) };
+export async function readComments(repoRoot: string): Promise<CommentStore> {
+  return readCommentStore(repoRoot);
 }
 
-export async function attachLegacyComments(repoRoot: string, diffHash: string): Promise<void> {
+export async function attachLegacyComments(repoRoot: string, diffHash: string, diffFiles: DiffFile[]): Promise<void> {
   const store = await readCommentStore(repoRoot);
   let changed = false;
   for (const thread of store.threads) {
     if (!thread.diffHash) {
       thread.diffHash = diffHash;
+      changed = true;
+    }
+    const file = diffFiles.find((item) => item.path === thread.filePath);
+    // 旧数据没有文件快照：同一整体快照可直接迁移；待处理评论仍挂回可见文件，避免升级后无处处理。
+    if (!thread.fileSnapshotHash && file && (thread.diffHash === diffHash || getThreadStatus(thread) === 'submit')) {
+      thread.fileSnapshotHash = file.snapshotHash;
       changed = true;
     }
   }
@@ -66,7 +70,8 @@ async function readLegacyComments(repoRoot: string): Promise<CommentStore> {
 function normalizeStore(store: CommentStore): CommentStore {
   const groups = new Map<string, ReviewThread[]>();
   for (const thread of store.threads) {
-    const key = `${thread.diffHash ?? 'legacy'}:${anchorKey(thread.anchor)}`;
+    const snapshotKey = thread.fileSnapshotHash ?? (thread.diffHash ? `diff:${thread.diffHash}` : 'legacy');
+    const key = `${snapshotKey}:${anchorKey(thread.anchor)}`;
     groups.set(key, [...(groups.get(key) ?? []), thread]);
   }
 

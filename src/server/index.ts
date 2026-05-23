@@ -7,7 +7,7 @@ import { readFileForPreview } from '../core/git';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
 import { readComments, writeComments } from './storage';
-import { getOpenThreadStatus, getThreadStatus, sameAnchor } from '../shared/thread-utils';
+import { getOpenThreadStatus, getThreadStatus, isThreadOnFileSnapshot, sameAnchor } from '../shared/thread-utils';
 
 export type ReviewServerState = {
   session: ReviewSession;
@@ -114,8 +114,13 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         res.status(400).json({ error: 'Comment body is required' });
         return;
       }
+      const file = state.diffFiles.find((item) => item.path === body.filePath);
+      if (!file) {
+        res.status(400).json({ error: 'Comment file is not present in the current diff' });
+        return;
+      }
       const store = await readComments(state.session.repoRoot);
-      const existingThread = store.threads.find((thread) => thread.diffHash === state.session.diffHash && sameAnchor(thread.anchor, body.anchor));
+      const existingThread = store.threads.find((thread) => thread.fileSnapshotHash === file.snapshotHash && sameAnchor(thread.anchor, body.anchor));
       const comment: ReviewComment = {
         id: crypto.randomUUID(),
         body: commentBody,
@@ -137,6 +142,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         filePath: body.filePath,
         anchor: body.anchor,
         diffHash: state.session.diffHash,
+        fileSnapshotHash: file.snapshotHash,
         status: 'submit',
         comments: [comment],
         createdAt: now,
@@ -290,7 +296,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       const scope = req.body as PromptScope;
       const store = await readComments(state.session.repoRoot);
       // Prompt 只拼接目标范围内的线程文本，交由 AI 继续加工。
-      const threads = selectPromptThreads(store.threads, scope);
+      const threads = selectPromptThreads(store.threads, scope, state.diffFiles);
       res.json({ prompt: formatPrompt(threads) });
     } catch (error) {
       next(error);
@@ -351,10 +357,14 @@ function listen(app: express.Express, port: number): Promise<string> {
   });
 }
 
-function selectPromptThreads(threads: ReviewThread[], scope: PromptScope): ReviewThread[] {
+function selectPromptThreads(threads: ReviewThread[], scope: PromptScope, currentFiles: DiffFile[]): ReviewThread[] {
+  const isCurrentSnapshotThread = (thread: ReviewThread) => currentFiles.some((file) => isThreadOnFileSnapshot(thread, file));
+
   if (scope.type === 'thread') return threads.filter((thread) => thread.id === scope.threadId);
   if (scope.type === 'file-unresolved') {
-    return threads.filter((thread) => thread.filePath === scope.filePath && thread.status !== 'resolved');
+    return threads.filter(
+      (thread) => thread.filePath === scope.filePath && thread.status !== 'resolved' && isCurrentSnapshotThread(thread)
+    );
   }
-  return threads.filter((thread) => thread.status !== 'resolved');
+  return threads.filter((thread) => thread.status !== 'resolved' && isCurrentSnapshotThread(thread));
 }

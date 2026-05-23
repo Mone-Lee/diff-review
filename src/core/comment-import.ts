@@ -45,7 +45,7 @@ export async function importAgentComments(repoRoot: string, diffHash: string, di
 
     const thread = buildAgentThread(parsed, diffHash, diffFiles, result, label);
     if (!thread) continue;
-    const existingThread = store.threads.find((item) => item.diffHash === diffHash && sameAnchor(item.anchor, thread.anchor));
+    const existingThread = store.threads.find((item) => item.fileSnapshotHash === thread.fileSnapshotHash && sameAnchor(item.anchor, thread.anchor));
     if (hasDuplicateAgentComment(store.threads, thread)) {
       result.skipped.push(`${label}: duplicate agent comment skipped`);
       continue;
@@ -147,6 +147,7 @@ function buildAgentThread(comment: ImportThreadComment, diffHash: string, diffFi
     filePath: anchor.filePath,
     anchor,
     diffHash,
+    fileSnapshotHash: file.snapshotHash,
     status: 'replied',
     comments: [
       {
@@ -199,7 +200,7 @@ function hasDuplicateAgentComment(threads: ReviewThread[], nextThread: ReviewThr
   return threads.some((thread) => {
     return (
       thread.comments.some((comment) => comment.author === 'agent' && comment.body.trim() === nextComment) &&
-      thread.diffHash === nextThread.diffHash &&
+      thread.fileSnapshotHash === nextThread.fileSnapshotHash &&
       thread.filePath === nextThread.filePath &&
       sameAnchor(thread.anchor, nextThread.anchor)
     );
