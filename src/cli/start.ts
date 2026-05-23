@@ -8,7 +8,7 @@ import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
 import { getLiveRuntimes, hasRuntimeRecord, recordRuntime, stopRecordedRuntimes } from './runtime-registry';
 import { startServer } from '../server';
 import { attachLegacyComments } from '../server/storage';
-import type { DiffFile, ReviewSession } from '../shared/types';
+import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type ReviewSession } from '../shared/types';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const builtWebDist = join(packageRoot, 'dist', 'web');
@@ -143,6 +143,11 @@ async function refreshRunningReview(session: ReviewSession, diffFiles: DiffFile[
   for (const runtime of runtimes) {
     const apiUrl = `http://127.0.0.1:${runtime.apiPort}`;
     try {
+      // 仅复用声明了同版本刷新协议的运行中服务，避免把新快照推给旧实现导致评论丢失展示。
+      const capabilityResponse = await fetch(`${apiUrl}/api/capabilities`);
+      if (!capabilityResponse.ok) continue;
+      const capabilities = (await capabilityResponse.json()) as { reviewRefreshProtocol?: unknown };
+      if (capabilities.reviewRefreshProtocol !== REVIEW_REFRESH_PROTOCOL) continue;
       const response = await fetch(`${apiUrl}/api/review-state`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

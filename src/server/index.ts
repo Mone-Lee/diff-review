@@ -2,7 +2,7 @@ import express from 'express';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
-import type { DiffFile, MarkdownPreview, PromptScope, ReviewComment, ReviewSession, ReviewThread } from '../shared/types';
+import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type MarkdownPreview, type PromptScope, type ReviewComment, type ReviewSession, type ReviewThread } from '../shared/types';
 import { readFileForPreview } from '../core/git';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
@@ -26,6 +26,11 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
 
   app.get('/api/diff', (_req, res) => {
     res.json({ files: state.diffFiles });
+  });
+
+  // 提供服务端能力声明，供 CLI 在刷新前做版本兼容探测。
+  app.get('/api/capabilities', (_req, res) => {
+    res.json({ reviewRefreshProtocol: REVIEW_REFRESH_PROTOCOL });
   });
 
   app.get('/api/review-state', async (_req, res, next) => {

@@ -53,6 +53,9 @@ export type ReviewComment = {
 
 export type ReviewThreadStatus = 'submit' | 'replied' | 'resolved';
 
+// review 页面刷新协议版本；CLI 与服务端通过它判断是否可以安全复用运行中的页面。
+export const REVIEW_REFRESH_PROTOCOL = 1;
+
 export type ReviewThread = {
   id: string;
   filePath: string;
