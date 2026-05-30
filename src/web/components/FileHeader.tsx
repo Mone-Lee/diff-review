@@ -2,8 +2,8 @@
  * 文件头区域：展示文件信息并提供文件级评论、文件提示词复制等操作。
  */
 import React from 'react';
-import { Button, Card, Tag, Typography } from 'antd';
-import { MessageOutlined, CopyOutlined } from '@ant-design/icons';
+import { Button, Card, Tag, Tooltip, Typography } from 'antd';
+import { MessageOutlined, CopyOutlined, ArrowsAltOutlined, ShrinkOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import { CommentComposer } from './CommentComposer';
 import { InlineThreadGroup } from './InlineThreadGroup';
@@ -12,8 +12,11 @@ import styles from '../styles.module.less';
 type Props = {
   file: DiffFile;
   threads: ReviewThread[];
+  showToggleAllLines: boolean;
+  hasExpandedContext: boolean;
   onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
   onCopy: (scope: { type: 'file-unresolved'; filePath: string }) => Promise<void>;
+  onToggleAllLines: (filePath: string) => void;
   onLocateThread: (threadId: string) => void;
   onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
   onDeleteThread: (id: string) => Promise<void>;
@@ -25,8 +28,11 @@ type Props = {
 export function FileHeader({
   file,
   threads,
+  showToggleAllLines,
+  hasExpandedContext,
   onCreate,
   onCopy,
+  onToggleAllLines,
   onLocateThread,
   onPatchThread,
   onDeleteThread,
@@ -35,6 +41,8 @@ export function FileHeader({
   onCopyThread
 }: Props) {
   const [open, setOpen] = React.useState(false);
+  const toggleTooltip = hasExpandedContext ? '隐藏当前文件未改动行' : '展开当前文件所有未改动行';
+  const toggleAriaLabel = hasExpandedContext ? '隐藏当前文件未改动行' : '展开当前文件所有未改动行';
   // 文件头部只展示当前文件的线程数量，便于快速判断讨论密度。
   const fileThreads = threads.filter((thread) => thread.filePath === file.path && thread.status !== 'resolved');
   const fileLevelThreads = threads.filter((thread) => thread.filePath === file.path && thread.anchor.type === 'file');
@@ -42,7 +50,20 @@ export function FileHeader({
   return (
     <Card className={styles.fileHeader}>
       <div className={styles.headerTop}>
-        <Typography.Text strong>{file.path}</Typography.Text>
+        <div className={styles.filePathBlock}>
+          {showToggleAllLines ? (
+            <Tooltip title={toggleTooltip}>
+              <Button
+                className={styles.fileExpandBtn}
+                type="text"
+                icon={hasExpandedContext ? <ShrinkOutlined /> : <ArrowsAltOutlined />}
+                aria-label={toggleAriaLabel}
+                onClick={() => onToggleAllLines(file.path)}
+              />
+            </Tooltip>
+          ) : null}
+          <Typography.Text strong className={styles.filePathText}>{file.path}</Typography.Text>
+        </div>
         <div className={styles.headerActions}>
           <Button disabled={fileThreads.length === 0} type='primary' className={styles.headerAction} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'file-unresolved', filePath: file.path })}>
             批量提交当前文件的review

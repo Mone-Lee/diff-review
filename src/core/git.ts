@@ -54,6 +54,29 @@ export async function readFileForPreview(file: DiffFile, mode: ReviewMode, repoR
   return { content: await readFile(join(repoRoot, targetPath), 'utf8'), deleted: false };
 }
 
+export type DiffFileContents = {
+  oldLines: string[];
+  newLines: string[];
+  oldTotalLines: number;
+  newTotalLines: number;
+};
+
+export async function readDiffFileContents(file: DiffFile, mode: ReviewMode, repoRoot: string): Promise<DiffFileContents> {
+  const [oldContent, newContent] = await Promise.all([
+    readDiffSideContent(file, mode, repoRoot, 'old'),
+    readDiffSideContent(file, mode, repoRoot, 'new')
+  ]);
+  const oldLines = splitContentLines(oldContent);
+  const newLines = splitContentLines(newContent);
+
+  return {
+    oldLines,
+    newLines,
+    oldTotalLines: oldLines.length,
+    newTotalLines: newLines.length
+  };
+}
+
 export function parseReviewMode(args: string[]): ReviewMode {
   const filtered = args.filter(Boolean);
   if (filtered.length === 0 || filtered[0] === 'working') return { kind: 'working' };
@@ -74,6 +97,36 @@ function isSafeRepoPath(repoRoot: string, path: string): boolean {
 
 async function gitShow(revPath: string, repoRoot: string): Promise<string> {
   return execGitStdout(['show', revPath], repoRoot);
+}
+
+async function readDiffSideContent(file: DiffFile, mode: ReviewMode, repoRoot: string, side: 'old' | 'new'): Promise<string> {
+  const path = side === 'old' ? file.oldPath : file.path;
+  if (!path || path === '/dev/null') return '';
+
+  if (!isSafeRepoPath(repoRoot, path)) {
+    throw new Error(`Unsafe file path: ${path}`);
+  }
+
+  if (side === 'old') {
+    if (file.status === 'added') return '';
+    if (mode.kind === 'staged') return gitShow(`HEAD:${path}`, repoRoot);
+    if (mode.kind === 'revision') return gitShow(`${mode.base}:${path}`, repoRoot);
+    return file.status === 'deleted' ? gitShow(`HEAD:${path}`, repoRoot) : readFile(join(repoRoot, path), 'utf8');
+  }
+
+  if (file.status === 'deleted') return '';
+  if (mode.kind === 'staged') return gitShow(`:${path}`, repoRoot);
+  if (mode.kind === 'revision') return gitShow(`${mode.target}:${path}`, repoRoot);
+  return readFile(join(repoRoot, path), 'utf8');
+}
+
+function splitContentLines(content: string): string[] {
+  const normalized = content.replace(/\r\n/g, '\n');
+  const lines = normalized.split('\n');
+  if (lines.length > 0 && lines.at(-1) === '') {
+    lines.pop();
+  }
+  return lines;
 }
 
 async function execGitStdout(args: string[], cwd: string): Promise<string> {

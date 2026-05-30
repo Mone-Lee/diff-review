@@ -1,0 +1,97 @@
+/**
+ * InlineDiffLine 组件：渲染 inline 模式下的单行 diff 与行级评论入口。
+ */
+import React from 'react';
+import { MessageOutlined } from '@ant-design/icons';
+import type { CommentAnchor, DiffFile, ReviewThread } from '../../../shared/types';
+import { CommentPopover } from '../CommentPopover';
+import { getLineSign } from './utils';
+import { InlineThreadStack } from './InlineThreadStack';
+import styles from '../../styles.module.less';
+
+type Props = {
+  filePath: string;
+  line: DiffFile['hunks'][number]['lines'][number];
+  index: number;
+  hunkKey: string;
+  preferredSide?: 'old' | 'new';
+  activeLine: string | null;
+  setActiveLine: React.Dispatch<React.SetStateAction<string | null>>;
+  threads: ReviewThread[];
+  onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
+  onLocateThread: (threadId: string) => void;
+  onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
+  onDeleteThread: (id: string) => Promise<void>;
+  onReplyThread: (id: string, body: string) => Promise<void>;
+  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
+  onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
+};
+
+export function InlineDiffLine({
+  filePath,
+  line,
+  index,
+  hunkKey,
+  preferredSide,
+  activeLine,
+  setActiveLine,
+  threads,
+  onCreate,
+  onLocateThread,
+  onPatchThread,
+  onDeleteThread,
+  onReplyThread,
+  onPatchComment,
+  onCopyThread
+}: Props) {
+  const side = preferredSide ?? (line.type === 'remove' ? 'old' : 'new');
+  const lineNumber = side === 'old' ? line.oldLineNumber : line.newLineNumber;
+  const anchorKey = `${hunkKey}-${side}-${lineNumber}-${index}`;
+  const lineThreads = threads.filter(
+    (thread) =>
+      thread.anchor.type === 'diff-line' &&
+      thread.anchor.filePath === filePath &&
+      thread.anchor.side === side &&
+      thread.anchor.lineNumber === lineNumber
+  );
+  const rowClass =
+    line.type === 'add' ? `${styles.diffRow} ${styles.add}` : line.type === 'remove' ? `${styles.diffRow} ${styles.remove}` : styles.diffRow;
+
+  return (
+    <div className={rowClass} data-review-anchor={`${side}:${lineNumber}`}>
+      <button className={styles.lineNo} onClick={() => line.oldLineNumber && setActiveLine(anchorKey)}>
+        {line.oldLineNumber ?? ''}
+      </button>
+      <button className={styles.lineNo} onClick={() => line.newLineNumber && setActiveLine(anchorKey)}>
+        {line.newLineNumber ?? ''}
+      </button>
+      <span className={line.type === 'add' ? `${styles.lineSign} ${styles.signAdd}` : line.type === 'remove' ? `${styles.lineSign} ${styles.signRemove}` : styles.lineSign}>
+        {getLineSign(line.type)}
+      </span>
+      <pre className={styles.codeLine}>{line.content || ' '}</pre>
+      {lineNumber && lineThreads.length === 0 ? (
+        <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setActiveLine(anchorKey)}>
+          <MessageOutlined />
+        </button>
+      ) : null}
+      {activeLine === anchorKey && lineNumber ? (
+        <CommentPopover
+          onCancel={() => setActiveLine(null)}
+          onSubmit={async (body) => {
+            await onCreate({ type: 'diff-line', filePath, side, lineNumber }, body);
+            setActiveLine(null);
+          }}
+        />
+      ) : null}
+      <InlineThreadStack
+        threads={lineThreads}
+        onLocateThread={onLocateThread}
+        onPatchThread={onPatchThread}
+        onDeleteThread={onDeleteThread}
+        onReplyThread={onReplyThread}
+        onPatchComment={onPatchComment}
+        onCopyThread={onCopyThread}
+      />
+    </div>
+  );
+}

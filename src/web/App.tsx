@@ -16,6 +16,7 @@ import styles from './styles.module.less';
 type ReviewState = { session: ReviewSession; files: DiffFile[]; threads: ReviewThread[] };
 type DiffViewMode = 'inline' | 'split';
 type LocateTarget = { threadId: string; anchor: CommentAnchor };
+type ExpandAllRequest = { filePath: string; requestId: number };
 const FILE_PATH_MAX_LENGTH = 36;
 const FILE_PATH_SUFFIX_LENGTH = 18;
 
@@ -24,6 +25,10 @@ function middleEllipsis(text: string, maxLength: number, suffixLength: number) {
   const safeSuffixLength = Math.min(suffixLength, maxLength - 4);
   const prefixLength = maxLength - safeSuffixLength - 3;
   return `${text.slice(0, prefixLength)}...${text.slice(-safeSuffixLength)}`;
+}
+
+function isImageFilePath(path: string) {
+  return /\.(avif|bmp|gif|heic|heif|ico|jpe?g|png|svg|tiff?|webp)$/i.test(path);
 }
 
 function sessionRepoName(session: ReviewSession | null) {
@@ -46,6 +51,8 @@ export default function App() {
   const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('split');
   const [focusedThreadId, setFocusedThreadId] = React.useState<string | null>(null);
   const [locateTarget, setLocateTarget] = React.useState<LocateTarget | null>(null);
+  const [expandAllRequest, setExpandAllRequest] = React.useState<ExpandAllRequest | null>(null);
+  const [expandedContextByFile, setExpandedContextByFile] = React.useState<Record<string, boolean>>({});
   const selectedFile = files.find((file) => file.path === selectedPath) ?? files[0];
   const currentSnapshotThreads = React.useMemo(
     () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
@@ -151,18 +158,6 @@ export default function App() {
     await refreshReviewState();
   }
 
-  async function deleteComment(threadId: string, commentId: string) {
-    if (!commentId) {
-      throw new Error('Comment id is required');
-    }
-    const res = await fetch(`/api/threads/${threadId}/comments/${commentId}`, { method: 'DELETE' });
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({ error: '删除评论失败' }))) as { error?: string };
-      throw new Error(data.error ?? '删除评论失败');
-    }
-    await refreshReviewState();
-  }
-
   async function copyPrompt(scope: { type: 'thread'; threadId: string } | { type: 'file-unresolved'; filePath: string } | { type: 'all-unresolved' }) {
     const res = await fetch('/api/prompt', {
       method: 'POST',
@@ -184,6 +179,23 @@ export default function App() {
       setLocateTarget({ threadId, anchor: target.anchor });
     }
     setFocusedThreadId(threadId);
+  }
+
+  function toggleAllLines(filePath: string) {
+    setExpandAllRequest((current) => ({
+      filePath,
+      requestId: (current?.requestId ?? 0) + 1
+    }));
+  }
+
+  function handleExpandedContextChange(filePath: string, expanded: boolean) {
+    setExpandedContextByFile((current) => {
+      if ((current[filePath] ?? false) === expanded) return current;
+      return {
+        ...current,
+        [filePath]: expanded
+      };
+    });
   }
 
   React.useEffect(() => {
@@ -268,8 +280,11 @@ export default function App() {
               <FileHeader
                 file={selectedFile}
                 threads={selectedFileThreads}
+                showToggleAllLines={!selectedFile.isMarkdown && !isImageFilePath(selectedFile.path)}
+                hasExpandedContext={selectedFile ? (expandedContextByFile[selectedFile.path] ?? false) : false}
                 onCreate={createThread}
                 onCopy={copyPrompt}
+                onToggleAllLines={toggleAllLines}
                 onLocateThread={locateThread}
                 onPatchThread={patchThread}
                 onDeleteThread={deleteThread}
@@ -297,6 +312,8 @@ export default function App() {
                   file={selectedFile}
                   threads={selectedFileThreads}
                   locateTarget={locateTarget}
+                  expandAllRequest={expandAllRequest}
+                  onExpandedContextChange={handleExpandedContextChange}
                   onCreate={createThread}
                   onLocateThread={locateThread}
                   onPatchThread={patchThread}
