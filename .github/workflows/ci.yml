@@ -21,7 +21,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --registry=https://registry.npmjs.org/ --replace-registry-host=always
 
       - name: Validate SKILL.md
         run: npm run skill:check
