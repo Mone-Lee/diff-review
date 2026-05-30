@@ -173,6 +173,12 @@ npm whoami --registry=https://registry.npmjs.org/
 
 只有在 `npm publish` 成功后，才会自动推送提交和标签到 GitHub。
 
+### CI 标签校验说明
+
+仓库的 GitHub Actions 标签检查任务（`.github/workflows/release-check.yml`）会在推送语义化标签（如 `v2.0.4`）时执行校验（安装依赖、`skill:check`、`release:check`、标签版本一致性检查），但不会执行 `npm publish`。
+
+当前发布策略是手动发布：由本地 `npm run release` 完成 `npm publish` 与 Git 推送。
+
 ## 本地开发
 
 ```bash

@@ -1,4 +1,4 @@
-name: Publish
+name: Release Tag Check
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - 'v*.*.*'
 
 jobs:
-  publish:
+  release-check:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,7 +39,5 @@ jobs:
             exit 1
           fi
 
-      - name: Publish to npm
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish policy notice
+        run: echo "Manual release policy: npm publish is executed locally by npm run release; CI only validates tagged source."
