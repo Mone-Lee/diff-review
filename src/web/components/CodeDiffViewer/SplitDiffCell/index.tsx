@@ -3,12 +3,12 @@
  */
 import React from 'react';
 import { MessageOutlined } from '@ant-design/icons';
-import type { CommentAnchor, ReviewThread } from '../../../shared/types';
-import type { SplitCell } from './types';
-import { CommentPopover } from '../CommentPopover';
-import { getLineSign } from './utils';
-import { InlineThreadStack } from './InlineThreadStack';
-import styles from '../../styles.module.less';
+import type { CommentAnchor, ReviewThread } from '../../../../shared/types';
+import type { SplitCell } from '../types';
+import { CommentPopover } from '../../CommentPopover';
+import { getLineSign } from '../utils';
+import { InlineThreadStack } from '../InlineThreadStack';
+import styles from './index.module.less';
 
 type Props = {
   cell: SplitCell;

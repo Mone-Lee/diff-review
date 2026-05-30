@@ -4,11 +4,11 @@
 import React from 'react';
 import { Button, Input, Popconfirm, Tag, Typography } from 'antd';
 import { CheckOutlined, CopyOutlined, DeleteOutlined, EditOutlined, ReloadOutlined, RedoOutlined } from '@ant-design/icons';
-import type { ReviewThread } from '../../shared/types';
-import { COMMENT_STATUS_TEXT_MAP } from '../../shared/types';
-import { getMergedThreadStatus, getThreadStatus } from '../../shared/thread-utils';
-import { CommentComposer } from './CommentComposer';
-import styles from '../styles.module.less';
+import type { ReviewThread } from '../../../shared/types';
+import { COMMENT_STATUS_TEXT_MAP } from '../../../shared/types';
+import { getMergedThreadStatus, getThreadStatus } from '../../../shared/thread-utils';
+import { CommentComposer } from '../CommentComposer';
+import styles from './index.module.less';
 
 export type InlineThreadGroupProps = {
   threads: ReviewThread[];
@@ -19,6 +19,7 @@ export type InlineThreadGroupProps = {
   onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
   onCopy: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
   showStatusTag?: boolean;
+  variant?: 'default' | 'fileLevel' | 'borderless';
 };
 
 export function InlineThreadGroup({
@@ -29,7 +30,8 @@ export function InlineThreadGroup({
   onReply,
   onPatchComment,
   onCopy,
-  showStatusTag = true
+  showStatusTag = true,
+  variant = 'default'
 }: InlineThreadGroupProps) {
   const [replyingThreadId, setReplyingThreadId] = React.useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null);
@@ -43,8 +45,18 @@ export function InlineThreadGroup({
   const canCopy = canCopyThread(actionThreadStatus, actionThreadLastComment?.author);
   if (!firstThread) return null;
 
+  const variantClassName =
+    variant === 'fileLevel'
+      ? styles.inlineThreadFileLevel
+      : variant === 'borderless'
+        ? styles.inlineThreadBorderless
+        : '';
+
   return (
-    <div className={`${styles.inlineThread} ${inlineThreadStatusClass(groupStatus)}`} onClick={() => onFocus(firstThread.id)}>
+    <div
+      className={[styles.inlineThread, inlineThreadStatusClass(groupStatus), variantClassName].filter(Boolean).join(' ')}
+      onClick={() => onFocus(firstThread.id)}
+    >
       <div className={styles.inlineThreadHeader}>
         {showStatusTag && groupStatus !== 'replied' ? (
           <Tag className={`${styles.threadTag} ${statusTagClass(groupStatus)}`}>{COMMENT_STATUS_TEXT_MAP[groupStatus]}</Tag>

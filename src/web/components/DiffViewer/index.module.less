@@ -1,0 +1,23 @@
+.diffCard {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  overflow: auto;
+}
+
+.hunk {
+  margin-bottom: 0;
+  border-top: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: var(--panel);
+}
+
+.splitTable {
+  display: grid;
+}
+
+.splitRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}

@@ -1,0 +1,273 @@
+.threads {
+  display: grid;
+  gap: 8px;
+}
+
+.threadScopeBar {
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid rgba(47, 111, 237, 0.26);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(242, 247, 255, 0.95), rgba(235, 244, 255, 0.9)),
+    linear-gradient(90deg, rgba(47, 111, 237, 0.16), rgba(47, 111, 237, 0));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  display: grid;
+  gap: 8px;
+}
+
+.threadScopeLabel {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #1f4fb0;
+}
+
+.threadScopeSwitchRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(47, 111, 237, 0.18);
+}
+
+.threadScopeSwitchRowDisabled {
+  opacity: 0.72;
+}
+
+.threadScopeOption {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  padding: 4px 10px;
+  line-height: 1.2;
+  font-size: 12px;
+  color: #5f6f87;
+  cursor: pointer;
+  transition: color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.threadScopeOption:hover {
+  color: #315baf;
+  background: rgba(47, 111, 237, 0.08);
+}
+
+.threadScopeOption:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.28);
+}
+
+.threadScopeOption:disabled {
+  cursor: not-allowed;
+}
+
+.threadScopeOptionActive {
+  color: #1c4db1 !important;
+  font-weight: 700;
+  background: #ffffff;
+  box-shadow: 0 1px 6px rgba(47, 111, 237, 0.2);
+}
+
+.threadScopeSwitch {
+  flex: 0 0 auto;
+}
+
+.threadScopeSwitch :global(.ant-switch-checked) {
+  background: linear-gradient(90deg, #2f6fed, #3b82f6);
+}
+
+.threadListToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.threadFilterWrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.threadFilterWrap :global(.ant-segmented) {
+  max-width: 100%;
+  background: #f1f4f9;
+}
+
+.threadFilterWrap :global(.ant-segmented-group) {
+  min-width: 0;
+}
+
+.threadBatchButton {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+  .threadScopeBar {
+    padding: 8px;
+    border-radius: 8px;
+    gap: 6px;
+  }
+
+  .threadScopeSwitchRow {
+    gap: 8px;
+  }
+
+  .threadListToolbar {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .threadFilterWrap {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .threadFilterWrap :global(.ant-segmented) {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: thin;
+  }
+
+  .threadFilterWrap :global(.ant-segmented-group) {
+    display: inline-flex;
+  }
+
+  .threadBatchButton {
+    margin-left: auto;
+  }
+}
+
+.thread {
+  border: 1px solid #e7d8a6;
+  border-radius: 8px !important;
+  background: #fffef8;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+
+  &:hover {
+    cursor: pointer;
+    border-color: #d8c98d;
+  }
+}
+
+.threadFocused {
+  border-color: #8fb7ff;
+  box-shadow: 0 0 0 1px rgba(47, 111, 237, 0.22);
+  background: #fffefc;
+}
+
+.submit {
+  border-color: #e7d8a6;
+  background-color: #fffef8;
+}
+
+.replied {
+  border-color: #2f6fed;
+  background-color: #fff;
+}
+
+.resolved {
+  border-color: #c9e7d3;
+  background-color: #fff;
+}
+
+.threadLocateFlash {
+  animation: threadLocateFlash 1.4s ease-out 1;
+}
+
+.thread :global(.ant-card-body) {
+  padding: 10px 12px !important;
+}
+
+.threadTopButton {
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.threadTopButton:hover {
+  background: rgba(47, 111, 237, 0.06);
+}
+
+.threadTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 0;
+  gap: 8px;
+}
+
+.threadAnchor {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.25;
+  color: #a4a4a4;
+}
+
+.threadTag {
+  margin-inline-end: 0 !important;
+  padding: 0 6px !important;
+  height: 20px;
+  line-height: 18px;
+  border-radius: 4px;
+  font-size: 12px;
+  border-width: 1px;
+}
+
+.threadTagResolved {
+  color: #1e7f42;
+  background: #edf9f1;
+  border-color: #bee6cb;
+}
+
+.threadTagSubmit {
+  color: #8a5a00;
+  background: #fff7e0;
+  border-color: #f0d389;
+}
+
+.threadTagReplied {
+  color: #1e6b3b;
+  background: #e9faef;
+  border-color: #aee8c0;
+}
+
+.threadEmpty {
+  margin-top: 52px;
+}
+
+@keyframes threadLocateFlash {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(47, 111, 237, 0.5),
+      0 0 0 0 rgba(47, 111, 237, 0.28);
+  }
+
+  40% {
+    box-shadow:
+      0 0 0 2px rgba(47, 111, 237, 0.42),
+      0 0 0 8px rgba(47, 111, 237, 0.22);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(47, 111, 237, 0),
+      0 0 0 0 rgba(47, 111, 237, 0);
+  }
+}

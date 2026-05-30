@@ -6,7 +6,7 @@
  * 3) 渲染失败时回退为错误提示 + 原始源码。
  */
 import React from 'react';
-import styles from '../styles.module.less';
+import styles from './index.module.less';
 
 type Props = {
   chart: string;

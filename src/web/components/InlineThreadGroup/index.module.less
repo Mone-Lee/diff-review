@@ -1,0 +1,194 @@
+.inlineThread {
+  border: 1px solid #c7d7f1;
+  border-left: 4px solid #2f6fed;
+  padding: 10px 12px 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+.inlineThreadFileLevel .inlineThreadHeader {
+  margin-bottom: 6px;
+}
+
+.inlineThreadFileLevel .inlineThreadBody {
+  margin-bottom: 8px !important;
+  white-space: pre-wrap;
+}
+
+.inlineThreadFileLevel .inlineThreadActions {
+  padding-top: 6px;
+}
+
+.inlineThreadBorderless {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+
+.inlineThreadBorderless .inlineThreadHeader {
+  display: none;
+}
+
+.inlineThreadBorderless .inlineThreadActions {
+  margin-top: 10px;
+}
+
+.inlineThreadSubmit {
+  border-color: #f0d389;
+  border-left-color: #f0b429;
+  background: #fffef8;
+}
+
+.inlineThreadReplied {
+  border-color: #bdecc9;
+  border-left-color: #2f6fed;
+  background: #fbfffc;
+}
+
+.inlineThreadResolved {
+  border-color: #bee6cb;
+  border-left-color: #2f9e52;
+  background: #f5fff8;
+}
+
+.inlineThreadHeader {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.inlineThreadSection {
+  min-width: 0;
+}
+
+.inlineThreadSection + .inlineThreadSection {
+  margin-top: 10px;
+}
+
+.threadTag {
+  margin-inline-end: 0 !important;
+  padding: 0 6px !important;
+  height: 20px;
+  line-height: 18px;
+  border-radius: 4px;
+  font-size: 12px;
+  border-width: 1px;
+}
+
+.threadTagResolved {
+  color: #1e7f42;
+  background: #edf9f1;
+  border-color: #bee6cb;
+}
+
+.threadTagSubmit {
+  color: #8a5a00;
+  background: #fff7e0;
+  border-color: #f0d389;
+}
+
+.threadTagReplied {
+  color: #1e6b3b;
+  background: #e9faef;
+  border-color: #aee8c0;
+}
+
+.inlineThreadAgentLabel {
+  display: block;
+  margin-bottom: 4px;
+  color: #278245;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.inlineThreadCommentItem {
+  min-width: 0;
+}
+
+.inlineThreadCommentItem + .inlineThreadCommentItem {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #dbe6f5;
+}
+
+.inlineThreadCommentItemAgent {
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: rgba(220, 250, 229, 0.78);
+}
+
+.inlineThreadCommentItemAgent + .inlineThreadCommentItemAgent {
+  border-top-color: rgba(47, 158, 82, 0.18);
+}
+
+.inlineThreadCommentActions {
+  display: inline-flex;
+  align-items: flex-start;
+  flex: 0 0 auto;
+  margin-top: -2px;
+}
+
+.threadIconBtn {
+  width: 22px;
+  height: 24px;
+  max-width: 22px;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.commentRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.commentContent {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.inlineThreadBody {
+  margin-bottom: 0 !important;
+  color: #1f2937;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.inlineThreadComposer {
+  margin-top: 10px;
+}
+
+.inlineThreadEdit {
+  margin-top: 6px;
+
+  :global(.ant-input) {
+    border-radius: 6px;
+  }
+}
+
+.inlineThreadEditActions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.inlineThreadActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.threadActionBtn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}

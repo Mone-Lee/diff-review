@@ -1,0 +1,48 @@
+.markdownCommentBlock {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 32px;
+}
+
+.markdownCommentContent {
+  min-width: 0;
+  padding-right: 52px;
+}
+
+.commentTrigger {
+  position: absolute;
+  z-index: 4;
+  right: 10px;
+  top: 2px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  display: inline-grid;
+  place-items: center;
+  background: #fff;
+  color: #1f2937;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.commentTrigger:hover {
+  border-color: #2f6fed;
+  color: #2f6fed;
+  box-shadow: 0 4px 12px rgba(47, 111, 237, 0.14);
+}
+
+.markdownCommentBlock:hover .commentTrigger {
+  opacity: 1;
+}
+
+.inlineThreadStack {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 0 0 16px;
+  background: transparent;
+}

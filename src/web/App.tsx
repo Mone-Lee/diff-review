@@ -5,7 +5,7 @@ import React from 'react';
 import { App as AntApp, Button, Card, Layout, List, Segmented, Space, Tag, Typography } from 'antd';
 import { CopyOutlined, EyeOutlined, PartitionOutlined, MessageOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewSession, ReviewThread } from '../shared/types';
-import { CodeDiffViewer } from './components/CodeDiffViewer';
+import { CodeDiffViewer } from './components/DiffViewer';
 import { FileHeader } from './components/FileHeader';
 import { MarkdownPreviewPanel } from './components/MarkdownPreviewPanel';
 import { ThreadList } from './components/ThreadList';

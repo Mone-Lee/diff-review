@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { Button, Input, Flex } from 'antd';
-import styles from '../styles.module.less';
+import styles from './index.module.less';
 
 type Props = {
   style?: React.CSSProperties;

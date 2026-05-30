@@ -4,12 +4,12 @@
 import React from 'react';
 import { DownOutlined } from '@ant-design/icons';
 import { Button, Card, Dropdown, Empty, Modal, Segmented, Space, Switch, Tag, Typography, Flex } from 'antd';
-import type { DiffFile, ReviewThread } from '../../shared/types';
-import { COMMENT_STATUS_TEXT_MAP } from '../../shared/types';
-import { getThreadStatus, isThreadOnFileSnapshot } from '../../shared/thread-utils';
-import { formatAnchor } from '../utils';
-import { InlineThreadGroup } from './InlineThreadGroup';
-import styles from '../styles.module.less';
+import type { DiffFile, ReviewThread } from '../../../shared/types';
+import { COMMENT_STATUS_TEXT_MAP } from '../../../shared/types';
+import { getThreadStatus, isThreadOnFileSnapshot } from '../../../shared/thread-utils';
+import { formatAnchor } from '../../utils';
+import { InlineThreadGroup } from '../InlineThreadGroup';
+import styles from './index.module.less';
 
 type Props = {
   threads: ReviewThread[];
@@ -204,6 +204,7 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                 className={[
                   styles.thread,
                   statusCardClass(threadStatus),
+                  isFocused ? styles.threadFocused : '',
                   locateFlashThreadId === thread.id ? styles.threadLocateFlash : ''
                 ]
                   .filter(Boolean)
@@ -228,9 +229,10 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                     </Flex>
                   </Space>
                 </button>
-                <div className={styles.threadListInlineBorderless}>
+                <div>
                   <InlineThreadGroup
                     threads={[thread]}
+                    variant="borderless"
                     showStatusTag={false}
                     onFocus={onLocateThread}
                     onPatch={onPatch}

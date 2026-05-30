@@ -1,0 +1,39 @@
+.mermaidDiagram,
+.mermaidLoading,
+.mermaidFallback {
+  margin: 16px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfdff;
+}
+
+.mermaidDiagram {
+  padding: 14px;
+  overflow: auto;
+  text-align: center;
+}
+
+.mermaidDiagram :global(svg) {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaidLoading {
+  padding: 18px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.mermaidFallback {
+  padding: 12px;
+}
+
+.mermaidFallback :global(pre) {
+  margin-bottom: 0;
+}
+
+.mermaidError {
+  margin-bottom: 10px;
+  color: #c44545;
+  font-size: 13px;
+}

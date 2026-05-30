@@ -3,9 +3,9 @@
  */
 import React from 'react';
 import { VerticalAlignBottomOutlined, VerticalAlignMiddleOutlined, VerticalAlignTopOutlined } from '@ant-design/icons';
-import type { ExpandButtonPosition, GapDescriptor, GapExpandDirection } from './types';
-import { GAP_EXPAND_STEP } from './utils';
-import styles from '../../styles.module.less';
+import type { ExpandButtonPosition, GapDescriptor, GapExpandDirection } from '../types';
+import { GAP_EXPAND_STEP } from '../utils';
+import styles from './index.module.less';
 
 type Props = {
   headerText: string;

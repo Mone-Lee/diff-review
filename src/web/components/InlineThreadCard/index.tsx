@@ -2,8 +2,8 @@
  * Diff/Markdown 内容区内嵌评论卡：把已有评论直接展示在对应行下方。
  */
 import React from 'react';
-import type { ReviewThread } from '../../shared/types';
-import { InlineThreadGroup } from './InlineThreadGroup';
+import type { ReviewThread } from '../../../shared/types';
+import { InlineThreadGroup } from '../InlineThreadGroup';
 
 type Props = {
   thread: ReviewThread;

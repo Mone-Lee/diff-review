@@ -4,10 +4,10 @@
 import React from 'react';
 import { Button, Card, Tag, Tooltip, Typography } from 'antd';
 import { MessageOutlined, CopyOutlined, ArrowsAltOutlined, ShrinkOutlined } from '@ant-design/icons';
-import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
-import { CommentComposer } from './CommentComposer';
-import { InlineThreadGroup } from './InlineThreadGroup';
-import styles from '../styles.module.less';
+import type { CommentAnchor, DiffFile, ReviewThread } from '../../../shared/types';
+import { CommentComposer } from '../CommentComposer';
+import { InlineThreadGroup } from '../InlineThreadGroup';
+import styles from './index.module.less';
 
 type Props = {
   file: DiffFile;
@@ -93,6 +93,7 @@ export function FileHeader({
         <div className={styles.fileLevelInlineThreads}>
           <InlineThreadGroup
             threads={fileLevelThreads}
+            variant="fileLevel"
             onFocus={onLocateThread}
             onPatch={onPatchThread}
             onDeleteThread={onDeleteThread}

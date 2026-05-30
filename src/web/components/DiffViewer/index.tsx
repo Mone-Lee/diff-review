@@ -2,21 +2,21 @@
  * 代码 Diff 视图：渲染 hunk/行信息，并支持行级评论的定位与提交。
  */
 import React from 'react';
-import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
-import type { GapDescriptor, GapExpandDirection } from './CodeDiffViewer/types';
-import { useAutoScrollToFirstThread, useDiffFileContents, useLocateTargetScroll } from './CodeDiffViewer/hooks';
-import { InlineDiffLine } from './CodeDiffViewer/InlineDiffLine';
-import { SplitDiffCell } from './CodeDiffViewer/SplitDiffCell';
-import { HunkHeader } from './CodeDiffViewer/HunkHeader';
-import { GapBlock } from './CodeDiffViewer/GapBlock';
+import type { CommentAnchor, DiffFile, ReviewThread } from '../../../shared/types';
+import type { GapDescriptor, GapExpandDirection } from '../CodeDiffViewer/types';
+import { useAutoScrollToFirstThread, useDiffFileContents, useLocateTargetScroll } from '../CodeDiffViewer/hooks';
+import { InlineDiffLine } from '../CodeDiffViewer/InlineDiffLine';
+import { SplitDiffCell } from '../CodeDiffViewer/SplitDiffCell';
+import { HunkHeader } from '../CodeDiffViewer/HunkHeader';
+import { GapBlock } from '../CodeDiffViewer/GapBlock';
 import {
   buildGapDescriptors,
   buildRenderedBlocks,
   buildSplitRows,
   GAP_EXPAND_STEP,
   scrollToContentTop
-} from './CodeDiffViewer/utils';
-import styles from '../styles.module.less';
+} from '../CodeDiffViewer/utils';
+import styles from './index.module.less';
 
 type Props = {
   file: DiffFile;

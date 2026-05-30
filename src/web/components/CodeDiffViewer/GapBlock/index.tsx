@@ -3,12 +3,12 @@
  */
 import React from 'react';
 import { VerticalAlignBottomOutlined, VerticalAlignMiddleOutlined } from '@ant-design/icons';
-import type { CommentAnchor, ReviewThread } from '../../../shared/types';
-import type { FileContents, GapDescriptor, GapExpandDirection } from './types';
-import { GAP_EXPAND_STEP, buildGapRows } from './utils';
-import { InlineDiffLine } from './InlineDiffLine';
-import { SplitDiffCell } from './SplitDiffCell';
-import styles from '../../styles.module.less';
+import type { CommentAnchor, ReviewThread } from '../../../../shared/types';
+import type { FileContents, GapDescriptor, GapExpandDirection } from '../types';
+import { GAP_EXPAND_STEP, buildGapRows } from '../utils';
+import { InlineDiffLine } from '../InlineDiffLine';
+import { SplitDiffCell } from '../SplitDiffCell';
+import styles from './index.module.less';
 
 type Props = {
   gap: GapDescriptor;

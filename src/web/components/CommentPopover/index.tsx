@@ -2,8 +2,8 @@
  * 行内评论弹层：在 Diff/Markdown 视图中承载快速评论输入。
  */
 import React from 'react';
-import { CommentComposer } from './CommentComposer';
-import styles from '../styles.module.less';
+import { CommentComposer } from '../CommentComposer';
+import styles from './index.module.less';
 
 type Props = {
   onCancel: () => void;

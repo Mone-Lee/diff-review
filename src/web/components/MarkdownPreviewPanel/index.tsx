@@ -12,10 +12,10 @@ import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
-import type { CommentAnchor, DiffFile, MarkdownPreview, ReviewThread } from '../../shared/types';
-import styles from '../styles.module.less';
-import { MarkdownCommentBlock } from './MarkdownCommentBlock';
-import { MermaidDiagram } from './MermaidDiagram';
+import type { CommentAnchor, DiffFile, MarkdownPreview, ReviewThread } from '../../../shared/types';
+import styles from './index.module.less';
+import { MarkdownCommentBlock } from '../MarkdownCommentBlock';
+import { MermaidDiagram } from '../MermaidDiagram';
 
 const MARKDOWN_REMARK_PLUGINS = [remarkFrontmatter, remarkGfm];
 

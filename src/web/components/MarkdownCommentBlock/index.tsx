@@ -3,10 +3,10 @@
  */
 import React from 'react';
 import { MessageOutlined } from '@ant-design/icons';
-import type { CommentAnchor, ReviewThread } from '../../shared/types';
-import styles from '../styles.module.less';
-import { CommentPopover } from './CommentPopover';
-import { InlineThreadGroup } from './InlineThreadGroup';
+import type { CommentAnchor, ReviewThread } from '../../../shared/types';
+import styles from './index.module.less';
+import { CommentPopover } from '../CommentPopover';
+import { InlineThreadGroup } from '../InlineThreadGroup';
 
 type Props = {
   lineNumber: number;

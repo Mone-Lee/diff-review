@@ -1,0 +1,168 @@
+.markdownLoading {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+}
+
+.markdownShell {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  overflow: auto;
+}
+
+.deletedBanner {
+  margin-bottom: 10px;
+}
+
+.markdownArticle {
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.markdownBody {
+  min-width: 0;
+  line-height: 1.72;
+}
+
+.markdownBody :global(h1),
+.markdownBody :global(h2),
+.markdownBody :global(h3),
+.markdownBody :global(p) {
+  margin-top: 0;
+}
+
+.markdownBody :global(h1) {
+  margin-bottom: 16px;
+  font-size: 2rem;
+}
+
+.markdownBody :global(h2) {
+  margin: 28px 0 12px;
+  font-size: 1.4rem;
+}
+
+.markdownBody :global(p),
+.markdownBody :global(li) {
+  color: #263446;
+}
+
+.markdownInlineCode,
+.markdownBody :global(:not(pre) > code) {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #f3f6fa;
+  color: #172033;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.markdownPre,
+.markdownBody :global(pre) {
+  padding: 12px 14px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7f9fc;
+}
+
+.markdownPre :global(code),
+.markdownBody :global(pre code) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  white-space: pre;
+}
+
+.markdownBody :global(a) {
+  color: #245fd6;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.markdownBody :global(a:hover) {
+  color: #1748a7;
+}
+
+.markdownBody :global(blockquote) {
+  margin: 14px 0;
+  padding: 2px 0 2px 14px;
+  border-left: 4px solid var(--line-strong);
+  color: var(--muted);
+}
+
+.markdownBody :global(hr) {
+  height: 1px;
+  margin: 22px 0;
+  border: 0;
+  background: var(--line-strong);
+}
+
+.markdownBody :global(img) {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.markdownTableScroll {
+  max-width: 100%;
+  margin: 16px 0;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.markdownTableScroll :global(table) {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.markdownTableScroll :global(thead) {
+  background: #f6f8fb;
+}
+
+.markdownTableScroll :global(tr) {
+  border-bottom: 1px solid var(--line);
+}
+
+.markdownTableScroll :global(tr:last-child) {
+  border-bottom: 0;
+}
+
+.markdownTableScroll :global(th),
+.markdownTableScroll :global(td) {
+  max-width: 48rem;
+  padding: 8px 10px;
+  border-right: 1px solid var(--line);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.markdownTableScroll :global(th:last-child),
+.markdownTableScroll :global(td:last-child) {
+  border-right: 0;
+}
+
+.markdownTableScroll :global(th) {
+  color: #152033;
+  font-weight: 650;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.markdownTableScroll :global(td) {
+  color: #263446;
+}
+
+.markdownTableScroll :global(td code) {
+  white-space: normal;
+}

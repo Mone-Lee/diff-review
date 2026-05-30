@@ -3,11 +3,11 @@
  */
 import React from 'react';
 import { MessageOutlined } from '@ant-design/icons';
-import type { CommentAnchor, DiffFile, ReviewThread } from '../../../shared/types';
-import { CommentPopover } from '../CommentPopover';
-import { getLineSign } from './utils';
-import { InlineThreadStack } from './InlineThreadStack';
-import styles from '../../styles.module.less';
+import type { CommentAnchor, DiffFile, ReviewThread } from '../../../../shared/types';
+import { CommentPopover } from '../../CommentPopover';
+import { getLineSign } from '../utils';
+import { InlineThreadStack } from '../InlineThreadStack';
+import styles from './index.module.less';
 
 type Props = {
   filePath: string;
