@@ -1,6 +1,6 @@
 # diff-review
 
-![Diff 审查台界面截图](https://cdn.jsdelivr.net/npm/local-diff-reviewer@latest/docs/images/diff-review-ui.jpg)
+![Diff 审查台界面截图](https://raw.githubusercontent.com/Mone-Lee/diff-review/master/docs/images/diff-review-ui.jpg)
 
 AI chat 里的本地代码审查工具。可以直接用 CLI 打开，也可以安装成 agent skill。
 
