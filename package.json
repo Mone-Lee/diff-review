@@ -1,6 +1,6 @@
 {
   "name": "local-diff-reviewer",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "private": false,
   "description": "Open a local GitHub-style diff review Web UI for the current repository.",
   "repository": {
