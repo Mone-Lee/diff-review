@@ -40,4 +40,5 @@ jobs:
           fi
 
       - name: Publish policy notice
-        run: echo "Manual release policy: npm publish is executed locally by npm run release; CI only validates tagged source."
+        run: |
+          echo "Manual release policy: npm publish is executed locally by npm run release; CI only validates tagged source."
