@@ -124,7 +124,7 @@ export function GapBlock({
               />
             </div>
           ))}
-      {gap.position === 'tail' && remainingCount > 0 && fileContents ? (
+      {/* {gap.position === 'tail' && remainingCount > 0 && fileContents ? (
         <div className={styles.hunkHeader} data-hunk-header="true">
           <div className={styles.hunkHeaderRail}>
             <button
@@ -138,7 +138,7 @@ export function GapBlock({
           </div>
           <div className={styles.hunkHeaderBody} />
         </div>
-      ) : null}
+      ) : null} */}
     </React.Fragment>
   );
 }
