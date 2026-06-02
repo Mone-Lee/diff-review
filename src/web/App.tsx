@@ -2,30 +2,26 @@
  * Web 主界面容器：负责加载会话数据、调度子组件和处理核心交互动作。
  */
 import React from 'react';
-import { App as AntApp, Button, Card, Layout, List, Segmented, Space, Tag, Typography } from 'antd';
-import { CopyOutlined, EyeOutlined, PartitionOutlined, MessageOutlined } from '@ant-design/icons';
+import { App as AntApp, Button, Card, Layout, Segmented, Space, Tag, Typography } from 'antd';
+import {
+  CopyOutlined,
+  EyeOutlined,
+  PartitionOutlined
+} from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewSession, ReviewThread } from '../shared/types';
 import { CodeDiffViewer } from './components/DiffViewer';
+import { FileList } from './components/FileList';
 import { FileHeader } from './components/FileHeader';
 import { MarkdownPreviewPanel } from './components/MarkdownPreviewPanel';
 import { ThreadList } from './components/ThreadList';
 import { isThreadOnFileSnapshot } from '../shared/thread-utils';
-import { formatFileStatus, modeLabel } from './utils';
+import { modeLabel } from './utils';
 import styles from './styles.module.less';
 
 type ReviewState = { session: ReviewSession; files: DiffFile[]; threads: ReviewThread[] };
 type DiffViewMode = 'inline' | 'split';
 type LocateTarget = { threadId: string; anchor: CommentAnchor };
 type ExpandAllRequest = { filePath: string; requestId: number };
-const FILE_PATH_MAX_LENGTH = 36;
-const FILE_PATH_SUFFIX_LENGTH = 18;
-
-function middleEllipsis(text: string, maxLength: number, suffixLength: number) {
-  if (text.length <= maxLength) return text;
-  const safeSuffixLength = Math.min(suffixLength, maxLength - 4);
-  const prefixLength = maxLength - safeSuffixLength - 3;
-  return `${text.slice(0, prefixLength)}...${text.slice(-safeSuffixLength)}`;
-}
 
 function isImageFilePath(path: string) {
   return /\.(avif|bmp|gif|heic|heif|ico|jpe?g|png|svg|tiff?|webp)$/i.test(path);
@@ -216,46 +212,18 @@ export default function App() {
           </div>
         </div>
 
-        <Card className={styles.sideCard} bordered={false}>
+        <Card className={styles.sideCard}>
           <Space size={8} wrap>
             <Tag color="blue">{session?.mode.kind === 'revision' ? '混合模式' : '本地模式'}</Tag>
             <Tag color="gold">{files.length} files</Tag>
           </Space>
         </Card>
 
-        <div className={styles.fileRailHeader}>
-          <Typography.Text strong>文件列表</Typography.Text>
-        </div>
-        <List
-          className={styles.fileList}
-          dataSource={files}
-          renderItem={(file) => {
-            const isActive = file.path === selectedFile?.path;
-            const fileThreads = currentSnapshotThreads.filter((thread) => isThreadOnFileSnapshot(thread, file) && thread.status !== 'resolved');
-
-            return (
-              <List.Item className={isActive ? `${styles.fileItem} ${styles.fileItemActive}` : styles.fileItem} onClick={() => setSelectedPath(file.path)}>
-                <div className={styles.fileMeta}>
-                  <Tag color={file.status === 'deleted' ? 'error' : file.status === 'added' ? 'green' : 'processing'}>
-                    {formatFileStatus(file.status)}
-                  </Tag>
-                  <Typography.Text strong className={styles.fileName} title={file.path}>
-                    {middleEllipsis(file.path, FILE_PATH_MAX_LENGTH, FILE_PATH_SUFFIX_LENGTH)}
-                  </Typography.Text>
-                </div>
-                <Typography.Text className={styles.fileStats} type="secondary">
-                  <span className={styles.fileStatAdd}>+{file.additions}</span> / <span className={styles.fileStatDelete}>-{file.deletions}</span>
-                </Typography.Text>
-                {
-                  fileThreads.length > 0 ? (
-                    <Tag className={styles.fileThreadCount} icon={<MessageOutlined />}>
-                      {fileThreads.length}
-                    </Tag>
-                  ) : null
-                }
-              </List.Item>
-            );
-          }}
+        <FileList
+          files={files}
+          threads={currentSnapshotThreads}
+          selectedPath={selectedFile?.path ?? ''}
+          onSelectFile={setSelectedPath}
         />
       </aside>
 

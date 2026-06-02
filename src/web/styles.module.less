@@ -158,7 +158,6 @@
   }
 }
 
-.fileRailHeader,
 .threadRailHeader,
 .topToolbar {
   display: flex;
@@ -173,74 +172,6 @@
 .threadRailTitle {
   flex-shrink: 0;
   margin-bottom: 0 !important;
-}
-
-.fileRailHeader {
-  margin-bottom: 6px;
-}
-
-.fileList {
-  background: transparent;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-}
-
-.fileItem {
-  display: grid;
-  gap: 4px;
-  padding: 8px 4px 8px 12px !important;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.fileItem:hover {
-  background: rgba(47, 111, 237, 0.05);
-}
-
-.fileItemActive {
-  background: rgba(47, 111, 237, 0.1);
-  box-shadow: inset 3px 0 0 #2f6fed;
-}
-
-.fileMeta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-width: 0;
-}
-
-.fileMeta :global(.ant-tag) {
-  flex-shrink: 0;
-}
-
-.fileName {
-  display: block;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 12px !important;
-}
-
-.fileStats {
-  flex-shrink: 0;
-}
-
-.fileStatAdd {
-  color: var(--green-border);
-  font-size: 12px;
-}
-
-.fileStatDelete {
-  color: var(--red-border);
-  font-size: 12px;
-}
-
-.fileThreadCount {
-  margin-inline-end: 0;
 }
 
 .topToolbar {
@@ -304,7 +235,6 @@
     padding-bottom: 0;
   }
 
-  .fileList,
   .threadRailBody,
   .reviewSurface {
     overflow: visible;
