@@ -1,0 +1,140 @@
+.fileRailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.fileRailModeSwitcher {
+  flex-shrink: 0;
+  border-radius: 6px;
+
+  :global(.ant-segmented-item) {
+    border-radius: 6px;
+  }
+}
+
+.fileList {
+  background: transparent;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.fileItem {
+  display: grid;
+  gap: 4px;
+  padding: 8px 4px 8px 12px !important;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.fileItem:hover {
+  background: rgba(47, 111, 237, 0.05);
+}
+
+.fileItemActive {
+  background: rgba(47, 111, 237, 0.1);
+  border-radius: 4px;
+}
+
+.lineItemActive {
+  box-shadow: inset 3px 0 0 #2f6fed;
+  background: rgba(47, 111, 237, 0.1);
+}
+
+.fileTree {
+  padding: 2px 0 8px;
+}
+
+.fileTreeDirectory {
+  width: 100%;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s ease;
+}
+
+.fileTreeDirectory:hover {
+  background: rgba(47, 111, 237, 0.05);
+}
+
+.fileTreeChevron {
+  width: 12px;
+  flex: 0 0 12px;
+  color: #73839a;
+  font-size: 10px;
+}
+
+.fileTreeFolderIcon {
+  flex: 0 0 auto;
+  color: #399fce;
+  font-size: 15px;
+}
+
+.fileIcon {
+  color: #696969;
+}
+
+.fileTreeDirectoryName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px !important;
+}
+
+.fileMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.fileMeta :global(.ant-tag) {
+  flex-shrink: 0;
+}
+
+.fileName {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px !important;
+}
+
+.fileStats {
+  flex-shrink: 0;
+}
+
+.fileStatAdd {
+  color: var(--green-border);
+  font-size: 12px;
+}
+
+.fileStatDelete {
+  color: var(--red-border);
+  font-size: 12px;
+}
+
+.fileThreadCount {
+  margin-inline-end: 0;
+}
+
+@media (max-width: 1100px) {
+  .fileList {
+    overflow: visible;
+  }
+}
