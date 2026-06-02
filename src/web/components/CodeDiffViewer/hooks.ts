@@ -65,7 +65,7 @@ export function useAutoScrollToFirstThread({
   scrollRef,
   autoScrollKeyRef
 }: UseAutoScrollArgs) {
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const scrollContainer = scrollRef.current;
     if (!scrollContainer) return;
 
@@ -73,41 +73,39 @@ export function useAutoScrollToFirstThread({
     if (autoScrollKeyRef.current === autoScrollKey) return;
 
     const firstThread = getFirstFileThread(filePath, threads);
-    window.requestAnimationFrame(() => {
-      if (!firstThread || firstThread.anchor.type === 'file') {
-        scrollToContentTop(scrollContainer);
-        autoScrollKeyRef.current = autoScrollKey;
+    if (!firstThread || firstThread.anchor.type === 'file') {
+      scrollToContentTop(scrollContainer);
+      autoScrollKeyRef.current = autoScrollKey;
+      return;
+    }
+
+    const anchorKey = getDiffAnchorKey(firstThread);
+    const target = anchorKey
+      ? scrollContainer.querySelector<HTMLElement>(`[data-review-anchor="${CSS.escape(anchorKey)}"]`)
+      : null;
+    if (!target) {
+      if (!fileContents) {
         return;
       }
-
-      const anchorKey = getDiffAnchorKey(firstThread);
-      const target = anchorKey
-        ? scrollContainer.querySelector<HTMLElement>(`[data-review-anchor="${CSS.escape(anchorKey)}"]`)
-        : null;
-      if (!target) {
-        if (!fileContents) {
+      const side = firstThread.anchor.type === 'diff-line' ? firstThread.anchor.side : null;
+      const lineNumber = firstThread.anchor.type === 'diff-line' ? firstThread.anchor.lineNumber : null;
+      if (side && lineNumber != null) {
+        const gap = findGapForAnchor(gapDescriptors, side, lineNumber);
+        if (gap) {
+          setExpandedGapLines((current) => ({
+            ...current,
+            [gap.key]: gap.hiddenCount
+          }));
           return;
         }
-        const side = firstThread.anchor.type === 'diff-line' ? firstThread.anchor.side : null;
-        const lineNumber = firstThread.anchor.type === 'diff-line' ? firstThread.anchor.lineNumber : null;
-        if (side && lineNumber != null) {
-          const gap = findGapForAnchor(gapDescriptors, side, lineNumber);
-          if (gap) {
-            setExpandedGapLines((current) => ({
-              ...current,
-              [gap.key]: gap.hiddenCount
-            }));
-            return;
-          }
-        }
-        scrollToContentTop(scrollContainer);
-        autoScrollKeyRef.current = autoScrollKey;
-        return;
       }
-
-      scrollToTarget(scrollContainer, target);
+      scrollToContentTop(scrollContainer);
       autoScrollKeyRef.current = autoScrollKey;
-    });
+      return;
+    }
+
+    scrollToTarget(scrollContainer, target);
+    autoScrollKeyRef.current = autoScrollKey;
   }, [
     autoScrollKeyRef,
     expandedGapLines,
@@ -143,7 +141,7 @@ export function useLocateTargetScroll({
   setExpandedGapLines,
   scrollRef
 }: UseLocateTargetArgs) {
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const scrollContainer = scrollRef.current;
     if (!scrollContainer || !locateTarget) return;
     if (locateTarget.anchor.filePath !== filePath) return;

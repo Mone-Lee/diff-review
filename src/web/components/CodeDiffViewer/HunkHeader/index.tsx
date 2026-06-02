@@ -5,7 +5,7 @@ import React from 'react';
 import { VerticalAlignBottomOutlined, VerticalAlignMiddleOutlined, VerticalAlignTopOutlined } from '@ant-design/icons';
 import type { ExpandButtonPosition, GapDescriptor, GapExpandDirection } from '../types';
 import { GAP_EXPAND_STEP } from '../utils';
-import styles from './index.module.less';
+import styles from '../../../styles.module.less';
 
 type Props = {
   headerText: string;
@@ -15,7 +15,6 @@ type Props = {
   getGapVisibleCount: (gap: GapDescriptor) => number;
   getGapHiddenCount: (gap: GapDescriptor) => number;
   onExpandGap: (gap: GapDescriptor, direction?: GapExpandDirection) => void;
-  onExpandGapAll: (gap: GapDescriptor, direction?: GapExpandDirection) => void;
   onExpandGapWithAnchor: (
     gap: GapDescriptor,
     anchor: HTMLElement | null,
@@ -31,7 +30,6 @@ export function HunkHeader({
   getGapVisibleCount,
   getGapHiddenCount,
   onExpandGap,
-  onExpandGapAll,
   onExpandGapWithAnchor
 }: Props) {
   function renderExpandButton() {

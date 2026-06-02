@@ -8,7 +8,7 @@ import type { FileContents, GapDescriptor, GapExpandDirection } from '../types';
 import { GAP_EXPAND_STEP, buildGapRows } from '../utils';
 import { InlineDiffLine } from '../InlineDiffLine';
 import { SplitDiffCell } from '../SplitDiffCell';
-import styles from './index.module.less';
+import styles from '../../../styles.module.less';
 
 type Props = {
   gap: GapDescriptor;

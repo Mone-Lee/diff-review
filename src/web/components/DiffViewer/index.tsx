@@ -70,7 +70,10 @@ export function CodeDiffViewer({
     [gapDescriptors, expandedGapLines]
   );
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
+    if (scrollRef.current) {
+      scrollToContentTop(scrollRef.current);
+    }
     setActiveLine(null);
     setExpandedGapLines({});
     setGapExpandDirection({});
@@ -242,7 +245,6 @@ export function CodeDiffViewer({
         getGapVisibleCount={getGapVisibleCount}
         getGapHiddenCount={getGapHiddenCount}
         onExpandGap={expandGap}
-        onExpandGapAll={expandGapAll}
         onExpandGapWithAnchor={expandGapWithAnchor}
       />
     );
