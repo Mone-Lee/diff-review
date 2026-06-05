@@ -2,7 +2,7 @@
  * 文件头区域：展示文件信息并提供文件级评论、文件提示词复制等操作。
  */
 import React from 'react';
-import { Button, Card, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Tag, Tooltip, Typography, message } from 'antd';
 import { MessageOutlined, CopyOutlined, ArrowsAltOutlined, ShrinkOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../../shared/types';
 import { CommentComposer } from '../CommentComposer';
@@ -41,14 +41,21 @@ export function FileHeader({
   onCopyThread
 }: Props) {
   const [open, setOpen] = React.useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
   const toggleTooltip = hasExpandedContext ? '隐藏当前文件未改动行' : '展开当前文件所有未改动行';
   const toggleAriaLabel = hasExpandedContext ? '隐藏当前文件未改动行' : '展开当前文件所有未改动行';
   // 文件头部只展示当前文件的线程数量，便于快速判断讨论密度。
   const fileThreads = threads.filter((thread) => thread.filePath === file.path && thread.status !== 'resolved');
   const fileLevelThreads = threads.filter((thread) => thread.filePath === file.path && thread.anchor.type === 'file');
 
+  async function copyFilePath() {
+    await navigator.clipboard.writeText(file.path);
+    void messageApi.success('完整文件路径已复制到剪贴板');
+  }
+
   return (
     <Card className={styles.fileHeader}>
+      {contextHolder}
       <div className={styles.headerTop}>
         <div className={styles.filePathBlock}>
           {showToggleAllLines ? (
@@ -63,6 +70,13 @@ export function FileHeader({
             </Tooltip>
           ) : null}
           <Typography.Text strong className={styles.filePathText}>{file.path}</Typography.Text>
+          <Button
+            className={styles.filePathCopyBtn}
+            type="text"
+            icon={<CopyOutlined />}
+            aria-label="复制完整文件路径"
+            onClick={() => void copyFilePath()}
+          />
         </div>
         <div className={styles.headerActions}>
           <Button disabled={fileThreads.length === 0} type='primary' className={styles.headerAction} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'file-unresolved', filePath: file.path })}>
