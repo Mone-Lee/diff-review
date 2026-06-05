@@ -15,6 +15,10 @@ function runCapture(command) {
   }).trim();
 }
 
+function verifyNpmAuthentication() {
+  return runCapture(`npm whoami --registry=${NPMJS_REGISTRY}`);
+}
+
 function readVersion() {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   return pkg.version;
@@ -60,13 +64,21 @@ function ensureNpmPublishPreflight() {
   }
 
   try {
-    const npmUser = runCapture(`npm whoami --registry=${NPMJS_REGISTRY}`);
+    const npmUser = verifyNpmAuthentication();
     console.log(`\nPublish preflight passed. npmjs user: ${npmUser}`);
   } catch {
-    console.error('\nRelease preflight failed: npmjs authentication is missing or expired.');
-    console.error(`Please run: npm login --registry=${NPMJS_REGISTRY}`);
-    console.error(`Then verify: npm whoami --registry=${NPMJS_REGISTRY}`);
-    process.exit(1);
+    console.warn('\nRelease preflight failed: npmjs authentication is missing or expired.');
+    console.warn(`Starting interactive login: npm login --registry=${NPMJS_REGISTRY}`);
+
+    try {
+      run(`npm login --registry=${NPMJS_REGISTRY}`);
+      const npmUser = verifyNpmAuthentication();
+      console.log(`\nPublish preflight passed after login. npmjs user: ${npmUser}`);
+    } catch {
+      console.error('\nRelease preflight failed: npmjs authentication is still unavailable after login.');
+      console.error(`Please verify manually: npm whoami --registry=${NPMJS_REGISTRY}`);
+      process.exit(1);
+    }
   }
 
   try {
