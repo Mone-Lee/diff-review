@@ -68,8 +68,8 @@ function getMarkdownScrollLine(preview: MarkdownPreview, lineNumber: number) {
   return nextBlock?.startLine ?? preview.blocks.at(-1)?.startLine ?? lineNumber;
 }
 
+// 仅允许常见安全协议与站内相对路径，拦截 javascript: 等危险链接。
 function isSafeUrl(url: string) {
-  // 仅允许常见安全协议与站内相对路径，拦截 javascript: 等危险链接。
   return /^(https?:|mailto:|#|\.{0,2}\/|\/)/i.test(url.trim());
 }
 
@@ -99,22 +99,22 @@ function resolveAssetPath(markdownPath: string, rawUrl: string) {
   return `/api/markdown-asset?path=${encodeURIComponent(resolvedPath)}`;
 }
 
+// 从 ReactNode 递归提取纯文本，用于读取 code/pre 的真实文本内容。
 function extractText(node: React.ReactNode): string {
-  // 从 ReactNode 递归提取纯文本，用于读取 code/pre 的真实文本内容。
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(extractText).join('');
   if (React.isValidElement<{ children?: React.ReactNode }>(node)) return extractText(node.props.children);
   return '';
 }
 
+// 统一 className 形态（string 或 string[]），便于后续解析 language-xxx。
 function getClassName(value: unknown) {
-  // 统一 className 形态（string 或 string[]），便于后续解析 language-xxx。
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string').join(' ');
   return typeof value === 'string' ? value : '';
 }
 
+// 判断节点是否可作为代码节点处理（含 className 或 children）。
 function isElementWithCodeProps(node: React.ReactNode): node is React.ReactElement<{ className?: string; children?: React.ReactNode }> {
-  // 判断节点是否可作为代码节点处理（含 className 或 children）。
   return React.isValidElement<{ className?: string; children?: React.ReactNode }>(node) && Boolean(node.props.className || node.props.children);
 }
 
@@ -132,25 +132,44 @@ function getNodeStartLine(node: unknown): number | undefined {
   return typeof line === 'number' ? line : undefined;
 }
 
+// 从 HAST 的 pre > code 节点中提取 className。
 function getCodeClassNameFromHast(node: unknown) {
-  // 从 HAST 的 pre > code 节点中提取 className。
   const maybePre = node as HastNode | undefined;
   const codeNode = maybePre?.children?.find((child) => child.tagName === 'code');
   return getClassName(codeNode?.properties?.className);
 }
 
+// 从 HAST 结构递归拼接文本，作为 ReactNode 提取失败时的兜底。
 function extractTextFromHast(node: HastNode | undefined): string {
-  // 从 HAST 结构递归拼接文本，作为 ReactNode 提取失败时的兜底。
   if (!node) return '';
   if (node.type === 'text') return node.value ?? '';
   return node.children?.map(extractTextFromHast).join('') ?? '';
 }
 
+// 从 HAST 的 pre > code 中读取源码文本。
 function getCodeTextFromHast(node: unknown) {
-  // 从 HAST 的 pre > code 中读取源码文本。
   const maybePre = node as HastNode | undefined;
   const codeNode = maybePre?.children?.find((child) => child.tagName === 'code');
   return extractTextFromHast(codeNode);
+}
+
+// 读取指定行原始 markdown，用来识别 blockquote 这类“外层块已可评论”的场景。
+// 这样可以避免继续给引用块里的每个段落再包一层评论入口，减少重复入口。
+function getMarkdownLineText(markdown: string, lineNumber: number | undefined) {
+  if (!lineNumber) return '';
+  return markdown.split(/\r?\n/)[lineNumber - 1] ?? '';
+}
+
+function joinClassNames(...classNames: Array<string | undefined>) {
+  return classNames.filter(Boolean).join(' ');
+}
+
+// 标题顶部留白不再交给 h1-h6 自己的 margin-top 处理，而是交给评论容器负责。
+// 这样评论 icon 就能稳定贴着标题文本顶部，而不会因为 heading margin 塌陷/外溢出现错位。
+function getHeadingSpacingClass(level: 1 | 2 | 3 | 4 | 5 | 6) {
+  if (level === 1) return undefined;
+  if (level === 2) return styles.commentBlockSpacingLg;
+  return styles.commentBlockSpacingMd;
 }
 
 export function MarkdownPreviewPanel({
@@ -165,13 +184,11 @@ export function MarkdownPreviewPanel({
   onPatchComment,
   onCopyThread
 }: Props) {
-  // preview 为 null 表示加载中或加载失败；当前 UI 统一展示 loading 态。
   const [preview, setPreview] = React.useState<MarkdownPreview | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const autoScrollKeyRef = React.useRef('');
 
   React.useEffect(() => {
-    // 文件切换时重新拉取预览内容，确保右侧展示与当前文件同步。
     setPreview(null);
     fetch(`/api/markdown-preview?path=${encodeURIComponent(file.path)}`)
       .then((res) => res.json())
@@ -236,7 +253,15 @@ export function MarkdownPreviewPanel({
     return nextThreadsByLine;
   }, [file.path, preview?.blocks, threads]);
 
-  const renderCommentableBlock = React.useCallback((lineNumber: number | undefined, content: React.ReactNode) => {
+  // 所有块级评论入口都尽量统一走这一层包装。
+  // 例外是 blockquote 内部段落：外层 blockquote 已经可评论时，内部 p 会跳过包装，避免重复入口。
+  // 特殊块（标题、表格、mermaid、blockquote）的垂直间距通过 className 加在这里，
+  // 避免再用 absolute top 去硬调 icon 位置，从根上减少错位和重叠。
+  const renderCommentableBlock = React.useCallback((
+    lineNumber: number | undefined,
+    content: React.ReactNode,
+    options?: { className?: string }
+  ) => {
     if (!lineNumber) return content;
 
     return (
@@ -244,6 +269,7 @@ export function MarkdownPreviewPanel({
         lineNumber={lineNumber}
         filePath={file.path}
         lineThreads={threadsByLine.get(lineNumber) ?? []}
+        className={options?.className}
         onCreate={onCreate}
         onLocateThread={onLocateThread}
         onPatchThread={onPatchThread}
@@ -267,33 +293,65 @@ export function MarkdownPreviewPanel({
     threadsByLine
   ]);
 
+  // 标题单独走这一层，是为了统一清掉 heading 自身的 margin-top，
+  // 再把顶部留白转移到评论容器，保证评论入口贴着标题文字而不是贴着外边距顶部。
+  const renderCommentableHeading = React.useCallback((
+    level: 1 | 2 | 3 | 4 | 5 | 6,
+    lineNumber: number | undefined,
+    props: React.HTMLAttributes<HTMLHeadingElement>,
+    children: React.ReactNode,
+    extraStyle?: React.CSSProperties
+  ) => {
+    const Tag = `h${level}` as const;
+    return renderCommentableBlock(
+      lineNumber,
+      React.createElement(
+        Tag,
+        {
+          ...props,
+          className: joinClassNames(props.className, styles.markdownHeading),
+          style: { ...props.style, ...extraStyle, marginTop: 0 }
+        },
+        children
+      ),
+      { className: getHeadingSpacingClass(level) }
+    );
+  }, [renderCommentableBlock]);
+
   const markdownComponents = React.useMemo<Components>(() => ({
     h1({ children, node, ...props }) {
-      return renderCommentableBlock(getNodeStartLine(node), <h1 {...props}>{children}</h1>);
+      return renderCommentableHeading(1, getNodeStartLine(node), props, children);
     },
-    h2({ children, node, ...props }) {
-      return renderCommentableBlock(getNodeStartLine(node), <h2 {...props}>{children}</h2>);
+    h2({ children, node, style, ...props }) {
+      return renderCommentableHeading(2, getNodeStartLine(node), { ...props, style }, children, { marginBottom: 12 });
     },
     h3({ children, node, ...props }) {
-      return renderCommentableBlock(getNodeStartLine(node), <h3 {...props}>{children}</h3>);
+      return renderCommentableHeading(3, getNodeStartLine(node), props, children);
     },
     h4({ children, node, ...props }) {
-      return renderCommentableBlock(getNodeStartLine(node), <h4 {...props}>{children}</h4>);
+      return renderCommentableHeading(4, getNodeStartLine(node), props, children);
     },
     h5({ children, node, ...props }) {
-      return renderCommentableBlock(getNodeStartLine(node), <h5 {...props}>{children}</h5>);
+      return renderCommentableHeading(5, getNodeStartLine(node), props, children);
     },
     h6({ children, node, ...props }) {
-      return renderCommentableBlock(getNodeStartLine(node), <h6 {...props}>{children}</h6>);
+      return renderCommentableHeading(6, getNodeStartLine(node), props, children);
     },
     p({ children, node, ...props }) {
+      if (preview && /^\s*>/.test(getMarkdownLineText(preview.content, getNodeStartLine(node)))) {
+        return <p {...props}>{children}</p>;
+      }
       return renderCommentableBlock(getNodeStartLine(node), <p {...props}>{children}</p>);
     },
     blockquote({ children, node, ...props }) {
-      return renderCommentableBlock(getNodeStartLine(node), <blockquote {...props}>{children}</blockquote>);
+      return renderCommentableBlock(
+        getNodeStartLine(node),
+        <blockquote {...props} className={joinClassNames(props.className, styles.markdownBlockquote)}>{children}</blockquote>,
+        { className: styles.commentBlockSpacingSm }
+      );
     },
+    // 自定义 pre：识别 mermaid 代码块并替换为图表组件，其余保持普通代码块渲染。
     pre({ children, node, ...props }) {
-      // 自定义 pre：识别 mermaid 代码块并替换为图表组件，其余保持普通代码块渲染。
       const nodes = React.Children.toArray(children);
       const codeElement = nodes.find(isElementWithCodeProps);
       const codeText = extractText(codeElement ?? children) || getCodeTextFromHast(node);
@@ -303,7 +361,11 @@ export function MarkdownPreviewPanel({
       const lineNumber = getNodeStartLine(node);
 
       if (language === 'mermaid' && normalizedCodeText.trim()) {
-        return renderCommentableBlock(lineNumber, <MermaidDiagram chart={normalizedCodeText} />);
+        return renderCommentableBlock(
+          lineNumber,
+          <MermaidDiagram chart={normalizedCodeText} />,
+          { className: styles.commentBlockSpacingMd }
+        );
       }
 
       return renderCommentableBlock(
@@ -313,8 +375,8 @@ export function MarkdownPreviewPanel({
         </pre>
       );
     },
+    // 行内 code 与代码块中的 code 分开样式处理。
     code({ className, children, node, ...props }) {
-      // 行内 code 与代码块中的 code 分开样式处理。
       void node;
       if (className) {
         return (
@@ -330,17 +392,18 @@ export function MarkdownPreviewPanel({
         </code>
       );
     },
+    // 表格包裹横向滚动容器，避免窄屏布局溢出。
     table({ children, node, ...props }) {
-      // 表格包裹横向滚动容器，避免窄屏布局溢出。
       return renderCommentableBlock(
         getNodeStartLine(node),
         <div className={styles.markdownTableScroll}>
           <table {...props}>{children}</table>
-        </div>
+        </div>,
+        { className: styles.commentBlockSpacingMd }
       );
     },
+    // 链接仅在通过安全校验后渲染；外链自动新开窗口。
     a({ href, children, node, ...props }) {
-      // 链接仅在通过安全校验后渲染；外链自动新开窗口。
       void node;
       const safeHref = href ?? '';
 
@@ -355,8 +418,8 @@ export function MarkdownPreviewPanel({
         </a>
       );
     },
+    // 图片地址仅在通过安全校验后渲染，并启用懒加载。
     img({ src, alt, node, ...props }) {
-      // 图片地址仅在通过安全校验后渲染，并启用懒加载。
       void node;
       const safeSrc = src ?? '';
 
@@ -369,8 +432,9 @@ export function MarkdownPreviewPanel({
         <img src={resolvedSrc} alt={alt ?? ''} loading="lazy" {...props} />
       );
     }
-  }), [file.path, renderCommentableBlock]);
+  }), [file.path, preview, renderCommentableBlock, renderCommentableHeading]);
 
+  // preview 为 null 时，当前 UI 统一展示 loading 态；加载失败也沿用这一视觉占位。
   if (!preview) {
     return (
       <div className={styles.markdownLoading}>

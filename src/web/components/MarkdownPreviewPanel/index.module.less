@@ -44,6 +44,10 @@
   font-size: 1.4rem;
 }
 
+.markdownHeading {
+  margin-top: 0;
+}
+
 .markdownBody :global(p),
 .markdownBody :global(li) {
   color: #263446;
@@ -95,6 +99,10 @@
   color: var(--muted);
 }
 
+.markdownBlockquote {
+  margin: 0;
+}
+
 .markdownBody :global(hr) {
   height: 1px;
   margin: 22px 0;
@@ -111,11 +119,23 @@
 
 .markdownTableScroll {
   max-width: 100%;
-  margin: 16px 0;
+  margin: 0;
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
+}
+
+.commentBlockSpacingSm {
+  margin: 14px 0;
+}
+
+.commentBlockSpacingMd {
+  margin: 16px 0;
+}
+
+.commentBlockSpacingLg {
+  margin-top: 28px;
 }
 
 .markdownTableScroll :global(table) {

@@ -13,6 +13,7 @@ type Props = {
   filePath: string;
   lineThreads: ReviewThread[];
   children: React.ReactNode;
+  className?: string;
   onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
   onLocateThread: (threadId: string) => void;
   onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
@@ -22,11 +23,14 @@ type Props = {
   onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
+// 外层允许透传额外 className，是为了把“块级内容本身的外边距”提升到评论容器上。
+// 这样 commentTrigger 永远只需要贴着当前容器顶部，无需再根据不同块类型动态计算 top。
 export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
   lineNumber,
   filePath,
   lineThreads,
   children,
+  className,
   onCreate,
   onLocateThread,
   onPatchThread,
@@ -36,9 +40,10 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
   onCopyThread
 }: Props) {
   const [isComposerOpen, setIsComposerOpen] = React.useState(false);
+  const blockClassName = [styles.markdownCommentBlock, className].filter(Boolean).join(' ');
 
   return (
-    <div className={styles.markdownCommentBlock} data-review-anchor={`line:${lineNumber}`} data-review-line={lineNumber}>
+    <div className={blockClassName} data-review-anchor={`line:${lineNumber}`} data-review-line={lineNumber}>
       <div className={styles.markdownCommentContent}>{children}</div>
       {lineThreads.length === 0 ? (
         <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setIsComposerOpen(true)}>
