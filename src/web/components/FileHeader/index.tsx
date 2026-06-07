@@ -1,5 +1,5 @@
 /**
- * 文件头区域：展示文件信息并提供文件级评论、文件提示词复制等操作。
+ * 文件头区域：展示文件信息，并提供文件级评论、文件路径复制和整文件 review 操作。
  */
 import React from 'react';
 import { Button, Card, Tag, Tooltip, Typography, message } from 'antd';
@@ -44,10 +44,10 @@ export function FileHeader({
   const [messageApi, contextHolder] = message.useMessage();
   const toggleTooltip = hasExpandedContext ? '隐藏当前文件未改动行' : '展开当前文件所有未改动行';
   const toggleAriaLabel = hasExpandedContext ? '隐藏当前文件未改动行' : '展开当前文件所有未改动行';
-  // 文件头部只展示当前文件的线程数量，便于快速判断讨论密度。
   const fileThreads = threads.filter((thread) => thread.filePath === file.path && thread.status !== 'resolved');
   const fileLevelThreads = threads.filter((thread) => thread.filePath === file.path && thread.anchor.type === 'file');
 
+  // 复制完整文件路径，并给出轻量提示反馈。
   async function copyFilePath() {
     await navigator.clipboard.writeText(file.path);
     void messageApi.success('完整文件路径已复制到剪贴板');
