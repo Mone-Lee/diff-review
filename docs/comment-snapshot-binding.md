@@ -98,6 +98,110 @@ export type CommentAnchor =
 锚点只在所属 `fileSnapshotHash` 内有定位意义。相同行号出现在另一个文件快照时，
 不视为同一可行内挂载位置。
 
+## Markdown 评论块定位
+
+Markdown 预览不是逐行渲染，而是先按“可评论块”定位，再把评论入口、行内线程和滚动
+目标都挂到这个块上。当前实现里，`markdown-line` 锚点虽然仍然以“源文件行号”存储，
+但展示时遵循“同一块统一挂到块起始行”的规则。
+
+### 块划分规则
+
+服务端会先对 Markdown 原文做一层轻量级 block 划分，生成 `preview.blocks`：
+
+- 标题：单行块，`startLine === endLine`
+- 引用：连续 `>` 行合并为一个 `blockquote` 块
+- 代码块：从 ```` ``` ```` 开始到结束围栏合并为一个 `code` 块
+- 列表：连续列表项和其间空行合并为一个 `list` 块
+- 表格：表头、分隔行和后续表格行合并为一个 `table` 块
+- 普通段落：默认收敛到下一个空行前
+
+每个块都记录：
+
+```ts
+type MarkdownBlock = {
+  id: string;
+  type: 'heading' | 'paragraph' | 'list' | 'code' | 'table' | 'blockquote' | 'other';
+  startLine: number;
+  endLine: number;
+  text: string;
+};
+```
+
+这里的 `id` 主要用于预览稳定性与块级描述；当前评论匹配和写入仍以
+`lineNumber` 为主，`blockId` 只是顺手写成 `line-${lineNumber}`，还没有参与
+线程归并判断。
+
+### 写入规则：评论创建在块起始行
+
+Markdown 预览中的每个可评论块最终都会包一层 `MarkdownCommentBlock`。用户点击
+评论入口时，前端创建的锚点是：
+
+```ts
+{ type: 'markdown-line', filePath, lineNumber, blockId: `line-${lineNumber}` }
+```
+
+这里的 `lineNumber` 是当前评论块绑定的行号。对标题、段落、引用、Mermaid、表格等
+块来说，都会优先取该 React/HAST 节点的起始源行，因此新评论天然绑定到“块起始行”。
+
+这带来两个直接结果：
+
+- 同一个多行引用块、代码块或表格，不会在块内每一行都生成独立评论入口。
+- 评论的逻辑归属是“这整个 Markdown 块”，而不是块内某个视觉子节点。
+
+### 展示规则：块内历史评论折算到 `startLine`
+
+为了兼容旧数据或块内其他行号导入的评论，`MarkdownPreviewPanel` 在渲染前会先做一次
+折算：
+
+```ts
+const block = preview?.blocks.find(
+  (item) =>
+    thread.anchor.lineNumber >= item.startLine &&
+    thread.anchor.lineNumber <= item.endLine
+);
+const displayLineNumber = block?.startLine ?? thread.anchor.lineNumber;
+```
+
+也就是说，只要某个 `markdown-line` thread 的行号落在某个块的
+`[startLine, endLine]` 范围内，前端就会把它挂到该块的 `startLine` 上展示。
+
+因此：
+
+- 历史上挂在引用块第 2 行的评论，当前会显示在这个引用块的第一行入口处。
+- Mermaid 或普通 fenced code block 内部任意一行的评论，都会折算到代码块首行。
+- 如果某条评论没有命中任何 block，才会回退到它自己的 `thread.anchor.lineNumber`。
+
+### 特殊块的去重与布局规则
+
+Markdown 里有几类块如果按 DOM 子节点继续加评论入口，会出现重复入口或视觉错位，
+所以当前实现做了专门约束：
+
+- `blockquote`：外层引用块已经可评论时，内部段落节点不再额外包评论入口。
+- `heading`：标题自身的 `margin-top` 会被清零，顶部留白转移到评论容器，避免 icon
+  对齐到标题外边距顶部而不是文字顶部。
+- `table`、`mermaid`：额外垂直间距挂在评论容器上，不靠 `absolute top` 微调入口位置。
+
+这套规则的目标是让“评论锚点”和“布局锚点”保持同一层，减少块级 margin 塌陷、
+嵌套段落重复包裹和多入口重叠带来的定位漂移。
+
+### 滚动定位规则
+
+当页面需要自动滚动到某条 Markdown 评论时，也不是直接滚到
+`thread.anchor.lineNumber`，而是先查它所属的 block：
+
+```ts
+getMarkdownScrollLine(preview, thread.anchor.lineNumber)
+```
+
+该函数会返回：
+
+- 若命中某个 block，则返回这个 block 的 `startLine`
+- 否则返回下一块的 `startLine`
+- 再不行才回退到原始行号
+
+随后前端通过 `data-review-line="<startLine>"` 找到对应的 `MarkdownCommentBlock`。
+这样无论评论原始行号位于块内哪一行，滚动、入口和行内线程都会稳定落到同一个块级容器。
+
 ## 绑定关系
 
 完整关系如下：

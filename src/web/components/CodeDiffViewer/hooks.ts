@@ -6,6 +6,7 @@ import type { CommentAnchor, ReviewThread } from '../../../shared/types';
 import type { FileContents, GapDescriptor } from './types';
 import { findGapForAnchor, getDiffAnchorKey, getFirstFileThread, scrollToContentTop, scrollToTarget } from './utils';
 
+// 按文件路径拉取 diff 对应的原始文件内容；文件切换时会重置并取消上一次请求。
 export function useDiffFileContents(filePath: string) {
   const [fileContents, setFileContents] = React.useState<FileContents | null>(null);
 
@@ -53,7 +54,8 @@ type UseAutoScrollArgs = {
   autoScrollKeyRef: React.MutableRefObject<string>;
 };
 
-// 首次打开文件时，尽量自动滚动到最早的未解决评论位置。
+// 首次打开文件时，优先滚到最早的未解决评论；
+// 如果目标行还在折叠区间里，会先展开对应 gap，再等待下一轮 effect 完成定位。
 export function useAutoScrollToFirstThread({
   filePath,
   viewMode,
@@ -130,7 +132,11 @@ type UseLocateTargetArgs = {
   scrollRef: React.RefObject<HTMLDivElement | null>;
 };
 
-// 响应“定位到评论”动作：命中行、gap 展开、最近邻兜底三层策略。
+// 响应“定位到评论”动作：
+// 1) 文件级锚点直接回顶；
+// 2) 命中精确行则直接滚动；
+// 3) 目标在折叠区间里则先展开 gap；
+// 4) 否则回退到同侧最近邻行，最后再兜底回顶。
 export function useLocateTargetScroll({
   filePath,
   locateTarget,
