@@ -66,13 +66,7 @@ export function HunkHeader({
           <button
             className={styles.hunkHeaderExpand}
             type="button"
-            onClick={(event) => {
-              const header = (event.currentTarget as HTMLElement).closest<HTMLElement>('[data-hunk-header="true"]');
-              onExpandGapWithAnchor(previousGap, header, {
-                expandAll: true,
-                alignHeaderToTop: true
-              });
-            }}
+            onClick={() => onExpandGap(previousGap, 'down')}
             aria-label={ariaLabel}
           >
             <VerticalAlignMiddleOutlined />
@@ -96,13 +90,7 @@ export function HunkHeader({
           <button
             className={styles.hunkHeaderExpand}
             type="button"
-            onClick={(event) => {
-              const header = (event.currentTarget as HTMLElement).closest<HTMLElement>('[data-hunk-header="true"]');
-              onExpandGapWithAnchor(previousGap, header, {
-                direction: 'up',
-                alignHeaderToTop: true
-              });
-            }}
+            onClick={() => onExpandGap(previousGap, 'up')}
             aria-label={upAriaLabel}
           >
             <VerticalAlignTopOutlined />
