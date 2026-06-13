@@ -1,7 +1,7 @@
 /**
  * CodeDiffViewer 工具函数：仅包含可复用的纯函数与无副作用辅助逻辑。
  */
-import type { DiffFile, ReviewThread } from '../../../shared/types';
+import type { CommentAnchor, DiffFile, ReviewThread } from '../../../shared/types';
 import type { FileContents, GapDescriptor, RenderedBlock, RenderedGapRow, SplitRow } from './types';
 
 export const GAP_EXPAND_STEP = 20;
@@ -18,9 +18,28 @@ export function getFirstFileThread(filePath: string, threads: ReviewThread[]) {
     .sort((left, right) => threadAnchorOrder(left) - threadAnchorOrder(right) || left.createdAt.localeCompare(right.createdAt))[0];
 }
 
-export function getDiffAnchorKey(thread: ReviewThread) {
-  if (thread.anchor.type !== 'diff-line') return null;
-  return `${thread.anchor.side}:${thread.anchor.lineNumber}`;
+export function getCodeViewSide(file: Pick<DiffFile, 'status'>) {
+  return file.status === 'deleted' ? 'old' : 'new';
+}
+
+export function getCodeViewAnchor(thread: ReviewThread, file: Pick<DiffFile, 'status'>) {
+  return getCodeViewAnchorForCommentAnchor(thread.anchor, file);
+}
+
+export function getCodeViewAnchorForCommentAnchor(anchor: CommentAnchor, file: Pick<DiffFile, 'status'>) {
+  if (anchor.type === 'diff-line') {
+    return { side: anchor.side as 'old' | 'new', lineNumber: anchor.lineNumber };
+  }
+  if (anchor.type === 'markdown-line') {
+    return { side: getCodeViewSide(file) as 'old' | 'new', lineNumber: anchor.lineNumber };
+  }
+  return null;
+}
+
+export function getCodeViewAnchorKey(thread: ReviewThread, file: Pick<DiffFile, 'status'>) {
+  const anchor = getCodeViewAnchor(thread, file);
+  if (!anchor) return null;
+  return `${anchor.side}:${anchor.lineNumber}`;
 }
 
 function getHunkEndLine(hunk: DiffFile['hunks'][number], side: 'old' | 'new') {

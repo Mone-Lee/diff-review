@@ -27,6 +27,7 @@ import {
   getMarkdownScrollLine,
   getNodeStartLine,
   getFirstFileThread,
+  getPreviewThreadLine,
   isElementWithCodeProps,
   isSafeUrl,
   joinClassNames,
@@ -67,12 +68,12 @@ export function MarkdownPreviewPanel({
 
     const firstThread = getFirstFileThread(file.path, threads);
     window.requestAnimationFrame(() => {
-      if (!firstThread || firstThread.anchor.type === 'file' || firstThread.anchor.type !== 'markdown-line') {
+      const scrollLine = firstThread ? getPreviewThreadLine(preview, firstThread) : null;
+      if (!scrollLine) {
         scrollToContentTop(scrollContainer);
         return;
       }
 
-      const scrollLine = getMarkdownScrollLine(preview, firstThread.anchor.lineNumber);
       const target = scrollContainer.querySelector<HTMLElement>(`[data-review-line="${scrollLine}"]`) ?? findMarkdownAnchor(scrollContainer, scrollLine);
       if (!target) {
         scrollToContentTop(scrollContainer);
@@ -91,7 +92,7 @@ export function MarkdownPreviewPanel({
       scrollToContentTop(scrollContainer);
       return;
     }
-    if (locateTarget.anchor.type !== 'markdown-line') return;
+    if (locateTarget.anchor.type === 'diff-line' && locateTarget.anchor.side !== 'new') return;
 
     const scrollLine = getMarkdownScrollLine(preview, locateTarget.anchor.lineNumber);
     const target = scrollContainer.querySelector<HTMLElement>(`[data-review-line="${scrollLine}"]`) ?? findMarkdownAnchor(scrollContainer, scrollLine);
@@ -105,15 +106,15 @@ export function MarkdownPreviewPanel({
   const threadsByLine = React.useMemo(() => {
     const nextThreadsByLine = new Map<number, ReviewThread[]>();
     for (const thread of threads) {
-      if (thread.anchor.type !== 'markdown-line' || thread.anchor.filePath !== file.path) continue;
-      const block = preview?.blocks.find((item) => thread.anchor.type === 'markdown-line' && thread.anchor.lineNumber >= item.startLine && thread.anchor.lineNumber <= item.endLine);
-      const displayLineNumber = block?.startLine ?? thread.anchor.lineNumber;
+      if (thread.anchor.filePath !== file.path || !preview) continue;
+      const displayLineNumber = getPreviewThreadLine(preview, thread);
+      if (!displayLineNumber) continue;
       const lineThreads = nextThreadsByLine.get(displayLineNumber) ?? [];
       lineThreads.push(thread);
       nextThreadsByLine.set(displayLineNumber, lineThreads);
     }
     return nextThreadsByLine;
-  }, [file.path, preview?.blocks, threads]);
+  }, [file.path, preview, threads]);
 
   // 所有块级评论入口都尽量统一走这一层包装。
   // 例外是 blockquote 内部段落：外层 blockquote 已经可评论时，内部 p 会跳过包装，避免重复入口。

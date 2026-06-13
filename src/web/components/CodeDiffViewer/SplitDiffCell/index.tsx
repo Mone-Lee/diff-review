@@ -3,10 +3,10 @@
  */
 import React from 'react';
 import { MessageOutlined } from '@ant-design/icons';
-import type { ReviewThread } from '../../../../shared/types';
+import type { DiffFile, ReviewThread } from '../../../../shared/types';
 import type { SplitCell } from '../types';
 import { CommentPopover } from '../../CommentPopover';
-import { getLineSign } from '../utils';
+import { getCodeViewAnchor, getLineSign } from '../utils';
 import { InlineThreadStack } from '../InlineThreadStack';
 import { useReviewActions } from '../../../contexts/ReviewActionsContext';
 import styles from './index.module.less';
@@ -15,6 +15,7 @@ type Props = {
   cell: SplitCell;
   rowKey: string;
   filePath: string;
+  fileStatus: DiffFile['status'];
   activeLine: string | null;
   setActiveLine: React.Dispatch<React.SetStateAction<string | null>>;
   threads: ReviewThread[];
@@ -24,19 +25,18 @@ export function SplitDiffCell({
   cell,
   rowKey,
   filePath,
+  fileStatus,
   activeLine,
   setActiveLine,
   threads
 }: Props) {
   const { createThread } = useReviewActions();
   const cellThreads = cell.lineNumber
-    ? threads.filter(
-        (thread) =>
-          thread.anchor.type === 'diff-line' &&
-          thread.anchor.filePath === filePath &&
-          thread.anchor.side === cell.side &&
-          thread.anchor.lineNumber === cell.lineNumber
-      )
+    ? threads.filter((thread) => {
+        if (thread.anchor.filePath !== filePath) return false;
+        const anchor = getCodeViewAnchor(thread, { status: fileStatus });
+        return anchor?.side === cell.side && anchor.lineNumber === cell.lineNumber;
+      })
     : [];
   const cellKey = `${rowKey}-${cell.side}-${cell.lineNumber ?? 'empty'}`;
   const className =

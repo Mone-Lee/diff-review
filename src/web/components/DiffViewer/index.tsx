@@ -102,6 +102,7 @@ export function CodeDiffViewer({
   }, [file.path, hasExpandedContext, onExpandedContextChange]);
 
   useAutoScrollToFirstThread({
+    file,
     filePath: file.path,
     viewMode,
     threads,
@@ -114,6 +115,7 @@ export function CodeDiffViewer({
   });
 
   useLocateTargetScroll({
+    file,
     filePath: file.path,
     locateTarget,
     viewMode,
@@ -236,6 +238,7 @@ export function CodeDiffViewer({
             key={block.key}
             gap={block.gap}
             filePath={file.path}
+            fileStatus={file.status}
             viewMode={viewMode}
             fileContents={fileContents}
             activeLine={activeLine}
@@ -280,6 +283,7 @@ export function CodeDiffViewer({
                             cell={row.oldCell}
                             rowKey={row.key}
                             filePath={file.path}
+                            fileStatus={file.status}
                             activeLine={activeLine}
                             setActiveLine={setActiveLine}
                             threads={threads}
@@ -288,6 +292,7 @@ export function CodeDiffViewer({
                             cell={row.newCell}
                             rowKey={row.key}
                             filePath={file.path}
+                            fileStatus={file.status}
                             activeLine={activeLine}
                             setActiveLine={setActiveLine}
                             threads={threads}

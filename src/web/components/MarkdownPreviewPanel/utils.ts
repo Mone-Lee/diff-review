@@ -15,6 +15,7 @@ export type HastNode = {
 function threadAnchorOrder(thread: ReviewThread) {
   if (thread.anchor.type === 'file') return 0;
   if (thread.anchor.type === 'markdown-line') return thread.anchor.lineNumber;
+  if (thread.anchor.type === 'diff-line' && thread.anchor.side === 'new') return thread.anchor.lineNumber;
   return Number.MAX_SAFE_INTEGER;
 }
 
@@ -46,6 +47,12 @@ export function getMarkdownScrollLine(preview: MarkdownPreview, lineNumber: numb
 
   const nextBlock = preview.blocks.find((block) => block.startLine >= lineNumber);
   return nextBlock?.startLine ?? preview.blocks.at(-1)?.startLine ?? lineNumber;
+}
+
+export function getPreviewThreadLine(preview: MarkdownPreview, thread: ReviewThread) {
+  if (thread.anchor.type === 'file') return null;
+  if (thread.anchor.type === 'diff-line' && thread.anchor.side !== 'new') return null;
+  return getMarkdownScrollLine(preview, thread.anchor.lineNumber);
 }
 
 // 仅允许常见安全协议与站内相对路径，拦截 javascript: 等危险链接。

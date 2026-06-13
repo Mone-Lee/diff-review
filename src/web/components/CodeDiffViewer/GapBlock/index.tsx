@@ -2,7 +2,7 @@
  * GapBlock 组件：渲染 hunk 之间被折叠的上下文区块。
  */
 import React from 'react';
-import type { ReviewThread } from '../../../../shared/types';
+import type { DiffFile, ReviewThread } from '../../../../shared/types';
 import type { FileContents, GapDescriptor, GapExpandDirection } from '../types';
 import { buildGapRows } from '../utils';
 import { InlineDiffLine } from '../InlineDiffLine';
@@ -12,6 +12,7 @@ import styles from '../../../styles.module.less';
 type Props = {
   gap: GapDescriptor;
   filePath: string;
+  fileStatus: DiffFile['status'];
   viewMode: 'inline' | 'split';
   fileContents: FileContents | null;
   activeLine: string | null;
@@ -27,6 +28,7 @@ type Props = {
 export function GapBlock({
   gap,
   filePath,
+  fileStatus,
   viewMode,
   fileContents,
   activeLine,
@@ -70,6 +72,7 @@ export function GapBlock({
                 }
                 rowKey={key}
                 filePath={filePath}
+                fileStatus={fileStatus}
                 activeLine={activeLine}
                 setActiveLine={setActiveLine}
                 threads={threads}
@@ -82,6 +85,7 @@ export function GapBlock({
                 }
                 rowKey={key}
                 filePath={filePath}
+                fileStatus={fileStatus}
                 activeLine={activeLine}
                 setActiveLine={setActiveLine}
                 threads={threads}

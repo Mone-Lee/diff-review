@@ -1,9 +1,10 @@
 import React from 'react';
-import type { CommentAnchor, ReviewThread } from '../../../../shared/types';
+import type { CommentAnchor, DiffFile, ReviewThread } from '../../../../shared/types';
 import type { FileContents, GapDescriptor } from '../types';
-import { findGapForAnchor, getDiffAnchorKey, getFirstFileThread, scrollToContentTop, scrollToTarget } from '../utils';
+import { findGapForAnchor, getCodeViewAnchor, getCodeViewAnchorForCommentAnchor, getCodeViewAnchorKey, getFirstFileThread, scrollToContentTop, scrollToTarget } from '../utils';
 
 type UseAutoScrollArgs = {
+  file: Pick<DiffFile, 'path' | 'status'>;
   filePath: string;
   viewMode: 'inline' | 'split';
   threads: ReviewThread[];
@@ -16,6 +17,7 @@ type UseAutoScrollArgs = {
 };
 
 type UseLocateTargetArgs = {
+  file: Pick<DiffFile, 'path' | 'status'>;
   filePath: string;
   locateTarget: { threadId: string; anchor: CommentAnchor } | null;
   viewMode: 'inline' | 'split';
@@ -29,6 +31,7 @@ type UseLocateTargetArgs = {
 // 首次打开文件时，优先滚到最早的未解决评论；
 // 如果目标行还在折叠区间里，会先展开对应 gap，再等待下一轮 effect 完成定位。
 export function useAutoScrollToFirstThread({
+  file,
   filePath,
   viewMode,
   threads,
@@ -53,7 +56,7 @@ export function useAutoScrollToFirstThread({
       return;
     }
 
-    const anchorKey = getDiffAnchorKey(firstThread);
+    const anchorKey = getCodeViewAnchorKey(firstThread, file);
     const target = anchorKey
       ? scrollContainer.querySelector<HTMLElement>(`[data-review-anchor="${CSS.escape(anchorKey)}"]`)
       : null;
@@ -61,9 +64,9 @@ export function useAutoScrollToFirstThread({
       if (!fileContents) {
         return;
       }
-      const side = firstThread.anchor.type === 'diff-line' ? firstThread.anchor.side : null;
-      const lineNumber = firstThread.anchor.type === 'diff-line' ? firstThread.anchor.lineNumber : null;
-      if (side && lineNumber != null) {
+      const anchor = getCodeViewAnchor(firstThread, file);
+      if (anchor) {
+        const { side, lineNumber } = anchor;
         const gap = findGapForAnchor(gapDescriptors, side, lineNumber);
         if (gap) {
           setExpandedGapLines((current) => ({
@@ -83,6 +86,7 @@ export function useAutoScrollToFirstThread({
   }, [
     autoScrollKeyRef,
     expandedGapLines,
+    file,
     fileContents,
     filePath,
     gapDescriptors,
@@ -99,6 +103,7 @@ export function useAutoScrollToFirstThread({
 // 3) 目标在折叠区间里则先展开 gap；
 // 4) 否则回退到同侧最近邻行，最后再兜底回顶。
 export function useLocateTargetScroll({
+  file,
   filePath,
   locateTarget,
   viewMode,
@@ -116,9 +121,9 @@ export function useLocateTargetScroll({
       scrollToContentTop(scrollContainer);
       return;
     }
-    if (locateTarget.anchor.type !== 'diff-line') return;
-
-    const { side, lineNumber } = locateTarget.anchor;
+    const anchor = getCodeViewAnchorForCommentAnchor(locateTarget.anchor, file);
+    if (!anchor) return;
+    const { side, lineNumber } = anchor;
     const exact = scrollContainer.querySelector<HTMLElement>(`[data-review-anchor="${CSS.escape(`${side}:${lineNumber}`)}"]`);
     if (exact) {
       scrollToTarget(scrollContainer, exact);
@@ -155,6 +160,7 @@ export function useLocateTargetScroll({
     }
   }, [
     expandedGapLines,
+    file,
     fileContents,
     filePath,
     gapDescriptors,

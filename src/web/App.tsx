@@ -27,6 +27,7 @@ import { modeLabel } from './utils';
 import styles from './styles.module.less';
 
 type DiffViewMode = 'inline' | 'split';
+type MarkdownViewMode = 'preview' | 'diff';
 type ExpandAllRequest = { filePath: string; requestId: number };
 
 function isImageFilePath(path: string) {
@@ -51,6 +52,7 @@ export default function App() {
   const [threads, setThreads] = React.useState<ReviewThread[]>([]);
   const [selectedPath, setSelectedPath] = React.useState<string>('');
   const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('split');
+  const [markdownViewMode, setMarkdownViewMode] = React.useState<MarkdownViewMode>('preview');
   const [focusedThreadId, setFocusedThreadId] = React.useState<string | null>(null);
   const [locateTarget, setLocateTarget] = React.useState<LocateTarget | null>(null);
   const [expandAllRequest, setExpandAllRequest] = React.useState<ExpandAllRequest | null>(null);
@@ -131,6 +133,19 @@ export default function App() {
     setFocusedThreadId(null);
   }, [selectedPath]);
 
+  React.useEffect(() => {
+    if (!locateTarget) return;
+    const targetFile = files.find((file) => file.path === locateTarget.anchor.filePath);
+    if (!targetFile?.isMarkdown) return;
+    if (locateTarget.anchor.type === 'markdown-line') {
+      setMarkdownViewMode('preview');
+      return;
+    }
+    if (locateTarget.anchor.type === 'diff-line' && locateTarget.anchor.side === 'old') {
+      setMarkdownViewMode('diff');
+    }
+  }, [files, locateTarget]);
+
   const handlePromptCopied = React.useCallback(() => {
     void message.success('提示词已复制到剪贴板');
   }, [message]);
@@ -190,7 +205,19 @@ export default function App() {
           <section className={styles.reviewPane}>
             {selectedFile ? (
               <>
-                {!selectedFile.isMarkdown ? (
+                {selectedFile.isMarkdown ? (
+                  <div className={styles.topToolbar}>
+                    <Segmented
+                      className={styles.viewModeSwitcher}
+                      options={[
+                        { label: 'Preview', value: 'preview', icon: <EyeOutlined /> },
+                        { label: 'Code diff', value: 'diff', icon: <PartitionOutlined /> }
+                      ]}
+                      value={markdownViewMode}
+                      onChange={(value) => setMarkdownViewMode(value as MarkdownViewMode)}
+                    />
+                  </div>
+                ) : (
                   <div className={styles.topToolbar}>
                     <Segmented
                       className={styles.viewModeSwitcher}
@@ -202,17 +229,17 @@ export default function App() {
                       onChange={(value) => setDiffViewMode(value as DiffViewMode)}
                     />
                   </div>
-                ) : null}
+                )}
 
                 <div className={styles.reviewSurface}>
                   <FileHeader
                     file={selectedFile}
                     threads={selectedFileThreads}
-                    showToggleAllLines={!selectedFile.isMarkdown && !isImageFilePath(selectedFile.path)}
+                    showToggleAllLines={!isImageFilePath(selectedFile.path) && (!selectedFile.isMarkdown || markdownViewMode === 'diff')}
                     hasExpandedContext={selectedFile ? (expandedContextByFile[selectedFile.path] ?? false) : false}
                     onToggleAllLines={toggleAllLines}
                   />
-                  {selectedFile.isMarkdown ? (
+                  {selectedFile.isMarkdown && markdownViewMode === 'preview' ? (
                     <MarkdownPreviewPanel
                       key={session?.id}
                       file={selectedFile}
@@ -227,7 +254,7 @@ export default function App() {
                       locateTarget={locateTarget}
                       expandAllRequest={expandAllRequest}
                       onExpandedContextChange={handleExpandedContextChange}
-                      viewMode={diffViewMode}
+                      viewMode={selectedFile.isMarkdown ? 'split' : diffViewMode}
                     />
                   )}
                 </div>
