@@ -3,10 +3,11 @@
  */
 import React from 'react';
 import { MessageOutlined } from '@ant-design/icons';
-import type { CommentAnchor, ReviewThread } from '../../../shared/types';
+import type { ReviewThread } from '../../../shared/types';
 import styles from './index.module.less';
 import { CommentPopover } from '../CommentPopover';
 import { InlineThreadGroup } from '../InlineThreadGroup';
+import { useReviewActions } from '../../contexts/ReviewActionsContext';
 
 type Props = {
   lineNumber: number;
@@ -14,13 +15,6 @@ type Props = {
   lineThreads: ReviewThread[];
   children: React.ReactNode;
   className?: string;
-  onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
-  onLocateThread: (threadId: string) => void;
-  onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
-  onDeleteThread: (id: string) => Promise<void>;
-  onReplyThread: (id: string, body: string) => Promise<void>;
-  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
 // 外层允许透传额外 className，是为了把“块级内容本身的外边距”提升到评论容器上。
@@ -30,15 +24,9 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
   filePath,
   lineThreads,
   children,
-  className,
-  onCreate,
-  onLocateThread,
-  onPatchThread,
-  onDeleteThread,
-  onReplyThread,
-  onPatchComment,
-  onCopyThread
+  className
 }: Props) {
+  const { createThread } = useReviewActions();
   const [isComposerOpen, setIsComposerOpen] = React.useState(false);
   const blockClassName = [styles.markdownCommentBlock, className].filter(Boolean).join(' ');
 
@@ -54,22 +42,14 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
         <CommentPopover
           onCancel={() => setIsComposerOpen(false)}
           onSubmit={async (body) => {
-            await onCreate({ type: 'markdown-line', filePath, lineNumber, blockId: `line-${lineNumber}` }, body);
+            await createThread({ type: 'markdown-line', filePath, lineNumber, blockId: `line-${lineNumber}` }, body);
             setIsComposerOpen(false);
           }}
         />
       ) : null}
       {lineThreads.length > 0 ? (
         <div className={styles.inlineThreadStack}>
-          <InlineThreadGroup
-            threads={lineThreads}
-            onFocus={onLocateThread}
-            onPatch={onPatchThread}
-            onDeleteThread={onDeleteThread}
-            onReply={onReplyThread}
-            onPatchComment={onPatchComment}
-            onCopy={onCopyThread}
-          />
+          <InlineThreadGroup threads={lineThreads} />
         </div>
       ) : null}
     </div>

@@ -1,7 +1,7 @@
 /**
  * CodeDiffViewer 工具函数：仅包含可复用的纯函数与无副作用辅助逻辑。
  */
-import type { DiffFile, DiffLine, ReviewThread } from '../../../shared/types';
+import type { DiffFile, ReviewThread } from '../../../shared/types';
 import type { FileContents, GapDescriptor, RenderedBlock, RenderedGapRow, SplitRow } from './types';
 
 export const GAP_EXPAND_STEP = 20;

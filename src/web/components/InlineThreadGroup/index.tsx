@@ -8,19 +8,41 @@ import type { ReviewThread } from '../../../shared/types';
 import { COMMENT_STATUS_TEXT_MAP } from '../../../shared/types';
 import { getMergedThreadStatus, getThreadStatus } from '../../../shared/thread-utils';
 import { CommentComposer } from '../CommentComposer';
+import { useReviewActions, useReviewNavigationActions } from '../../contexts/ReviewActionsContext';
 import styles from './index.module.less';
 
 export type InlineThreadGroupProps = {
   threads: ReviewThread[];
-  onFocus: (threadId: string) => void;
-  onPatch: (id: string, status: ReviewThread['status']) => Promise<void>;
-  onDeleteThread: (id: string) => Promise<void>;
-  onReply: (id: string, body: string) => Promise<void>;
-  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onCopy: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
+  onFocus?: (threadId: string) => void;
+  onPatch?: (id: string, status: ReviewThread['status']) => Promise<void>;
+  onDeleteThread?: (id: string) => Promise<void>;
+  onReply?: (id: string, body: string) => Promise<void>;
+  onPatchComment?: (threadId: string, commentId: string, body: string) => Promise<void>;
+  onCopy?: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
   showStatusTag?: boolean;
   variant?: 'default' | 'fileLevel' | 'borderless';
 };
+
+function inlineThreadStatusClass(status: ReviewThread['status']): string {
+  if (status === 'submit') return styles.inlineThreadSubmit;
+  if (status === 'replied') return styles.inlineThreadReplied;
+  return styles.inlineThreadResolved;
+}
+
+function statusTagClass(status: ReviewThread['status']): string {
+  if (status === 'submit') return styles.threadTagSubmit;
+  if (status === 'replied') return styles.threadTagReplied;
+  return styles.threadTagResolved;
+}
+
+function getActionThread(threads: ReviewThread[]): ReviewThread | undefined {
+  return threads.find((thread) => getThreadStatus(thread) === 'replied') ?? threads.find((thread) => getThreadStatus(thread) === 'submit') ?? threads[0];
+}
+
+function canCopyThread(status: ReviewThread['status'], lastAuthor?: 'user' | 'agent'): boolean {
+  if (status === 'submit') return true;
+  return status === 'replied' && lastAuthor === 'user';
+}
 
 export function InlineThreadGroup({
   threads,
@@ -33,6 +55,14 @@ export function InlineThreadGroup({
   showStatusTag = true,
   variant = 'default'
 }: InlineThreadGroupProps) {
+  const reviewActions = useReviewActions();
+  const reviewNavigationActions = useReviewNavigationActions();
+  const focusThread = onFocus ?? reviewNavigationActions.locateThread;
+  const patchThread = onPatch ?? reviewActions.patchThread;
+  const removeThread = onDeleteThread ?? reviewActions.deleteThread;
+  const replyToThread = onReply ?? reviewActions.replyThread;
+  const updateComment = onPatchComment ?? reviewActions.patchComment;
+  const copyThreadPrompt = onCopy ?? reviewActions.copyPrompt;
   const [replyingThreadId, setReplyingThreadId] = React.useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null);
   const [editingBody, setEditingBody] = React.useState('');
@@ -55,7 +85,7 @@ export function InlineThreadGroup({
   return (
     <div
       className={[styles.inlineThread, inlineThreadStatusClass(groupStatus), variantClassName].filter(Boolean).join(' ')}
-      onClick={() => onFocus(firstThread.id)}
+      onClick={() => focusThread(firstThread.id)}
     >
       <div className={styles.inlineThreadHeader}>
         {showStatusTag && groupStatus !== 'replied' ? (
@@ -71,7 +101,7 @@ export function InlineThreadGroup({
             key={thread.id}
             onClick={(event) => {
               event.stopPropagation();
-              onFocus(thread.id);
+              focusThread(thread.id);
             }}
           >
             {thread.comments.map((comment) => {
@@ -110,7 +140,7 @@ export function InlineThreadGroup({
                               type="primary"
                               onClick={async (event) => {
                                 event.stopPropagation();
-                                await onPatchComment(thread.id, comment.id, editingBody);
+                                await updateComment(thread.id, comment.id, editingBody);
                                 setEditingCommentId(null);
                                 setEditingBody('');
                               }}
@@ -154,7 +184,7 @@ export function InlineThreadGroup({
               setReplyingThreadId(null);
             }}
             onSubmit={async (body) => {
-              await onReply(actionThread.id, body);
+              await replyToThread(actionThread.id, body);
               setReplyingThreadId(null);
             }}
           />
@@ -170,7 +200,7 @@ export function InlineThreadGroup({
               icon={<CopyOutlined />}
               onClick={(event) => {
                 event.stopPropagation();
-                void onCopy({ type: 'thread', threadId: actionThread.id });
+                void copyThreadPrompt({ type: 'thread', threadId: actionThread.id });
               }}
             >
               复制
@@ -195,7 +225,7 @@ export function InlineThreadGroup({
               cancelText="取消"
               onConfirm={async () => {
                 for (const thread of threads) {
-                  await onDeleteThread(thread.id);
+                  await removeThread(thread.id);
                 }
               }}
             >
@@ -211,7 +241,7 @@ export function InlineThreadGroup({
               icon={<ReloadOutlined />}
               onClick={(event) => {
                 event.stopPropagation();
-                void onPatch(actionThread.id, 'submit');
+                void patchThread(actionThread.id, 'submit');
               }}
             >
               重新打开
@@ -223,7 +253,7 @@ export function InlineThreadGroup({
               icon={<CheckOutlined />}
               onClick={(event) => {
                 event.stopPropagation();
-                void onPatch(actionThread.id, 'resolved');
+                void patchThread(actionThread.id, 'resolved');
               }}
             >
               确认完成
@@ -233,25 +263,4 @@ export function InlineThreadGroup({
       ) : null}
     </div>
   );
-}
-
-function inlineThreadStatusClass(status: ReviewThread['status']): string {
-  if (status === 'submit') return styles.inlineThreadSubmit;
-  if (status === 'replied') return styles.inlineThreadReplied;
-  return styles.inlineThreadResolved;
-}
-
-function statusTagClass(status: ReviewThread['status']): string {
-  if (status === 'submit') return styles.threadTagSubmit;
-  if (status === 'replied') return styles.threadTagReplied;
-  return styles.threadTagResolved;
-}
-
-function getActionThread(threads: ReviewThread[]): ReviewThread | undefined {
-  return threads.find((thread) => getThreadStatus(thread) === 'replied') ?? threads.find((thread) => getThreadStatus(thread) === 'submit') ?? threads[0];
-}
-
-function canCopyThread(status: ReviewThread['status'], lastAuthor?: 'user' | 'agent'): boolean {
-  if (status === 'submit') return true;
-  return status === 'replied' && lastAuthor === 'user';
 }

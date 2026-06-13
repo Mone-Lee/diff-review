@@ -7,6 +7,7 @@ import type { CommentAnchor, DiffFile, ReviewThread } from '../../../../shared/t
 import { CommentPopover } from '../../CommentPopover';
 import { getLineSign } from '../utils';
 import { InlineThreadStack } from '../InlineThreadStack';
+import { useReviewActions } from '../../../contexts/ReviewActionsContext';
 import styles from './index.module.less';
 
 type Props = {
@@ -18,13 +19,6 @@ type Props = {
   activeLine: string | null;
   setActiveLine: React.Dispatch<React.SetStateAction<string | null>>;
   threads: ReviewThread[];
-  onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
-  onLocateThread: (threadId: string) => void;
-  onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
-  onDeleteThread: (id: string) => Promise<void>;
-  onReplyThread: (id: string, body: string) => Promise<void>;
-  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
 export function InlineDiffLine({
@@ -35,15 +29,9 @@ export function InlineDiffLine({
   preferredSide,
   activeLine,
   setActiveLine,
-  threads,
-  onCreate,
-  onLocateThread,
-  onPatchThread,
-  onDeleteThread,
-  onReplyThread,
-  onPatchComment,
-  onCopyThread
+  threads
 }: Props) {
+  const { createThread } = useReviewActions();
   const side = preferredSide ?? (line.type === 'remove' ? 'old' : 'new');
   const lineNumber = side === 'old' ? line.oldLineNumber : line.newLineNumber;
   const anchorKey = `${hunkKey}-${side}-${lineNumber}-${index}`;
@@ -78,20 +66,12 @@ export function InlineDiffLine({
         <CommentPopover
           onCancel={() => setActiveLine(null)}
           onSubmit={async (body) => {
-            await onCreate({ type: 'diff-line', filePath, side, lineNumber }, body);
+            await createThread({ type: 'diff-line', filePath, side, lineNumber }, body);
             setActiveLine(null);
           }}
         />
       ) : null}
-      <InlineThreadStack
-        threads={lineThreads}
-        onLocateThread={onLocateThread}
-        onPatchThread={onPatchThread}
-        onDeleteThread={onDeleteThread}
-        onReplyThread={onReplyThread}
-        onPatchComment={onPatchComment}
-        onCopyThread={onCopyThread}
-      />
+      <InlineThreadStack threads={lineThreads} />
     </div>
   );
 }

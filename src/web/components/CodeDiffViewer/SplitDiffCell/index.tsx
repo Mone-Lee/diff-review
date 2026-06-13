@@ -3,11 +3,12 @@
  */
 import React from 'react';
 import { MessageOutlined } from '@ant-design/icons';
-import type { CommentAnchor, ReviewThread } from '../../../../shared/types';
+import type { ReviewThread } from '../../../../shared/types';
 import type { SplitCell } from '../types';
 import { CommentPopover } from '../../CommentPopover';
 import { getLineSign } from '../utils';
 import { InlineThreadStack } from '../InlineThreadStack';
+import { useReviewActions } from '../../../contexts/ReviewActionsContext';
 import styles from './index.module.less';
 
 type Props = {
@@ -17,13 +18,6 @@ type Props = {
   activeLine: string | null;
   setActiveLine: React.Dispatch<React.SetStateAction<string | null>>;
   threads: ReviewThread[];
-  onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
-  onLocateThread: (threadId: string) => void;
-  onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
-  onDeleteThread: (id: string) => Promise<void>;
-  onReplyThread: (id: string, body: string) => Promise<void>;
-  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
 export function SplitDiffCell({
@@ -32,15 +26,9 @@ export function SplitDiffCell({
   filePath,
   activeLine,
   setActiveLine,
-  threads,
-  onCreate,
-  onLocateThread,
-  onPatchThread,
-  onDeleteThread,
-  onReplyThread,
-  onPatchComment,
-  onCopyThread
+  threads
 }: Props) {
+  const { createThread } = useReviewActions();
   const cellThreads = cell.lineNumber
     ? threads.filter(
         (thread) =>
@@ -76,20 +64,12 @@ export function SplitDiffCell({
         <CommentPopover
           onCancel={() => setActiveLine(null)}
           onSubmit={async (body) => {
-            await onCreate({ type: 'diff-line', filePath, side: cell.side, lineNumber: cell.lineNumber! }, body);
+            await createThread({ type: 'diff-line', filePath, side: cell.side, lineNumber: cell.lineNumber! }, body);
             setActiveLine(null);
           }}
         />
       ) : null}
-      <InlineThreadStack
-        threads={cellThreads}
-        onLocateThread={onLocateThread}
-        onPatchThread={onPatchThread}
-        onDeleteThread={onDeleteThread}
-        onReplyThread={onReplyThread}
-        onPatchComment={onPatchComment}
-        onCopyThread={onCopyThread}
-      />
+      <InlineThreadStack threads={cellThreads} />
     </div>
   );
 }

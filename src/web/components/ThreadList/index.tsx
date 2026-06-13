@@ -9,6 +9,7 @@ import { COMMENT_STATUS_TEXT_MAP } from '../../../shared/types';
 import { getThreadStatus, isThreadOnFileSnapshot } from '../../../shared/thread-utils';
 import { formatAnchor } from '../../utils';
 import { InlineThreadGroup } from '../InlineThreadGroup';
+import { useReviewActions, useReviewNavigationActions } from '../../contexts/ReviewActionsContext';
 import styles from './index.module.less';
 
 type Props = {
@@ -16,17 +17,10 @@ type Props = {
   currentFiles: DiffFile[];
   currentFilePath: string;
   focusedThreadId: string | null;
-  onLocateThread: (threadId: string) => void;
-  onPatch: (id: string, status: ReviewThread['status']) => Promise<void>;
-  onDeleteThread: (id: string) => Promise<void>;
-  onReply: (id: string, body: string) => Promise<void>;
-  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onCopy: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
 type ThreadFilter = 'all' | 'pending' | 'resolved';
 type ThreadScope = 'current-file' | 'all-diff';
-
 type BatchAction = 'delete-resolved' | 'delete-submit' | 'delete-all';
 
 const GROUP_STATUS_ORDER: Record<ReviewThread['status'], number> = {
@@ -35,7 +29,21 @@ const GROUP_STATUS_ORDER: Record<ReviewThread['status'], number> = {
   resolved: 2
 };
 
-export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId, onLocateThread, onPatch, onDeleteThread, onReply, onPatchComment, onCopy }: Props) {
+function statusTagClass(status: ReviewThread['status']): string {
+  if (status === 'submit') return styles.threadTagSubmit;
+  if (status === 'replied') return styles.threadTagReplied;
+  return styles.threadTagResolved;
+}
+
+function statusCardClass(status: ReviewThread['status']): string {
+  if (status === 'submit') return styles.submit;
+  if (status === 'replied') return styles.replied;
+  return styles.resolved;
+}
+
+export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId }: Props) {
+  const { deleteThread } = useReviewActions();
+  const { locateThread } = useReviewNavigationActions();
   const [filter, setFilter] = React.useState<ThreadFilter>('all');
   const [scope, setScope] = React.useState<ThreadScope>('current-file');
   const [locateFlashThreadId, setLocateFlashThreadId] = React.useState<string | null>(null);
@@ -79,10 +87,10 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
       if (action === 'delete-submit') targets = batchTargets.submit;
       if (action === 'delete-all') targets = scopeThreads;
       for (const thread of targets) {
-        await onDeleteThread(thread.id);
+        await deleteThread(thread.id);
       }
     },
-    [batchTargets.resolved, batchTargets.submit, onDeleteThread, scopeThreads]
+    [batchTargets.resolved, batchTargets.submit, deleteThread, scopeThreads]
   );
 
   const confirmBatchDelete = React.useCallback(
@@ -214,7 +222,7 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                   groupRefs.current[group.key] = node;
                 }}
               >
-                <button type="button" className={styles.threadTopButton} onClick={() => onLocateThread(thread.id)}>
+                <button type="button" className={styles.threadTopButton} onClick={() => locateThread(thread.id)}>
                   <Space className={styles.threadTop} align="start" size={8}>
                     <Typography.Text className={styles.threadAnchor} strong>
                       {formatAnchor(thread)}
@@ -230,17 +238,7 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                   </Space>
                 </button>
                 <div>
-                  <InlineThreadGroup
-                    threads={[thread]}
-                    variant="borderless"
-                    showStatusTag={false}
-                    onFocus={onLocateThread}
-                    onPatch={onPatch}
-                    onDeleteThread={onDeleteThread}
-                    onReply={onReply}
-                    onPatchComment={onPatchComment}
-                    onCopy={onCopy}
-                  />
+                  <InlineThreadGroup threads={[thread]} variant="borderless" showStatusTag={false} />
                 </div>
               </Card>
             );
@@ -249,17 +247,4 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
       )}
     </div>
   );
-}
-
-function statusTagClass(status: ReviewThread['status']): string {
-  if (status === 'submit') return styles.threadTagSubmit;
-  if (status === 'replied') return styles.threadTagReplied;
-  return styles.threadTagResolved;
-}
-
-
-function statusCardClass(status: ReviewThread['status']): string {
-  if (status === 'submit') return styles.submit;
-  if (status === 'replied') return styles.replied;
-  return styles.resolved;
 }

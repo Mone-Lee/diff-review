@@ -4,7 +4,8 @@
 import React from 'react';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../../shared/types';
 import type { GapDescriptor, GapExpandDirection } from '../CodeDiffViewer/types';
-import { useAutoScrollToFirstThread, useDiffFileContents, useLocateTargetScroll } from '../CodeDiffViewer/hooks';
+import { useDiffFileContents } from '../CodeDiffViewer/hooks/useDiffFileContents';
+import { useAutoScrollToFirstThread, useLocateTargetScroll } from '../CodeDiffViewer/hooks/useDiffScroll';
 import { InlineDiffLine } from '../CodeDiffViewer/InlineDiffLine';
 import { SplitDiffCell } from '../CodeDiffViewer/SplitDiffCell';
 import { HunkHeader } from '../CodeDiffViewer/HunkHeader';
@@ -24,15 +25,16 @@ type Props = {
   locateTarget: { threadId: string; anchor: CommentAnchor } | null;
   expandAllRequest: { filePath: string; requestId: number } | null;
   onExpandedContextChange: (filePath: string, expanded: boolean) => void;
-  onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
-  onLocateThread: (threadId: string) => void;
-  onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
-  onDeleteThread: (id: string) => Promise<void>;
-  onReplyThread: (id: string, body: string) => Promise<void>;
-  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
   viewMode: 'inline' | 'split';
 };
+
+function getGapVisibleCount(gap: GapDescriptor, expandedGapLines: Record<string, number>) {
+  return Math.min(expandedGapLines[gap.key] ?? 0, gap.hiddenCount);
+}
+
+function getGapDirection(gap: GapDescriptor, gapExpandDirection: Record<string, GapExpandDirection>) {
+  return gapExpandDirection[gap.key] ?? gap.direction;
+}
 
 export function CodeDiffViewer({
   file,
@@ -40,13 +42,6 @@ export function CodeDiffViewer({
   locateTarget,
   expandAllRequest,
   onExpandedContextChange,
-  onCreate,
-  onLocateThread,
-  onPatchThread,
-  onDeleteThread,
-  onReplyThread,
-  onPatchComment,
-  onCopyThread,
   viewMode
 }: Props) {
   const [activeLine, setActiveLine] = React.useState<string | null>(null);
@@ -129,23 +124,6 @@ export function CodeDiffViewer({
     scrollRef
   });
 
-  const threadActionProps = {
-    onLocateThread,
-    onPatchThread,
-    onDeleteThread,
-    onReplyThread,
-    onPatchComment,
-    onCopyThread
-  };
-
-  function getGapVisibleCount(gap: GapDescriptor) {
-    return Math.min(expandedGapLines[gap.key] ?? 0, gap.hiddenCount);
-  }
-
-  function getGapDirection(gap: GapDescriptor) {
-    return gapExpandDirection[gap.key] ?? gap.direction;
-  }
-
   function expandGapWithAnchor(
     gap: GapDescriptor,
     anchor: HTMLElement | null,
@@ -203,7 +181,7 @@ export function CodeDiffViewer({
   }
 
   function getGapHiddenCount(gap: GapDescriptor) {
-    return Math.max(0, gap.hiddenCount - getGapVisibleCount(gap));
+    return Math.max(0, gap.hiddenCount - getGapVisibleCount(gap, expandedGapLines));
   }
 
   function shouldShowHunkHeader(index: number) {
@@ -215,14 +193,14 @@ export function CodeDiffViewer({
   function shouldRenderHunkHeaderInGap(index: number) {
     const previousGap = gapByPosition.get(index);
     if (!previousGap) return false;
-    return getGapVisibleCount(previousGap) > 0 && getGapHiddenCount(previousGap) > 0 && getGapDirection(previousGap) === 'up';
+    return getGapVisibleCount(previousGap, expandedGapLines) > 0 && getGapHiddenCount(previousGap) > 0 && getGapDirection(previousGap, gapExpandDirection) === 'up';
   }
 
   function getHunkHeaderText(hunk: DiffFile['hunks'][number], index: number) {
     const previousGap = gapByPosition.get(index);
     if (!previousGap) return hunk.header;
 
-    const visibleCount = getGapVisibleCount(previousGap);
+    const visibleCount = getGapVisibleCount(previousGap, expandedGapLines);
     const hiddenCount = getGapHiddenCount(previousGap);
     if (visibleCount <= 0) {
       return `${hunk.header} · 已隐藏 ${hiddenCount} 行上下文`;
@@ -242,7 +220,7 @@ export function CodeDiffViewer({
         position={position}
         previousGap={previousGap}
         nextGap={nextGap}
-        getGapVisibleCount={getGapVisibleCount}
+        getGapVisibleCount={(gap) => getGapVisibleCount(gap, expandedGapLines)}
         getGapHiddenCount={getGapHiddenCount}
         onExpandGap={expandGap}
         onExpandGapWithAnchor={expandGapWithAnchor}
@@ -263,15 +241,8 @@ export function CodeDiffViewer({
             activeLine={activeLine}
             setActiveLine={setActiveLine}
             threads={threads}
-            onCreate={onCreate}
-            onLocateThread={onLocateThread}
-            onPatchThread={onPatchThread}
-            onDeleteThread={onDeleteThread}
-            onReplyThread={onReplyThread}
-            onPatchComment={onPatchComment}
-            onCopyThread={onCopyThread}
-            getGapDirection={getGapDirection}
-            getGapVisibleCount={getGapVisibleCount}
+            getGapDirection={(gap) => getGapDirection(gap, gapExpandDirection)}
+            getGapVisibleCount={(gap) => getGapVisibleCount(gap, expandedGapLines)}
             onExpandGap={expandGap}
             onExpandGapAll={expandGapAll}
             leadingHunkHeader={
@@ -299,8 +270,6 @@ export function CodeDiffViewer({
                         activeLine={activeLine}
                         setActiveLine={setActiveLine}
                         threads={threads}
-                        onCreate={onCreate}
-                        {...threadActionProps}
                       />
                     ))
                   ) : (
@@ -314,8 +283,6 @@ export function CodeDiffViewer({
                             activeLine={activeLine}
                             setActiveLine={setActiveLine}
                             threads={threads}
-                            onCreate={onCreate}
-                            {...threadActionProps}
                           />
                           <SplitDiffCell
                             cell={row.newCell}
@@ -324,8 +291,6 @@ export function CodeDiffViewer({
                             activeLine={activeLine}
                             setActiveLine={setActiveLine}
                             threads={threads}
-                            onCreate={onCreate}
-                            {...threadActionProps}
                           />
                         </div>
                       ))}

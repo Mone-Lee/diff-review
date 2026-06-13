@@ -4,9 +4,10 @@
 import React from 'react';
 import { Button, Card, Tag, Tooltip, Typography, message } from 'antd';
 import { MessageOutlined, CopyOutlined, ArrowsAltOutlined, ShrinkOutlined } from '@ant-design/icons';
-import type { CommentAnchor, DiffFile, ReviewThread } from '../../../shared/types';
+import type { DiffFile, ReviewThread } from '../../../shared/types';
 import { CommentComposer } from '../CommentComposer';
 import { InlineThreadGroup } from '../InlineThreadGroup';
+import { useReviewActions } from '../../contexts/ReviewActionsContext';
 import styles from './index.module.less';
 
 type Props = {
@@ -14,15 +15,7 @@ type Props = {
   threads: ReviewThread[];
   showToggleAllLines: boolean;
   hasExpandedContext: boolean;
-  onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
-  onCopy: (scope: { type: 'file-unresolved'; filePath: string }) => Promise<void>;
   onToggleAllLines: (filePath: string) => void;
-  onLocateThread: (threadId: string) => void;
-  onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
-  onDeleteThread: (id: string) => Promise<void>;
-  onReplyThread: (id: string, body: string) => Promise<void>;
-  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
 
 export function FileHeader({
@@ -30,16 +23,9 @@ export function FileHeader({
   threads,
   showToggleAllLines,
   hasExpandedContext,
-  onCreate,
-  onCopy,
-  onToggleAllLines,
-  onLocateThread,
-  onPatchThread,
-  onDeleteThread,
-  onReplyThread,
-  onPatchComment,
-  onCopyThread
+  onToggleAllLines
 }: Props) {
+  const { copyPrompt, createThread } = useReviewActions();
   const [open, setOpen] = React.useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const toggleTooltip = hasExpandedContext ? '隐藏当前文件未改动行' : '展开当前文件所有未改动行';
@@ -79,7 +65,7 @@ export function FileHeader({
           />
         </div>
         <div className={styles.headerActions}>
-          <Button disabled={fileThreads.length === 0} type='primary' className={styles.headerAction} icon={<CopyOutlined />} onClick={() => void onCopy({ type: 'file-unresolved', filePath: file.path })}>
+          <Button disabled={fileThreads.length === 0} type='primary' className={styles.headerAction} icon={<CopyOutlined />} onClick={() => void copyPrompt({ type: 'file-unresolved', filePath: file.path })}>
             批量提交当前文件的review
           </Button>
           <Button className={styles.headerAction} icon={<MessageOutlined />} type={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>
@@ -92,7 +78,7 @@ export function FileHeader({
           style={{ marginTop: 16 }}
           placeholder="请输入文件级审查评论..."
           onSubmit={async (body) => {
-            await onCreate({ type: 'file', filePath: file.path }, body);
+            await createThread({ type: 'file', filePath: file.path }, body);
             setOpen(false);
           }}
           onCancel={() => setOpen(false)}
@@ -105,16 +91,7 @@ export function FileHeader({
       ) : null}
       {fileLevelThreads.length > 0 ? (
         <div className={styles.fileLevelInlineThreads}>
-          <InlineThreadGroup
-            threads={fileLevelThreads}
-            variant="fileLevel"
-            onFocus={onLocateThread}
-            onPatch={onPatchThread}
-            onDeleteThread={onDeleteThread}
-            onReply={onReplyThread}
-            onPatchComment={onPatchComment}
-            onCopy={onCopyThread}
-          />
+          <InlineThreadGroup threads={fileLevelThreads} variant="fileLevel" />
         </div>
       ) : null}
     </Card>
