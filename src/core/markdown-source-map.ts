@@ -50,10 +50,10 @@ export function buildMarkdownBlocks(content: string): MarkdownBlock[] {
       continue;
     }
 
-    if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
+    if (isListLine(line)) {
       const start = lineNumber;
       const collected: string[] = [];
-      while (index < lines.length && (lines[index].trim() === '' || /^\s*([-*+]|\d+\.)\s+/.test(lines[index]))) {
+      while (index < lines.length && isListBlockLine(lines[index])) {
         collected.push(lines[index]);
         index += 1;
       }
@@ -75,7 +75,12 @@ export function buildMarkdownBlocks(content: string): MarkdownBlock[] {
     const start = lineNumber;
     const collected: string[] = [];
     // 默认按段落收敛，直到空行为止。
-    while (index < lines.length && lines[index].trim() !== '') {
+    // 段落遇到下一个块级结构起点时提前收口，避免把后续列表、表格等并入当前段落。
+    while (index < lines.length && lines[index].trim() !== '' && !startsNewMarkdownBlock(lines[index], lines[index + 1])) {
+      collected.push(lines[index]);
+      index += 1;
+    }
+    if (index < lines.length && lines[index].trim() !== '') {
       collected.push(lines[index]);
       index += 1;
     }
@@ -83,6 +88,39 @@ export function buildMarkdownBlocks(content: string): MarkdownBlock[] {
   }
 
   return blocks;
+}
+
+// 识别 Markdown 列表项起始行，统一服务列表块判断和块边界判断。
+function isListLine(line: string) {
+  return /^\s*([-*+]|\d+\.)\s+/.test(line);
+}
+
+// 识别列表项下的缩进续行，例如多行列表正文或内嵌说明文本。
+function isIndentedContinuationLine(line: string) {
+  return /^\s{2,}\S/.test(line);
+}
+
+// 仅做轻量级表格起始判断：当前行含分隔符，且下一行符合表头分隔线形态。
+function isTableStartLine(line: string, nextLine: string | undefined) {
+  return line.includes('|') && Boolean(nextLine) && /^\s*\|?[\s:-]+\|/.test(nextLine ?? '');
+}
+
+// 判断某一行是否应作为新块起点，用于在段落扫描时及时停止，避免误吞后续块结构。
+function startsNewMarkdownBlock(line: string, nextLine: string | undefined) {
+  if (!line.trim()) return false;
+  if (/^```/.test(line.trim())) return true;
+  if (/^#{1,6}\s+/.test(line)) return true;
+  if (/^\s*>/.test(line)) return true;
+  if (isListLine(line)) return true;
+  if (isTableStartLine(line, nextLine)) return true;
+  return false;
+}
+
+// 列表块允许包含空行、后续列表项，以及属于当前列表项的缩进续行。
+function isListBlockLine(line: string) {
+  if (!line.trim()) return true;
+  if (isListLine(line)) return true;
+  return isIndentedContinuationLine(line);
 }
 
 function makeBlock(type: MarkdownBlock['type'], startLine: number, endLine: number, text: string, slugger: GithubSlugger): MarkdownBlock {

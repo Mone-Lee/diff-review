@@ -12,6 +12,12 @@ export type HastNode = {
   children?: HastNode[];
 };
 
+/**
+ * codediff 里评论的锚点排序规则：
+ * 文件级评论：不映射
+ * old 侧行评论：不在 Preview 挂载
+ * new 侧行评论：按它的源码行号，找出所属 Markdown block，并返回该 block 的 startLine
+ */
 function threadAnchorOrder(thread: ReviewThread) {
   if (thread.anchor.type === 'file') return 0;
   if (thread.anchor.type === 'markdown-line') return thread.anchor.lineNumber;

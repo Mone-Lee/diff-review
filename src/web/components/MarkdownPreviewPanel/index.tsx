@@ -187,10 +187,20 @@ export function MarkdownPreviewPanel({
       return renderCommentableHeading(6, getNodeStartLine(node), props, children);
     },
     p({ children, node, ...props }) {
-      if (preview && /^\s*>/.test(getMarkdownLineText(preview.content, getNodeStartLine(node)))) {
+      if (preview && /^(?:\s*>|\s*([-*+]|\d+\.)\s+)/.test(getMarkdownLineText(preview.content, getNodeStartLine(node)))) {
         return <p {...props}>{children}</p>;
       }
       return renderCommentableBlock(getNodeStartLine(node), <p {...props}>{children}</p>);
+    },
+    ul({ children, node, ...props }) {
+      return renderCommentableBlock(getNodeStartLine(node), <ul {...props}>{children}</ul>);
+    },
+    ol({ children, node, ...props }) {
+      return renderCommentableBlock(getNodeStartLine(node), <ol {...props}>{children}</ol>);
+    },
+    li({ children, node, ...props }) {
+      void node;
+      return <li {...props}>{children}</li>;
     },
     blockquote({ children, node, ...props }) {
       return renderCommentableBlock(
