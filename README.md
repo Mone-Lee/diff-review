@@ -29,8 +29,12 @@ npx skills add Mone-Lee/diff-review
 
 - 查看当前工作区 diff、staged diff、指定 revision diff。
 - 代码文件使用 GitHub 风格 unified diff。
-- Markdown 文件只展示 Preview，不提供 Diff / Preview 切换。
+- Markdown 文件支持 `Preview / Code diff` 切换；`Code diff` 当前只支持 side-by-side，不支持 inline。
 - 支持文件级评论、代码行级评论、Markdown source line 评论。
+- Markdown 评论在两种视图间会按视图能力降级展示：
+  - `Preview` 中的新评论按块级锚定；`Code diff` 中可精确到行。
+  - 从 `Code diff` 当前文本一侧创建的评论，会归并展示到对应的 Markdown 块；同一块内的多条评论目前会集中显示在块级内容底部。
+  - 对于只存在于旧版本一侧的评论，`Preview` 无法精确展示；定位这类评论时会切换到 `Code diff`。
 - 支持 submit / replied / resolved 评论状态。
 - 一条 thread 下可以包含多条 comment；同一锚点的新评论会追加到已有 thread。
 - 支持通过内部 `--comment` 参数预置 agent findings / replies。
@@ -78,7 +82,7 @@ local-diff-reviewer --repo /path/to/project staged
 项目 B /diff-review -> http://127.0.0.1:<空闲端口> -> 项目 B diff
 ```
 
-页面打开后，代码 diff 和 Markdown 预览会固定为当前审查快照；工作区继续变动不会自行改写页面内容。再次执行 `local-diff-reviewer` 或 `/diff-review` 会让默认页面自动同步到新快照；使用 `--new-session` 打开的独立页面继续保留旧快照。评论线程与其创建时的 diff 快照绑定：旧线程会在评论侧栏中保留并标记为历史快照，但不会因另一份快照中恰好有相同行号而贴到错误代码上。
+页面打开后，代码 diff 与 Markdown 的 `Preview / Code diff` 视图都会固定为当前审查快照；工作区继续变动不会自行改写页面内容。再次执行 `local-diff-reviewer` 或 `/diff-review` 会让默认页面自动同步到新快照；使用 `--new-session` 打开的独立页面继续保留旧快照。评论线程与其创建时的 diff 快照绑定：旧线程会在评论侧栏中保留并标记为历史快照，但不会因另一份快照中恰好有相同行号而贴到错误代码上。
 
 评论、快照、代码行之间的绑定关系及页面更新判断详见
 [`docs/comment-snapshot-binding.md`](docs/comment-snapshot-binding.md)。
@@ -140,6 +144,26 @@ npx --yes local-diff-reviewer \
 `thread` 评论会以 `author: "agent"` 写入：如果同一锚点已经存在 thread，会作为新的 comment 追加进去；否则创建 replied thread。`reply` 会向目标 thread 追加一条 agent 回复并把状态切到 replied。为避免 agent finding 反复注入导致刷屏，同一 thread 内相同正文的 agent comment 会被视为重复并跳过。若路径不在当前 diff 中、行号无法定位或内容重复，脚本会跳过并在终端打印 warning。
 
 当 agent 收到从 UI 复制出的 `[thread:<id>]` prompt 并完成处理后，应使用 `type: "reply"` 把处理结果写回原 thread，作为 `author: "agent"` 的 comment 保留在评论流里。回复内容应简要说明已修改什么，或说明为什么没有修改。
+
+从 UI 复制出的 prompt 示例：
+
+```text
+[thread:33fdc4a2-3cfa-419f-9aa4-b1ae4f662241]
+test.md:41
+markdown评论
+
+[thread:4f053318-5922-45d0-99e2-377071942422]
+test.md:new:37
+new行内评论
+
+[thread:82546c3b-52b5-42be-9358-c685b2ad1693]
+test.md:old:57
+old行内评论
+
+[thread:86fca351-f2c7-4d41-810c-f810fe066ca4]
+src/core/prompt.ts
+文件级评论
+```
 
 评论状态含义：
 
