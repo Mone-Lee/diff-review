@@ -13,176 +13,39 @@ import type { Components } from 'react-markdown';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
 import type { CommentAnchor, DiffFile, MarkdownPreview, ReviewThread } from '../../../shared/types';
+import { fetchMarkdownPreview } from '../../api/content';
 import styles from './index.module.less';
 import { MarkdownCommentBlock } from '../MarkdownCommentBlock';
 import { MermaidDiagram } from '../MermaidDiagram';
-
-const MARKDOWN_REMARK_PLUGINS = [remarkFrontmatter, remarkGfm];
+import {
+  extractText,
+  findMarkdownAnchor,
+  getCodeClassNameFromHast,
+  getCodeTextFromHast,
+  getHeadingSpacingClass,
+  getMarkdownLineText,
+  getMarkdownScrollLine,
+  getNodeStartLine,
+  getFirstFileThread,
+  isElementWithCodeProps,
+  isSafeUrl,
+  joinClassNames,
+  resolveAssetPath,
+  scrollToContentTop,
+  scrollToTarget
+} from './utils';
 
 type Props = {
   file: DiffFile;
   threads: ReviewThread[];
   locateTarget: { threadId: string; anchor: CommentAnchor } | null;
-  onCreate: (anchor: CommentAnchor, body: string) => Promise<void>;
-  onLocateThread: (threadId: string) => void;
-  onPatchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
-  onDeleteThread: (id: string) => Promise<void>;
-  onReplyThread: (id: string, body: string) => Promise<void>;
-  onPatchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
-  onCopyThread: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
 };
-
-function threadAnchorOrder(thread: ReviewThread) {
-  if (thread.anchor.type === 'file') return 0;
-  if (thread.anchor.type === 'markdown-line') return thread.anchor.lineNumber;
-  return Number.MAX_SAFE_INTEGER;
-}
-
-function getFirstFileThread(filePath: string, threads: ReviewThread[]) {
-  return threads
-    .filter((thread) => thread.filePath === filePath && thread.status !== 'resolved')
-    .sort((left, right) => threadAnchorOrder(left) - threadAnchorOrder(right) || left.createdAt.localeCompare(right.createdAt))[0];
-}
-
-function scrollToContentTop(scrollContainer: HTMLElement) {
-  scrollContainer.scrollTop = 0;
-}
-
-function scrollToTarget(scrollContainer: HTMLElement, target: HTMLElement) {
-  const containerRect = scrollContainer.getBoundingClientRect();
-  const targetRect = target.getBoundingClientRect();
-  scrollContainer.scrollTop += targetRect.top - containerRect.top;
-}
-
-function findMarkdownAnchor(scrollContainer: HTMLElement, lineNumber: number) {
-  const anchors = [...scrollContainer.querySelectorAll<HTMLElement>('[data-review-line]')];
-  const previousAnchors = anchors.filter((anchor) => Number(anchor.dataset.reviewLine) <= lineNumber);
-  return previousAnchors.at(-1) ?? anchors.find((anchor) => Number(anchor.dataset.reviewLine) >= lineNumber) ?? null;
-}
-
-function getMarkdownScrollLine(preview: MarkdownPreview, lineNumber: number) {
-  const containingBlock = preview.blocks.find((block) => lineNumber >= block.startLine && lineNumber <= block.endLine);
-  if (containingBlock) return containingBlock.startLine;
-
-  const nextBlock = preview.blocks.find((block) => block.startLine >= lineNumber);
-  return nextBlock?.startLine ?? preview.blocks.at(-1)?.startLine ?? lineNumber;
-}
-
-// 仅允许常见安全协议与站内相对路径，拦截 javascript: 等危险链接。
-function isSafeUrl(url: string) {
-  return /^(https?:|mailto:|#|\.{0,2}\/|\/)/i.test(url.trim());
-}
-
-function normalizePathSegments(path: string) {
-  const segments = path.split('/').filter((segment) => segment.length > 0 && segment !== '.');
-  const normalized: string[] = [];
-  for (const segment of segments) {
-    if (segment === '..') {
-      normalized.pop();
-      continue;
-    }
-    normalized.push(segment);
-  }
-  return normalized;
-}
-
-function resolveAssetPath(markdownPath: string, rawUrl: string) {
-  if (!rawUrl || /^https?:|^mailto:|^#/i.test(rawUrl)) return rawUrl;
-  if (rawUrl.startsWith('/')) return rawUrl;
-
-  const cleanUrl = rawUrl.split('#')[0]?.split('?')[0] ?? rawUrl;
-  const fileSegments = normalizePathSegments(markdownPath);
-  fileSegments.pop();
-  const targetSegments = normalizePathSegments(cleanUrl);
-  const resolvedPath = [...fileSegments, ...targetSegments].join('/');
-  if (!resolvedPath) return rawUrl;
-  return `/api/markdown-asset?path=${encodeURIComponent(resolvedPath)}`;
-}
-
-// 从 ReactNode 递归提取纯文本，用于读取 code/pre 的真实文本内容。
-function extractText(node: React.ReactNode): string {
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(extractText).join('');
-  if (React.isValidElement<{ children?: React.ReactNode }>(node)) return extractText(node.props.children);
-  return '';
-}
-
-// 统一 className 形态（string 或 string[]），便于后续解析 language-xxx。
-function getClassName(value: unknown) {
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string').join(' ');
-  return typeof value === 'string' ? value : '';
-}
-
-// 判断节点是否可作为代码节点处理（含 className 或 children）。
-function isElementWithCodeProps(node: React.ReactNode): node is React.ReactElement<{ className?: string; children?: React.ReactNode }> {
-  return React.isValidElement<{ className?: string; children?: React.ReactNode }>(node) && Boolean(node.props.className || node.props.children);
-}
-
-type HastNode = {
-  tagName?: string;
-  type?: string;
-  value?: string;
-  position?: { start?: { line?: number } };
-  properties?: { className?: unknown };
-  children?: HastNode[];
-};
-
-function getNodeStartLine(node: unknown): number | undefined {
-  const line = (node as HastNode | undefined)?.position?.start?.line;
-  return typeof line === 'number' ? line : undefined;
-}
-
-// 从 HAST 的 pre > code 节点中提取 className。
-function getCodeClassNameFromHast(node: unknown) {
-  const maybePre = node as HastNode | undefined;
-  const codeNode = maybePre?.children?.find((child) => child.tagName === 'code');
-  return getClassName(codeNode?.properties?.className);
-}
-
-// 从 HAST 结构递归拼接文本，作为 ReactNode 提取失败时的兜底。
-function extractTextFromHast(node: HastNode | undefined): string {
-  if (!node) return '';
-  if (node.type === 'text') return node.value ?? '';
-  return node.children?.map(extractTextFromHast).join('') ?? '';
-}
-
-// 从 HAST 的 pre > code 中读取源码文本。
-function getCodeTextFromHast(node: unknown) {
-  const maybePre = node as HastNode | undefined;
-  const codeNode = maybePre?.children?.find((child) => child.tagName === 'code');
-  return extractTextFromHast(codeNode);
-}
-
-// 读取指定行原始 markdown，用来识别 blockquote 这类“外层块已可评论”的场景。
-// 这样可以避免继续给引用块里的每个段落再包一层评论入口，减少重复入口。
-function getMarkdownLineText(markdown: string, lineNumber: number | undefined) {
-  if (!lineNumber) return '';
-  return markdown.split(/\r?\n/)[lineNumber - 1] ?? '';
-}
-
-function joinClassNames(...classNames: Array<string | undefined>) {
-  return classNames.filter(Boolean).join(' ');
-}
-
-// 标题顶部留白不再交给 h1-h6 自己的 margin-top 处理，而是交给评论容器负责。
-// 这样评论 icon 就能稳定贴着标题文本顶部，而不会因为 heading margin 塌陷/外溢出现错位。
-function getHeadingSpacingClass(level: 1 | 2 | 3 | 4 | 5 | 6) {
-  if (level === 1) return undefined;
-  if (level === 2) return styles.commentBlockSpacingLg;
-  return styles.commentBlockSpacingMd;
-}
+const MARKDOWN_REMARK_PLUGINS = [remarkFrontmatter, remarkGfm];
 
 export function MarkdownPreviewPanel({
   file,
   threads,
-  locateTarget,
-  onCreate,
-  onLocateThread,
-  onPatchThread,
-  onDeleteThread,
-  onReplyThread,
-  onPatchComment,
-  onCopyThread
+  locateTarget
 }: Props) {
   const [preview, setPreview] = React.useState<MarkdownPreview | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -190,9 +53,8 @@ export function MarkdownPreviewPanel({
 
   React.useEffect(() => {
     setPreview(null);
-    fetch(`/api/markdown-preview?path=${encodeURIComponent(file.path)}`)
-      .then((res) => res.json())
-      .then((data: MarkdownPreview) => setPreview(data))
+    fetchMarkdownPreview(file.path)
+      .then((data) => setPreview(data))
       .catch(() => setPreview(null));
   }, [file.path]);
 
@@ -270,26 +132,12 @@ export function MarkdownPreviewPanel({
         filePath={file.path}
         lineThreads={threadsByLine.get(lineNumber) ?? []}
         className={options?.className}
-        onCreate={onCreate}
-        onLocateThread={onLocateThread}
-        onPatchThread={onPatchThread}
-        onDeleteThread={onDeleteThread}
-        onReplyThread={onReplyThread}
-        onPatchComment={onPatchComment}
-        onCopyThread={onCopyThread}
       >
         {content}
       </MarkdownCommentBlock>
     );
   }, [
     file.path,
-    onCopyThread,
-    onCreate,
-    onDeleteThread,
-    onLocateThread,
-    onPatchComment,
-    onPatchThread,
-    onReplyThread,
     threadsByLine
   ]);
 

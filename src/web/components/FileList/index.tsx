@@ -12,16 +12,18 @@ import {
 } from '@ant-design/icons';
 import type { DiffFile, ReviewThread } from '../../../shared/types';
 import { isThreadOnFileSnapshot } from '../../../shared/thread-utils';
+import {
+  buildFileTree,
+  countTreeThreads,
+  FILE_PATH_MAX_LENGTH,
+  FILE_PATH_SUFFIX_LENGTH,
+  FILE_TREE_INDENT_PX,
+  type FileListViewMode,
+  type FileTreeNode,
+  getAllDirectoryPaths,
+  middleEllipsis
+} from './utils';
 import styles from './index.module.less';
-
-type FileListViewMode = 'list' | 'tree';
-type FileTreeNode = {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  children?: FileTreeNode[];
-  file?: DiffFile;
-};
 
 type FileListProps = {
   files: DiffFile[];
@@ -29,86 +31,6 @@ type FileListProps = {
   selectedPath: string;
   onSelectFile: (filePath: string) => void;
 };
-
-const FILE_PATH_MAX_LENGTH = 36;
-const FILE_PATH_SUFFIX_LENGTH = 18;
-const FILE_TREE_INDENT_PX = 18;
-
-function middleEllipsis(text: string, maxLength: number, suffixLength: number) {
-  if (text.length <= maxLength) return text;
-  const safeSuffixLength = Math.min(suffixLength, maxLength - 4);
-  const prefixLength = maxLength - safeSuffixLength - 3;
-  return `${text.slice(0, prefixLength)}...${text.slice(-safeSuffixLength)}`;
-}
-
-function buildFileTree(files: DiffFile[]): FileTreeNode {
-  const root: FileTreeNode = {
-    name: '',
-    path: '',
-    isDirectory: true,
-    children: []
-  };
-
-  files.forEach((file) => {
-    const parts = file.path.split('/').filter(Boolean);
-    let current = root;
-
-    parts.forEach((part, index) => {
-      const isLast = index === parts.length - 1;
-      const path = parts.slice(0, index + 1).join('/');
-      current.children ??= [];
-
-      let child = current.children.find((item) => item.name === part);
-      if (!child) {
-        child = {
-          name: part,
-          path,
-          isDirectory: !isLast,
-          children: isLast ? undefined : [],
-          file: isLast ? file : undefined
-        };
-        current.children.push(child);
-      }
-
-      current = child;
-    });
-  });
-
-  const collapseDirectories = (node: FileTreeNode): FileTreeNode => {
-    if (!node.isDirectory || !node.children) return node;
-
-    const children = node.children.map(collapseDirectories);
-    if (node.name && children.length === 1 && children[0]?.isDirectory && children[0].children) {
-      const child = children[0];
-      return {
-        ...node,
-        name: `${node.name}/${child.name}`,
-        path: child.path,
-        children: child.children
-      };
-    }
-
-    return {
-      ...node,
-      children
-    };
-  };
-
-  return collapseDirectories(root);
-}
-
-function getAllDirectoryPaths(node: FileTreeNode): string[] {
-  if (!node.isDirectory || !node.children) return [];
-  return [
-    ...(node.path ? [node.path] : []),
-    ...node.children.flatMap((child) => getAllDirectoryPaths(child))
-  ];
-}
-
-function countTreeThreads(node: FileTreeNode, countByPath: Map<string, number>): number {
-  if (node.file) return countByPath.get(node.file.path) ?? 0;
-  return node.children?.reduce((total, child) => total + countTreeThreads(child, countByPath), 0) ?? 0;
-}
 
 export function FileList({ files, threads, selectedPath, onSelectFile }: FileListProps) {
   const [viewMode, setViewMode] = React.useState<FileListViewMode>('list');
