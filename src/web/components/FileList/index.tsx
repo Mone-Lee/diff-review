@@ -12,6 +12,7 @@ import {
 } from '@ant-design/icons';
 import type { DiffFile, ReviewThread } from '../../../shared/types';
 import { isThreadOnFileSnapshot } from '../../../shared/thread-utils';
+import { formatFileStatus } from '../../utils';
 import {
   buildFileTree,
   countTreeThreads,
@@ -73,6 +74,11 @@ export function FileList({ files, threads, selectedPath, onSelectFile }: FileLis
       <List.Item className={className} onClick={() => onSelectFile(file.path)}>
         <div className={styles.fileMeta}>
           {isTreeItem ? <FileOutlined className={styles.fileIcon} /> : null}
+          {!isTreeItem ? (
+            <span className={`${styles.fileStatusBadge} ${styles[`fileStatusBadge${formatFileStatus(file.status)}`]}`}>
+              {formatFileStatus(file.status)}
+            </span>
+          ) : null}
           <Tooltip title={isTreeItem ? undefined : file.path}>
             <Typography.Text strong className={styles.fileName} title={file.path}>
               {isTreeItem ? displayPath : middleEllipsis(file.path, FILE_PATH_MAX_LENGTH, FILE_PATH_SUFFIX_LENGTH)}
