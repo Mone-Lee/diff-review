@@ -3,9 +3,7 @@ import type { ReviewThread } from '../shared/types';
 export function formatPrompt(threads: ReviewThread[]): string {
   return threads
     .map((thread) => {
-      // 文件级评论不带行号，行级/块级评论带 file:line。
-      const line = getAnchorLine(thread);
-      const location = line ? `${thread.filePath}:${line}` : thread.filePath;
+      const location = getThreadLocation(thread);
       const [firstComment, ...replies] = thread.comments;
       const replyText = replies
         .map((comment, index) => {
@@ -19,7 +17,8 @@ export function formatPrompt(threads: ReviewThread[]): string {
     .join('\n\n');
 }
 
-function getAnchorLine(thread: ReviewThread): number | undefined {
-  if (thread.anchor.type === 'file') return undefined;
-  return thread.anchor.lineNumber;
+function getThreadLocation(thread: ReviewThread) {
+  if (thread.anchor.type === 'file') return thread.filePath;
+  if (thread.anchor.type === 'diff-line') return `${thread.filePath}:${thread.anchor.side}:${thread.anchor.lineNumber}`;
+  return `${thread.filePath}:${thread.anchor.lineNumber}`;
 }
