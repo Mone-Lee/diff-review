@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { createServer as createNetServer } from 'node:net';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
@@ -52,12 +53,14 @@ async function main() {
   const apiUrl = await startServer({ session, diffFiles, webDist: hasBuiltWeb ? builtWebDist : undefined });
   // 非 --dev 模式下优先复用已构建的静态页面，避免每次都起 Vite。
   const useVite = dev || !hasBuiltWeb;
-  const uiUrl = useVite ? 'http://127.0.0.1:5173' : apiUrl;
+  const vitePort = useVite ? await findAvailablePort(5173) : undefined;
+  const uiUrl = useVite ? `http://127.0.0.1:${vitePort}` : apiUrl;
 
-  const vitePid = useVite ? startVite() : undefined;
+  const vitePid = useVite && vitePort ? startVite(apiUrl, vitePort) : undefined;
   await recordRuntime({
     pid: process.pid,
     vitePid,
+    vitePort,
     repoRoot,
     repoName: session.repoName,
     startedAt: session.createdAt,
@@ -154,7 +157,7 @@ async function refreshRunningReview(session: ReviewSession, diffFiles: DiffFile[
         body: JSON.stringify({ session, diffFiles })
       });
       if (!response.ok) continue;
-      return runtime.usesVite ? 'http://127.0.0.1:5173' : apiUrl;
+      return runtime.usesVite ? `http://127.0.0.1:${runtime.vitePort ?? 5173}` : apiUrl;
     } catch {
       // Runtime records may outlive a process that has just exited; fall through to a new server.
     }
@@ -187,7 +190,7 @@ async function stopCommand(repo: string | undefined): Promise<void> {
   console.log(`Stopped review runtimes: ${stopped.length}`);
   for (const entry of stopped) {
     console.log(
-      `- pid=${entry.pid} vitePid=${entry.vitePid ?? '-'} apiPort=${entry.apiPort} vite=${entry.usesVite ? 'yes' : 'no'} startedAt=${entry.startedAt}`
+      `- pid=${entry.pid} vitePid=${entry.vitePid ?? '-'} apiPort=${entry.apiPort} vitePort=${entry.vitePort ?? '-'} vite=${entry.usesVite ? 'yes' : 'no'} startedAt=${entry.startedAt}`
     );
   }
   if (stale.length > 0) {
@@ -206,13 +209,44 @@ function modeLabel(mode: ReviewSession['mode']): string {
   return mode.kind;
 }
 
-function startVite(): number | undefined {
+function findAvailablePort(preferredPort: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createNetServer();
+
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE') {
+        findAvailablePort(0).then(resolve, reject);
+        return;
+      }
+      reject(error);
+    });
+
+    server.listen(preferredPort, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : preferredPort;
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(port);
+      });
+    });
+  });
+}
+
+function startVite(apiUrl: string, port: number): number | undefined {
   // 由 review 进程托管 Vite 子进程，便于 Ctrl+C 一并退出。
   const child = spawn('npm', ['run', 'web:dev'], {
     cwd: packageRoot,
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    env: { ...process.env, BROWSER: 'none' }
+    env: {
+      ...process.env,
+      BROWSER: 'none',
+      DIFF_REVIEW_API_URL: apiUrl,
+      DIFF_REVIEW_VITE_PORT: String(port)
+    }
   });
 
   process.on('SIGINT', () => child.kill('SIGINT'));

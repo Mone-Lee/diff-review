@@ -18,6 +18,8 @@ import { basename, dirname, join } from 'node:path';
 export type RuntimeEntry = {
   pid: number;
   vitePid?: number;
+  // runtime 记录新增 vitePort，同仓库刷新时返回真实 Vite URL，不再固定 5173
+  vitePort?: number;
   repoRoot: string;
   repoName: string;
   startedAt: string;
@@ -107,6 +109,7 @@ function isRuntimeEntry(value: unknown): value is RuntimeEntry {
   return (
     typeof entry.pid === 'number' &&
     (typeof entry.vitePid === 'undefined' || typeof entry.vitePid === 'number') &&
+    (typeof entry.vitePort === 'undefined' || typeof entry.vitePort === 'number') &&
     typeof entry.repoRoot === 'string' &&
     typeof entry.repoName === 'string' &&
     typeof entry.startedAt === 'string' &&

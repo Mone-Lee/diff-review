@@ -87,7 +87,7 @@ local-diff-reviewer --repo /path/to/project staged
 评论、快照、代码行之间的绑定关系及页面更新判断详见
 [`docs/comment-snapshot-binding.md`](docs/comment-snapshot-binding.md)。
 
-注意：本地开发的 `--dev` 模式仍使用 Vite dev server，端口和 API proxy 是固定的；多项目并行审查请使用默认的构建页面模式。
+本地开发的 `--dev` 模式会同时为 API 服务和 Vite dev server 选择可用端口，并把 Vite proxy 绑定到本次启动的 API 地址。其他项目已经占用 `4966` 或 `5173` 时，当前项目会自动换用空闲端口。
 
 ## Skill 使用方式
 
