@@ -122,6 +122,12 @@ export function getMarkdownLineText(markdown: string, lineNumber: number | undef
   return markdown.split(/\r?\n/)[lineNumber - 1] ?? '';
 }
 
+// 判断当前标题是否写在列表项标记后面，例如 `- ### title`。
+// 这种内容已经由外层列表承载评论入口，标题自身不再额外生成入口。
+export function isListItemHeadingLine(markdown: string, lineNumber: number | undefined) {
+  return /^(?:\s*(?:[-*+]|\d+\.)\s+)#{1,6}(?:\s|$)/.test(getMarkdownLineText(markdown, lineNumber));
+}
+
 export function joinClassNames(...classNames: Array<string | undefined>) {
   return classNames.filter(Boolean).join(' ');
 }

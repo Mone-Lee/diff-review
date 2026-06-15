@@ -28,6 +28,7 @@ import {
   getNodeStartLine,
   getFirstFileThread,
   getPreviewThreadLine,
+  isListItemHeadingLine,
   isElementWithCodeProps,
   isSafeUrl,
   joinClassNames,
@@ -152,20 +153,26 @@ export function MarkdownPreviewPanel({
     extraStyle?: React.CSSProperties
   ) => {
     const Tag = `h${level}` as const;
+    const heading = React.createElement(
+      Tag,
+      {
+        ...props,
+        className: joinClassNames(props.className, styles.markdownHeading),
+        style: { ...props.style, ...extraStyle, marginTop: 0 }
+      },
+      children
+    );
+
+    if (preview && isListItemHeadingLine(preview.content, lineNumber)) {
+      return heading;
+    }
+
     return renderCommentableBlock(
       lineNumber,
-      React.createElement(
-        Tag,
-        {
-          ...props,
-          className: joinClassNames(props.className, styles.markdownHeading),
-          style: { ...props.style, ...extraStyle, marginTop: 0 }
-        },
-        children
-      ),
+      heading,
       { className: getHeadingSpacingClass(level) }
     );
-  }, [renderCommentableBlock]);
+  }, [preview, renderCommentableBlock]);
 
   const markdownComponents = React.useMemo<Components>(() => ({
     h1({ children, node, ...props }) {
