@@ -38,7 +38,9 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "github-slugger": "^2.0.0"
+    "github-slugger": "^2.0.0",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0"
   },
   "devDependencies": {
     "@ant-design/icons": "^6.2.3",

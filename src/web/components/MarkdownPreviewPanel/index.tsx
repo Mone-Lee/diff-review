@@ -10,8 +10,11 @@ import React from 'react';
 import { Alert, Spin } from 'antd';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
+import type { PluggableList } from 'unified';
 import type { CommentAnchor, DiffFile, MarkdownPreview, ReviewThread } from '../../../shared/types';
 import { fetchMarkdownPreview } from '../../api/content';
 import styles from './index.module.less';
@@ -42,7 +45,73 @@ type Props = {
   threads: ReviewThread[];
   locateTarget: { threadId: string; anchor: CommentAnchor } | null;
 };
-const MARKDOWN_REMARK_PLUGINS = [remarkFrontmatter, remarkGfm];
+type MarkdownAstNode = {
+  type?: string;
+  value?: string;
+  children?: MarkdownAstNode[];
+};
+
+const MARKDOWN_HIGHLIGHT_PATTERN = /==(.+?)==/g;
+
+// 将 ==高亮== 这种轻量扩展语法转换成 mark 标签。
+// 只处理 markdown 已解析出的普通 text 节点，避免影响 code、html 等语义节点。
+function remarkMarkHighlight() {
+  return (tree: MarkdownAstNode) => {
+    transformHighlightSyntax(tree);
+  };
+}
+
+function transformHighlightSyntax(node: MarkdownAstNode) {
+  if (!node.children) return;
+
+  node.children = node.children.flatMap((child) => {
+    if (child.type !== 'text' || typeof child.value !== 'string') {
+      transformHighlightSyntax(child);
+      return [child];
+    }
+
+    return splitHighlightText(child.value);
+  });
+}
+
+function splitHighlightText(value: string): MarkdownAstNode[] {
+  const nodes: MarkdownAstNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of value.matchAll(MARKDOWN_HIGHLIGHT_PATTERN)) {
+    const matchIndex = match.index ?? 0;
+    if (matchIndex > lastIndex) {
+      nodes.push({ type: 'text', value: value.slice(lastIndex, matchIndex) });
+    }
+
+    nodes.push(
+      { type: 'html', value: '<mark>' },
+      { type: 'text', value: match[1] },
+      { type: 'html', value: '</mark>' }
+    );
+    lastIndex = matchIndex + match[0].length;
+  }
+
+  if (lastIndex === 0) return [{ type: 'text', value }];
+  if (lastIndex < value.length) {
+    nodes.push({ type: 'text', value: value.slice(lastIndex) });
+  }
+
+  return nodes;
+}
+
+const MARKDOWN_REMARK_PLUGINS: PluggableList = [remarkFrontmatter, remarkGfm, remarkMarkHighlight];
+const MARKDOWN_REHYPE_SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    'mark'
+  ]
+};
+const MARKDOWN_REHYPE_PLUGINS: PluggableList = [
+  rehypeRaw,
+  [rehypeSanitize, MARKDOWN_REHYPE_SANITIZE_SCHEMA]
+];
 
 export function MarkdownPreviewPanel({
   file,
@@ -314,7 +383,12 @@ export function MarkdownPreviewPanel({
       {preview.deleted ? <Alert className={styles.deletedBanner} message="该文件已删除，仅展示删除前预览" type="warning" showIcon /> : null}
       <article className={styles.markdownArticle}>
         <div className={styles.markdownBody}>
-          <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} urlTransform={(url) => (isSafeUrl(url) ? url : '')} components={markdownComponents}>
+          <ReactMarkdown
+            remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+            rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
+            urlTransform={(url) => (isSafeUrl(url) ? url : '')}
+            components={markdownComponents}
+          >
             {preview.content}
           </ReactMarkdown>
         </div>
