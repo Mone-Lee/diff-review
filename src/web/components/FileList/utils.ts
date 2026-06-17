@@ -89,3 +89,29 @@ export function countTreeThreads(node: FileTreeNode, countByPath: Map<string, nu
   if (node.file) return countByPath.get(node.file.path) ?? 0;
   return node.children?.reduce((total, child) => total + countTreeThreads(child, countByPath), 0) ?? 0;
 }
+
+/**
+ * 树形搜索需要保留命中的父目录，且目录自身命中时应继续展示整个子树，避免结果丢失上下文。
+ */
+export function filterFileTree(node: FileTreeNode, query: string): FileTreeNode | null {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return node;
+
+  if (node.file) {
+    return node.file.path.toLowerCase().includes(normalizedQuery) ? node : null;
+  }
+
+  const nodeMatches = node.path.toLowerCase().includes(normalizedQuery) || node.name.toLowerCase().includes(normalizedQuery);
+  if (nodeMatches) return node;
+
+  const children = node.children
+    ?.map((child) => filterFileTree(child, normalizedQuery))
+    .filter((child): child is FileTreeNode => Boolean(child));
+
+  if (!children?.length) return null;
+
+  return {
+    ...node,
+    children
+  };
+}

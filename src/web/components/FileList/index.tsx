@@ -1,5 +1,6 @@
 import React from 'react';
-import { List, Segmented, Tag, Typography, Tooltip } from 'antd';
+import { Empty, Input, List, Segmented, Tag, Typography, Tooltip } from 'antd';
+import debounce from 'lodash/debounce';
 import {
   ApartmentOutlined,
   DownOutlined,
@@ -8,6 +9,7 @@ import {
   FileOutlined,
   MessageOutlined,
   RightOutlined,
+  SearchOutlined,
   UnorderedListOutlined
 } from '@ant-design/icons';
 import type { DiffFile, ReviewThread } from '../../../shared/types';
@@ -21,6 +23,7 @@ import {
   FILE_TREE_INDENT_PX,
   type FileListViewMode,
   type FileTreeNode,
+  filterFileTree,
   getAllDirectoryPaths,
   middleEllipsis
 } from './utils';
@@ -35,8 +38,24 @@ type FileListProps = {
 
 export function FileList({ files, threads, selectedPath, onSelectFile }: FileListProps) {
   const [viewMode, setViewMode] = React.useState<FileListViewMode>('list');
+  const [searchText, setSearchText] = React.useState('');
+  const [debouncedSearchText, setDebouncedSearchText] = React.useState('');
   const [expandedDirs, setExpandedDirs] = React.useState<Set<string>>(() => new Set());
+  const debouncedApplySearchText = React.useMemo(
+    () => debounce((value: string) => setDebouncedSearchText(value), 200),
+    []
+  );
+  const normalizedSearchText = debouncedSearchText.trim().toLowerCase();
+  const hasSearch = normalizedSearchText.length > 0;
   const fileTree = React.useMemo(() => buildFileTree(files), [files]);
+  const filteredFiles = React.useMemo(() => {
+    if (!hasSearch) return files;
+    return files.filter((file) => file.path.toLowerCase().includes(normalizedSearchText));
+  }, [files, hasSearch, normalizedSearchText]);
+  const visibleFileTree = React.useMemo(() => {
+    if (!hasSearch) return fileTree;
+    return filterFileTree(fileTree, normalizedSearchText);
+  }, [fileTree, hasSearch, normalizedSearchText]);
   const unresolvedThreadCountByFilePath = React.useMemo(() => {
     const counts = new Map<string, number>();
     files.forEach((file) => {
@@ -46,8 +65,22 @@ export function FileList({ files, threads, selectedPath, onSelectFile }: FileLis
   }, [files, threads]);
 
   React.useEffect(() => {
+    debouncedApplySearchText(searchText);
+  }, [debouncedApplySearchText, searchText]);
+
+  React.useEffect(() => () => {
+    debouncedApplySearchText.cancel();
+  }, [debouncedApplySearchText]);
+
+  React.useEffect(() => {
+    if (hasSearch) return;
     setExpandedDirs(new Set(getAllDirectoryPaths(fileTree)));
-  }, [fileTree]);
+  }, [fileTree, hasSearch]);
+
+  React.useEffect(() => {
+    if (!hasSearch || !visibleFileTree) return;
+    setExpandedDirs(new Set(getAllDirectoryPaths(visibleFileTree)));
+  }, [hasSearch, visibleFileTree]);
 
   function toggleDirectory(path: string) {
     setExpandedDirs((current) => {
@@ -59,6 +92,15 @@ export function FileList({ files, threads, selectedPath, onSelectFile }: FileLis
       }
       return next;
     });
+  }
+
+  function handleSearchInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setSearchText(event.target.value);
+  }
+
+  function handleSearchInputEnter() {
+    debouncedApplySearchText.cancel();
+    setDebouncedSearchText(searchText);
   }
 
   function renderFileItem(file: DiffFile, displayPath = file.path, isTreeItem = false) {
@@ -155,15 +197,25 @@ export function FileList({ files, threads, selectedPath, onSelectFile }: FileLis
           onChange={(value) => setViewMode(value as FileListViewMode)}
         />
       </div>
+      <Input
+        className={styles.fileSearch}
+        placeholder="搜索文件路径"
+        allowClear
+        prefix={<SearchOutlined className={styles.fileSearchIcon} />}
+        value={searchText}
+        onChange={handleSearchInputChange}
+        onPressEnter={handleSearchInputEnter}
+      />
       {viewMode === 'list' ? (
         <List
           className={styles.fileList}
-          dataSource={files}
+          dataSource={filteredFiles}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的文件" /> }}
           renderItem={(file) => renderFileItem(file)}
         />
       ) : (
         <div className={`${styles.fileList} ${styles.fileTree}`} role="tree">
-          {renderTreeNode(fileTree)}
+          {visibleFileTree ? renderTreeNode(visibleFileTree) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的文件" />}
         </div>
       )}
     </>
