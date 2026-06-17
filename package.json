@@ -11,6 +11,11 @@
   "bugs": {
     "url": "https://github.com/Mone-Lee/diff-review/issues"
   },
+  "packageManager": "npm@11.6.2",
+  "engines": {
+    "node": ">=22",
+    "npm": ">=11 <12"
+  },
   "type": "module",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
