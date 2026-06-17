@@ -45,6 +45,13 @@ function areThreadsEqual(left: ReviewThread[], right: ReviewThread[]) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+/**
+ * 侧边栏展示顺序独立于原始 diff 顺序，统一按文件路径升序排列。
+ */
+function sortFilesByPath(files: DiffFile[]) {
+  return [...files].sort((left, right) => left.path.localeCompare(right.path));
+}
+
 export default function App() {
   const { message } = AntApp.useApp();
   const [session, setSession] = React.useState<ReviewSession | null>(null);
@@ -59,7 +66,8 @@ export default function App() {
   const [expandedContextByFile, setExpandedContextByFile] = React.useState<Record<string, boolean>>({});
   const sessionIdRef = React.useRef<string | null>(null);
   const focusedThreadIdRef = React.useRef<string | null>(null);
-  const selectedFile = files.find((file) => file.path === selectedPath) ?? files[0];
+  const displayFiles = React.useMemo(() => sortFilesByPath(files), [files]);
+  const selectedFile = files.find((file) => file.path === selectedPath) ?? displayFiles[0];
   const currentSnapshotThreads = React.useMemo(
     () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
     [files, threads]
@@ -78,7 +86,8 @@ export default function App() {
       setSession(nextState.session);
       sessionIdRef.current = nextState.session.id;
       setFiles(nextState.files);
-      setSelectedPath((currentPath) => nextState.files.some((file) => file.path === currentPath) ? currentPath : nextState.files[0]?.path ?? '');
+      const nextDisplayFiles = sortFilesByPath(nextState.files);
+      setSelectedPath((currentPath) => nextState.files.some((file) => file.path === currentPath) ? currentPath : nextDisplayFiles[0]?.path ?? '');
     }
 
     setThreads((currentThreads) => (areThreadsEqual(currentThreads, nextState.threads) ? currentThreads : nextState.threads));
@@ -195,7 +204,7 @@ export default function App() {
             </Card>
 
             <FileList
-              files={files}
+              files={displayFiles}
               threads={currentSnapshotThreads}
               selectedPath={selectedFile?.path ?? ''}
               onSelectFile={setSelectedPath}
