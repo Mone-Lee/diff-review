@@ -2,8 +2,8 @@ import React from 'react';
 import { fetchDiffFileContents } from '../../../api/content';
 import type { FileContents } from '../types';
 
-// 按文件路径拉取 diff 对应的原始文件内容；文件切换时会重置并取消上一次请求。
-export function useDiffFileContents(filePath: string) {
+// 按文件路径和当前 diff 快照拉取原始文件内容，避免同一路径内容更新后继续复用旧结果。
+export function useDiffFileContents(filePath: string, snapshotHash: string) {
   const [fileContents, setFileContents] = React.useState<FileContents | null>(null);
 
   React.useEffect(() => {
@@ -31,7 +31,7 @@ export function useDiffFileContents(filePath: string) {
       cancelled = true;
       controller.abort();
     };
-  }, [filePath]);
+  }, [filePath, snapshotHash]);
 
   return fileContents;
 }

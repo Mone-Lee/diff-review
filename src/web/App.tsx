@@ -45,6 +45,22 @@ function areThreadsEqual(left: ReviewThread[], right: ReviewThread[]) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function areFilesEqual(left: DiffFile[], right: DiffFile[]) {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  return left.every((file, index) => {
+    const candidate = right[index];
+    return (
+      candidate &&
+      file.path === candidate.path &&
+      file.snapshotHash === candidate.snapshotHash &&
+      file.status === candidate.status &&
+      file.additions === candidate.additions &&
+      file.deletions === candidate.deletions
+    );
+  });
+}
+
 /**
  * 侧边栏展示顺序独立于原始 diff 顺序，统一按文件路径升序排列。
  */
@@ -80,15 +96,25 @@ export default function App() {
 
   const refreshReviewState = React.useCallback(async (forceSnapshot = false) => {
     const nextState = await fetchReviewState();
-    const snapshotChanged = forceSnapshot || sessionIdRef.current !== nextState.session.id;
+    const nextDisplayFiles = sortFilesByPath(nextState.files);
+    const sessionChanged = forceSnapshot || sessionIdRef.current !== nextState.session.id;
+    sessionIdRef.current = nextState.session.id;
 
-    if (snapshotChanged) {
-      setSession(nextState.session);
-      sessionIdRef.current = nextState.session.id;
-      setFiles(nextState.files);
-      const nextDisplayFiles = sortFilesByPath(nextState.files);
-      setSelectedPath((currentPath) => nextState.files.some((file) => file.path === currentPath) ? currentPath : nextDisplayFiles[0]?.path ?? '');
-    }
+    setSession((currentSession) => {
+      if (
+        !forceSnapshot &&
+        currentSession &&
+        currentSession.id === nextState.session.id &&
+        currentSession.diffHash === nextState.session.diffHash &&
+        currentSession.createdAt === nextState.session.createdAt
+      ) {
+        return currentSession;
+      }
+      return nextState.session;
+    });
+
+    setFiles((currentFiles) => (sessionChanged || !areFilesEqual(currentFiles, nextState.files) ? nextState.files : currentFiles));
+    setSelectedPath((currentPath) => (nextState.files.some((file) => file.path === currentPath) ? currentPath : nextDisplayFiles[0]?.path ?? ''));
 
     setThreads((currentThreads) => (areThreadsEqual(currentThreads, nextState.threads) ? currentThreads : nextState.threads));
 
@@ -250,14 +276,14 @@ export default function App() {
                   />
                   {selectedFile.isMarkdown && markdownViewMode === 'preview' ? (
                     <MarkdownPreviewPanel
-                      key={session?.id}
+                      key={`${session?.id ?? 'session'}:${selectedFile.path}:${selectedFile.snapshotHash}:preview`}
                       file={selectedFile}
                       threads={selectedFileThreads}
                       locateTarget={locateTarget}
                     />
                   ) : (
                     <CodeDiffViewer
-                      key={session?.id}
+                      key={`${session?.id ?? 'session'}:${selectedFile.path}:${selectedFile.snapshotHash}:${selectedFile.isMarkdown ? 'split' : diffViewMode}`}
                       file={selectedFile}
                       threads={selectedFileThreads}
                       locateTarget={locateTarget}

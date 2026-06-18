@@ -47,7 +47,7 @@ export function CodeDiffViewer({
   const [activeLine, setActiveLine] = React.useState<string | null>(null);
   const [expandedGapLines, setExpandedGapLines] = React.useState<Record<string, number>>({});
   const [gapExpandDirection, setGapExpandDirection] = React.useState<Record<string, GapExpandDirection>>({});
-  const fileContents = useDiffFileContents(file.path);
+  const fileContents = useDiffFileContents(file.path, file.snapshotHash);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const autoScrollKeyRef = React.useRef('');
   const handledExpandRequestRef = React.useRef('');
@@ -73,7 +73,7 @@ export function CodeDiffViewer({
     setExpandedGapLines({});
     setGapExpandDirection({});
     handledExpandRequestRef.current = '';
-  }, [file.path]);
+  }, [file.path, file.snapshotHash]);
 
   React.useEffect(() => {
     if (!expandAllRequest || expandAllRequest.filePath !== file.path) return;
