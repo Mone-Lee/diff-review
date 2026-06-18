@@ -57,7 +57,7 @@ export function buildFileTree(files: DiffFile[]): FileTreeNode {
   const collapseDirectories = (node: FileTreeNode): FileTreeNode => {
     if (!node.isDirectory || !node.children) return node;
 
-    const children = node.children.map(collapseDirectories);
+    const children = node.children.map(collapseDirectories).sort(compareFileTreeNodes);
     if (node.name && children.length === 1 && children[0]?.isDirectory && children[0].children) {
       const child = children[0];
       return {
@@ -75,6 +75,80 @@ export function buildFileTree(files: DiffFile[]): FileTreeNode {
   };
 
   return collapseDirectories(root);
+}
+
+/**
+ * 文件列表需要按目录层级顺序展开，而不是按完整路径做全局字典序。
+ * 这样直属文件会排在子目录文件前面，同时同目录下的 `index.*` 入口文件也会更靠前。
+ */
+export function compareDiffFilePaths(leftPath: string, rightPath: string) {
+  const leftSegments = leftPath.split('/').filter(Boolean);
+  const rightSegments = rightPath.split('/').filter(Boolean);
+  const sharedLength = Math.min(leftSegments.length, rightSegments.length);
+
+  for (let index = 0; index < sharedLength; index += 1) {
+    const leftSegment = leftSegments[index]!;
+    const rightSegment = rightSegments[index]!;
+    const leftIsFileName = index === leftSegments.length - 1;
+    const rightIsFileName = index === rightSegments.length - 1;
+
+    if (leftIsFileName && rightIsFileName) {
+      return compareFileNames(leftSegment, rightSegment);
+    }
+
+    if (leftIsFileName !== rightIsFileName) {
+      return leftIsFileName ? -1 : 1;
+    }
+
+    const segmentOrder = comparePathSegment(leftSegment, rightSegment);
+    if (segmentOrder !== 0) return segmentOrder;
+  }
+
+  return leftSegments.length - rightSegments.length;
+}
+
+/**
+ * 树形文件列表需要把当前目录的入口文件固定到最前，避免 `index.scss` 这类页面入口样式被深层子目录“淹没”。
+ */
+function compareFileTreeNodes(left: FileTreeNode, right: FileTreeNode) {
+  const leftEntryPriority = entryFilePriority(left);
+  const rightEntryPriority = entryFilePriority(right);
+  if (leftEntryPriority !== rightEntryPriority) return leftEntryPriority - rightEntryPriority;
+
+  if (left.isDirectory !== right.isDirectory) {
+    return left.isDirectory ? -1 : 1;
+  }
+
+  return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function compareFileNames(left: string, right: string) {
+  const leftEntryPriority = entryFileNamePriority(left);
+  const rightEntryPriority = entryFileNamePriority(right);
+  if (leftEntryPriority !== rightEntryPriority) return leftEntryPriority - rightEntryPriority;
+  return comparePathSegment(left, right);
+}
+
+function comparePathSegment(left: string, right: string) {
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+/**
+ * 仅把当前目录下的 `index.*` 视为目录入口文件，并让样式入口先于脚本入口展示。
+ */
+function entryFilePriority(node: FileTreeNode) {
+  if (node.isDirectory || !node.file) return 100;
+  return entryFileNamePriority(node.name);
+}
+
+function entryFileNamePriority(name: string) {
+  const match = name.match(/^index\.([^.]+)$/i);
+  if (!match) return 100;
+
+  const extension = match[1]?.toLowerCase() ?? '';
+  if (['css', 'less', 'sass', 'scss', 'styl', 'stylus'].includes(extension)) return 0;
+  if (['js', 'jsx', 'ts', 'tsx'].includes(extension)) return 1;
+  return 2;
 }
 
 export function getAllDirectoryPaths(node: FileTreeNode): string[] {

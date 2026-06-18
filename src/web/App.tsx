@@ -19,6 +19,7 @@ import {
 } from './contexts/ReviewActionsContext';
 import { CodeDiffViewer } from './components/DiffViewer';
 import { FileList } from './components/FileList';
+import { compareDiffFilePaths } from './components/FileList/utils';
 import { FileHeader } from './components/FileHeader';
 import { MarkdownPreviewPanel } from './components/MarkdownPreviewPanel';
 import { ThreadList } from './components/ThreadList';
@@ -62,10 +63,10 @@ function areFilesEqual(left: DiffFile[], right: DiffFile[]) {
 }
 
 /**
- * 侧边栏展示顺序独立于原始 diff 顺序，统一按文件路径升序排列。
+ * 左侧列表按目录层级展开顺序展示，和树视图保持一致，避免全路径字典序打散同目录入口文件。
  */
 function sortFilesByPath(files: DiffFile[]) {
-  return [...files].sort((left, right) => left.path.localeCompare(right.path));
+  return [...files].sort((left, right) => compareDiffFilePaths(left.path, right.path));
 }
 
 export default function App() {
