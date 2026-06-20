@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
 import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type MarkdownPreview, type PromptScope, type ReviewComment, type ReviewSession, type ReviewThread } from '../shared/types';
-import { readDiffFileContents, readFileForPreview } from '../core/git';
+import { readDiffFileContents, readDiffImageContent, readFileForPreview } from '../core/git';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
 import { readComments, writeComments } from './storage';
@@ -97,6 +97,37 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
 
       const contents = await readDiffFileContents(file, state.session.mode, state.session.repoRoot);
       res.json(contents);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/diff-file-image', async (req, res, next) => {
+    try {
+      const filePath = String(req.query.path ?? '');
+      const side = req.query.side === 'old' ? 'old' : req.query.side === 'new' ? 'new' : null;
+      if (!filePath || !side) {
+        res.status(400).json({ error: 'File path and side are required' });
+        return;
+      }
+
+      const file = state.diffFiles.find((item) => item.path === filePath || item.oldPath === filePath);
+      if (!file) {
+        res.status(404).json({ error: 'Diff file not found' });
+        return;
+      }
+
+      const contents = await readDiffImageContent(file, state.session.mode, state.session.repoRoot, side);
+      if (!contents) {
+        res.status(404).json({ error: 'Image not found on requested side' });
+        return;
+      }
+
+      const targetPath = side === 'old' ? file.oldPath : file.path;
+      if (targetPath) {
+        res.type(targetPath);
+      }
+      res.send(contents);
     } catch (error) {
       next(error);
     }

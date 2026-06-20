@@ -80,6 +80,32 @@ export async function readDiffFileContents(file: DiffFile, mode: ReviewMode, rep
   };
 }
 
+export async function readDiffImageContent(
+  file: DiffFile,
+  mode: ReviewMode,
+  repoRoot: string,
+  side: 'old' | 'new'
+): Promise<Buffer | null> {
+  const path = side === 'old' ? file.oldPath : file.path;
+  if (!path || path === '/dev/null') return null;
+
+  if (!isSafeRepoPath(repoRoot, path)) {
+    throw new Error(`Unsafe file path: ${path}`);
+  }
+
+  if (side === 'old') {
+    if (file.status === 'added') return null;
+    if (mode.kind === 'staged') return gitShowBuffer(`HEAD:${path}`, repoRoot);
+    if (mode.kind === 'revision') return gitShowBuffer(`${mode.base}:${path}`, repoRoot);
+    return gitShowBuffer(`HEAD:${path}`, repoRoot);
+  }
+
+  if (file.status === 'deleted') return null;
+  if (mode.kind === 'staged') return gitShowBuffer(`:${path}`, repoRoot);
+  if (mode.kind === 'revision') return gitShowBuffer(`${mode.target}:${path}`, repoRoot);
+  return readFile(join(repoRoot, path));
+}
+
 export function parseReviewMode(args: string[]): ReviewMode {
   const filtered = args.filter(Boolean);
   if (filtered.length === 0 || filtered[0] === 'working') return { kind: 'working' };
@@ -102,6 +128,10 @@ async function gitShow(revPath: string, repoRoot: string): Promise<string> {
   return execGitStdout(['show', revPath], repoRoot);
 }
 
+async function gitShowBuffer(revPath: string, repoRoot: string): Promise<Buffer> {
+  return execGitBuffer(['show', revPath], repoRoot);
+}
+
 async function readDiffSideContent(file: DiffFile, mode: ReviewMode, repoRoot: string, side: 'old' | 'new'): Promise<string> {
   const path = side === 'old' ? file.oldPath : file.path;
   if (!path || path === '/dev/null') return '';
@@ -114,7 +144,7 @@ async function readDiffSideContent(file: DiffFile, mode: ReviewMode, repoRoot: s
     if (file.status === 'added') return '';
     if (mode.kind === 'staged') return gitShow(`HEAD:${path}`, repoRoot);
     if (mode.kind === 'revision') return gitShow(`${mode.base}:${path}`, repoRoot);
-    return file.status === 'deleted' ? gitShow(`HEAD:${path}`, repoRoot) : readFile(join(repoRoot, path), 'utf8');
+    return gitShow(`HEAD:${path}`, repoRoot);
   }
 
   if (file.status === 'deleted') return '';
@@ -135,6 +165,27 @@ function splitContentLines(content: string): string[] {
 async function execGitStdout(args: string[], cwd: string): Promise<string> {
   const { stdout } = await execGit(args, cwd);
   return stdout;
+}
+
+async function execGitBuffer(args: string[], cwd: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      'git',
+      args,
+      {
+        cwd,
+        encoding: 'buffer',
+        maxBuffer: 1024 * 1024 * 80
+      },
+      (error, stdout) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(stdout);
+      }
+    );
+  });
 }
 
 async function execGit(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {

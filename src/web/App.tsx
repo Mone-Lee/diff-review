@@ -20,6 +20,7 @@ import {
 import { CodeDiffViewer } from './components/DiffViewer';
 import { FileList } from './components/FileList';
 import { FileHeader } from './components/FileHeader';
+import { ImageDiffViewer } from './components/ImageDiffViewer';
 import { MarkdownPreviewPanel } from './components/MarkdownPreviewPanel';
 import { ThreadList } from './components/ThreadList';
 import { isThreadOnFileSnapshot } from '../shared/thread-utils';
@@ -59,6 +60,7 @@ export default function App() {
   const displayFiles = React.useMemo(() => sortFilesByPath(files), [files]);
   const currentViewedStorageKey = React.useMemo(() => (session ? viewedStorageKey(session) : null), [session]);
   const selectedFile = files.find((file) => file.path === selectedPath) ?? displayFiles[0];
+  const selectedFileIsImage = selectedFile ? isImageFilePath(selectedFile.path) : false;
   const currentSnapshotThreads = React.useMemo(
     () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
     [files, threads]
@@ -268,7 +270,7 @@ export default function App() {
                       onChange={(value) => setMarkdownViewMode(value as MarkdownViewMode)}
                     />
                   </div>
-                ) : (
+                ) : selectedFileIsImage ? null : (
                   <div className={styles.topToolbar}>
                     <Segmented
                       className={styles.viewModeSwitcher}
@@ -287,7 +289,7 @@ export default function App() {
                     file={selectedFile}
                     threads={selectedFileThreads}
                     isViewed={viewedFilePaths.has(selectedFile.path)}
-                    showToggleAllLines={!isImageFilePath(selectedFile.path) && (!selectedFile.isMarkdown || markdownViewMode === 'diff')}
+                    showToggleAllLines={!selectedFileIsImage && (!selectedFile.isMarkdown || markdownViewMode === 'diff')}
                     hasExpandedContext={selectedFile ? (expandedContextByFile[selectedFile.path] ?? false) : false}
                     onToggleAllLines={toggleAllLines}
                     onToggleViewed={toggleViewedFile}
@@ -298,6 +300,11 @@ export default function App() {
                       file={selectedFile}
                       threads={selectedFileThreads}
                       locateTarget={locateTarget}
+                    />
+                  ) : selectedFileIsImage ? (
+                    <ImageDiffViewer
+                      key={`${session?.id ?? 'session'}:${selectedFile.path}:${selectedFile.snapshotHash}:image`}
+                      file={selectedFile}
                     />
                   ) : (
                     <CodeDiffViewer

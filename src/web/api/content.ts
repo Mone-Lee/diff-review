@@ -21,6 +21,13 @@ export async function fetchDiffFileContents(filePath: string, signal?: AbortSign
   return (await res.json()) as FileContents;
 }
 
+/**
+ * 构造图片 diff 单侧内容的访问地址，交给 `<img>` 直接加载对应快照内容。
+ */
+export function buildDiffImageUrl(filePath: string, side: 'old' | 'new') {
+  return `/api/diff-file-image?path=${encodeURIComponent(filePath)}&side=${side}`;
+}
+
 function normalizePathSegments(path: string) {
   const segments = path.split('/').filter((segment) => segment.length > 0 && segment !== '.');
   const normalized: string[] = [];
