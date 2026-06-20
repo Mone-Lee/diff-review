@@ -1,3 +1,6 @@
+/**
+ * Diff 文件内容加载 Hook：负责按文件路径和快照拉取原始内容，并处理切换过程中的中断与失效结果。
+ */
 import React from 'react';
 import { fetchDiffFileContents } from '../../../api/content';
 import type { FileContents } from '../types';

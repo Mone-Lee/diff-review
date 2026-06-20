@@ -1,3 +1,6 @@
+/**
+ * 评论线程共享工具：承载前后端共用的锚点比较、线程归属判断与状态推导逻辑。
+ */
 import type { CommentAnchor, DiffFile, ReviewThread } from './types';
 
 export function sameAnchor(left: CommentAnchor, right: CommentAnchor): boolean {

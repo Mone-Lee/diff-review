@@ -1,3 +1,6 @@
+/**
+ * 内容读取 API 封装：负责请求 markdown 预览、diff 文件内容与 markdown 资源地址转换，屏蔽前端调用细节。
+ */
 import type { MarkdownPreview } from '../../shared/types';
 import type { FileContents } from '../components/CodeDiffViewer/types';
 

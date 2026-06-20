@@ -1,3 +1,6 @@
+/**
+ * Git 访问工具：负责读取仓库根目录、生成不同 review 模式下的 diff，并按快照读取文件内容。
+ */
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';

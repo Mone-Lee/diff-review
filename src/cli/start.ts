@@ -1,3 +1,6 @@
+/**
+ * CLI 入口：负责解析命令行参数、采集当前仓库 diff、复用或启动 review 服务，并协调浏览器打开流程。
+ */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';

@@ -1,3 +1,6 @@
+/**
+ * Markdown 预览辅助工具：负责评论定位、滚动锚点、HAST 代码块信息提取与预览层安全展示判断。
+ */
 import React from 'react';
 import type { MarkdownPreview, ReviewThread } from '../../../shared/types';
 import { buildMarkdownAssetUrl } from '../../api/content';

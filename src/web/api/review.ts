@@ -1,3 +1,6 @@
+/**
+ * Review API 封装：负责前端与 review 会话、评论线程、评论编辑和 prompt 生成接口之间的通信。
+ */
 import type { CommentAnchor, DiffFile, ReviewSession, ReviewThread } from '../../shared/types';
 
 export type PromptScope = { type: 'thread'; threadId: string } | { type: 'file-unresolved'; filePath: string } | { type: 'all-unresolved' };

@@ -1,3 +1,6 @@
+/**
+ * Prompt 格式化工具：负责把评论线程整理成稳定的纯文本提示词，供复制到外部 Agent 或模型上下文中。
+ */
 import type { ReviewThread } from '../shared/types';
 
 export function formatPrompt(threads: ReviewThread[]): string {

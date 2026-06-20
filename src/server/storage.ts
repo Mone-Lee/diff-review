@@ -1,3 +1,6 @@
+/**
+ * 评论存储工具：负责评论文件路径计算、读写持久化，以及旧评论数据的兼容迁移与归并规范化。
+ */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { homedir, platform } from 'node:os';

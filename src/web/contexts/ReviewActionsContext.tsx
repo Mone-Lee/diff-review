@@ -1,3 +1,6 @@
+/**
+ * Review 动作上下文：负责组装评论增删改、prompt 复制与线程定位动作，并向审查子树统一分发。
+ */
 import React from 'react';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import {

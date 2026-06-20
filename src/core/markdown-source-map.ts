@@ -1,3 +1,6 @@
+/**
+ * Markdown 块映射工具：负责把原始 Markdown 文本切成轻量块结构，供预览定位与评论锚点映射使用。
+ */
 import GithubSlugger from 'github-slugger';
 import type { MarkdownBlock } from '../shared/types';
 

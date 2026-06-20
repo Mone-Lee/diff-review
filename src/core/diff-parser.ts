@@ -1,3 +1,6 @@
+/**
+ * Unified diff 解析器：负责把 Git diff 文本转换成前端可消费的文件、hunk 与行级结构快照。
+ */
 import { createHash } from 'node:crypto';
 import type { DiffFile, DiffHunk, DiffLine } from '../shared/types';
 

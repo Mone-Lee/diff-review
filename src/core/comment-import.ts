@@ -1,3 +1,6 @@
+/**
+ * Agent 评论导入工具：负责解析 `--comment` 输入、校验定位信息，并把外部评论安全并入当前 review 线程存储。
+ */
 import type { CommentAnchor, DiffFile, ReviewThread } from '../shared/types';
 import { readComments, writeComments } from '../server/storage';
 import { getOpenThreadStatus, sameAnchor } from '../shared/thread-utils';

@@ -1,3 +1,6 @@
+/**
+ * Review 服务端入口：负责暴露会话、diff、评论、预览与 prompt 相关 API，并维护运行时 review 状态。
+ */
 import express from 'express';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';

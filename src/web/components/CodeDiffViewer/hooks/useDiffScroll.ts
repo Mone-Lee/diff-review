@@ -1,3 +1,6 @@
+/**
+ * Diff 视图滚动 Hook：负责文件首次打开、评论定位与折叠区展开后的自动滚动对齐逻辑。
+ */
 import React from 'react';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../../../shared/types';
 import type { FileContents, GapDescriptor } from '../types';
