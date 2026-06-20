@@ -128,7 +128,19 @@ export function getMarkdownLineText(markdown: string, lineNumber: number | undef
 // 判断当前标题是否写在列表项标记后面，例如 `- ### title`。
 // 这种内容已经由外层列表承载评论入口，标题自身不再额外生成入口。
 export function isListItemHeadingLine(markdown: string, lineNumber: number | undefined) {
-  return /^(?:\s*(?:[-*+]|\d+\.)\s+)#{1,6}(?:\s|$)/.test(getMarkdownLineText(markdown, lineNumber));
+  return /^(?:\s*(?:[-*+]|\d+[.)])\s+)#{1,6}(?:\s|$)/.test(getMarkdownLineText(markdown, lineNumber));
+}
+
+// 判断当前节点对应的源码行是否仍处于 blockquote 语法中。
+// 这类内容已经由外层引用块承载评论入口，内部段落/列表不应再重复挂评论按钮。
+export function isBlockquoteLine(markdown: string, lineNumber: number | undefined) {
+  return /^\s*>/.test(getMarkdownLineText(markdown, lineNumber));
+}
+
+// 判断当前列表节点是否是缩进后的嵌套列表。
+// 嵌套列表的评论应归属最外层 list block，避免外层列表与内层列表同时出现入口。
+export function isNestedListLine(markdown: string, lineNumber: number | undefined) {
+  return /^\s{2,}(?:[-*+]|\d+[.)])\s+/.test(getMarkdownLineText(markdown, lineNumber));
 }
 
 export function joinClassNames(...classNames: Array<string | undefined>) {

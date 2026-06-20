@@ -26,6 +26,8 @@ import {
   getCodeClassNameFromHast,
   getCodeTextFromHast,
   getHeadingSpacingClass,
+  isBlockquoteLine,
+  isNestedListLine,
   getMarkdownLineText,
   getMarkdownScrollLine,
   getNodeStartLine,
@@ -187,7 +189,7 @@ export function MarkdownPreviewPanel({
   }, [file.path, preview, threads]);
 
   // 所有块级评论入口都尽量统一走这一层包装。
-  // 例外是 blockquote 内部段落：外层 blockquote 已经可评论时，内部 p 会跳过包装，避免重复入口。
+  // 例外是 blockquote 内部的段落/列表：外层 blockquote 已经可评论时，内部块会跳过包装，避免重复入口。
   // 特殊块（标题、表格、mermaid、blockquote）的垂直间距通过 className 加在这里，
   // 避免再用 absolute top 去硬调 icon 位置，从根上减少错位和重叠。
   const renderCommentableBlock = React.useCallback((
@@ -263,15 +265,24 @@ export function MarkdownPreviewPanel({
       return renderCommentableHeading(6, getNodeStartLine(node), props, children);
     },
     p({ children, node, ...props }) {
-      if (preview && /^(?:\s*>|\s*([-*+]|\d+\.)\s+)/.test(getMarkdownLineText(preview.content, getNodeStartLine(node)))) {
+      if (preview && /^(?:\s*([-*+]|\d+[.)])\s+)/.test(getMarkdownLineText(preview.content, getNodeStartLine(node)))) {
+        return <p {...props}>{children}</p>;
+      }
+      if (preview && isBlockquoteLine(preview.content, getNodeStartLine(node))) {
         return <p {...props}>{children}</p>;
       }
       return renderCommentableBlock(getNodeStartLine(node), <p {...props}>{children}</p>);
     },
     ul({ children, node, ...props }) {
+      if (preview && (isBlockquoteLine(preview.content, getNodeStartLine(node)) || isNestedListLine(preview.content, getNodeStartLine(node)))) {
+        return <ul {...props}>{children}</ul>;
+      }
       return renderCommentableBlock(getNodeStartLine(node), <ul {...props}>{children}</ul>);
     },
     ol({ children, node, ...props }) {
+      if (preview && (isBlockquoteLine(preview.content, getNodeStartLine(node)) || isNestedListLine(preview.content, getNodeStartLine(node)))) {
+        return <ol {...props}>{children}</ol>;
+      }
       return renderCommentableBlock(getNodeStartLine(node), <ol {...props}>{children}</ol>);
     },
     li({ children, node, ...props }) {

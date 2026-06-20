@@ -176,7 +176,8 @@ const displayLineNumber = block?.startLine ?? thread.anchor.lineNumber;
 Markdown 里有几类块如果按 DOM 子节点继续加评论入口，会出现重复入口或视觉错位，
 所以当前实现做了专门约束：
 
-- `blockquote`：外层引用块已经可评论时，内部段落节点不再额外包评论入口。
+- `blockquote`：外层引用块已经可评论时，内部段落与列表节点不再额外包评论入口。
+- `list`：同一个 list block 内，缩进后的嵌套列表会复用外层列表入口，不再各自生成独立入口。
 - `heading`：标题自身的 `margin-top` 会被清零，顶部留白转移到评论容器，避免 icon
   对齐到标题外边距顶部而不是文字顶部。
 - `table`、`mermaid`：额外垂直间距挂在评论容器上，不靠 `absolute top` 微调入口位置。

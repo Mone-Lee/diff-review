@@ -95,7 +95,7 @@ export function buildMarkdownBlocks(content: string): MarkdownBlock[] {
 
 // 识别 Markdown 列表项起始行，统一服务列表块判断和块边界判断。
 function isListLine(line: string) {
-  return /^\s*([-*+]|\d+\.)\s+/.test(line);
+  return /^\s*([-*+]|\d+[.)])\s+/.test(line);
 }
 
 // 识别列表项下的缩进续行，例如多行列表正文或内嵌说明文本。
