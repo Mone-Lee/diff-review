@@ -1,12 +1,15 @@
 /**
- * 文件列表组件：负责在列表/树两种视图之间切换，展示文件状态、搜索结果、未解决评论数和 viewed 标记。
+ * 文件列表组件：负责在列表/树两种视图之间切换，展示文件状态、搜索结果、未解决评论数，并支持按 viewed 进度过滤文件。
  */
 import React from 'react';
-import { Empty, Input, List, Segmented, Tag, Typography, Tooltip } from 'antd';
+import { Button, Empty, Input, List, Segmented, Tag, Typography, Tooltip } from 'antd';
 import debounce from 'lodash/debounce';
 import {
   ApartmentOutlined,
+  CheckOutlined,
   DownOutlined,
+  EyeInvisibleOutlined,
+  EyeOutlined,
   FolderOpenOutlined,
   FolderOutlined,
   FileOutlined,
@@ -45,6 +48,7 @@ type FileListProps = {
 export function FileList({ files, threads, selectedPath, viewedFilePaths, onSelectFile, onToggleViewed }: FileListProps) {
   const [viewMode, setViewMode] = React.useState<FileListViewMode>('list');
   const [searchText, setSearchText] = React.useState('');
+  const [hideViewedFiles, setHideViewedFiles] = React.useState(false);
   const [debouncedSearchText, setDebouncedSearchText] = React.useState('');
   const [expandedDirs, setExpandedDirs] = React.useState<Set<string>>(() => new Set());
   const debouncedApplySearchText = React.useMemo(
@@ -53,7 +57,11 @@ export function FileList({ files, threads, selectedPath, viewedFilePaths, onSele
   );
   const normalizedSearchText = debouncedSearchText.trim().toLowerCase();
   const hasSearch = normalizedSearchText.length > 0;
-  const fileTree = React.useMemo(() => buildFileTree(files), [files]);
+  const visibleFiles = React.useMemo(() => {
+    if (!hideViewedFiles) return files;
+    return files.filter((file) => !viewedFilePaths.has(file.path));
+  }, [files, hideViewedFiles, viewedFilePaths]);
+  const fileTree = React.useMemo(() => buildFileTree(visibleFiles), [visibleFiles]);
   const visibleFileTree = React.useMemo(() => {
     if (!hasSearch) return fileTree;
     return filterFileTree(fileTree, normalizedSearchText);
@@ -227,18 +235,32 @@ export function FileList({ files, threads, selectedPath, viewedFilePaths, onSele
           onChange={(value) => setViewMode(value as FileListViewMode)}
         />
       </div>
-      <Input
-        className={styles.fileSearch}
-        placeholder="搜索文件路径"
-        allowClear
-        prefix={<SearchOutlined className={styles.fileSearchIcon} />}
-        value={searchText}
-        onChange={handleSearchInputChange}
-        onPressEnter={handleSearchInputEnter}
-      />
+      <div className={styles.fileSearchToolbar}>
+        <Input
+          className={styles.fileSearch}
+          placeholder="搜索文件路径"
+          allowClear
+          prefix={<SearchOutlined className={styles.fileSearchIcon} />}
+          value={searchText}
+          onChange={handleSearchInputChange}
+          onPressEnter={handleSearchInputEnter}
+        />
+        <Tooltip title={hideViewedFiles ? '显示已审查文件' : '隐藏已审查文件'}>
+          <Button
+            className={styles.viewedFilterButton}
+            type="text"
+            shape="circle"
+            icon={hideViewedFiles ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+            aria-pressed={hideViewedFiles}
+            aria-label={hideViewedFiles ? '显示已审查文件' : '隐藏已审查文件'}
+            onClick={() => setHideViewedFiles((current) => !current)}
+          />
+        </Tooltip>
+      </div>
       {viewMode === 'list' ? (
         <List
           className={styles.fileList}
+          split={false}
           dataSource={visibleListFiles}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的文件" /> }}
           renderItem={(file) => renderFileItem(file)}

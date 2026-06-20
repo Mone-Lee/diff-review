@@ -15,13 +15,42 @@
   }
 }
 
-.fileSearch {
+.fileSearchToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+.fileSearch {
+  flex: 1 1 auto;
+  min-width: 0;
   background: #fdfdfd !important;
 }
 
 .fileSearchIcon {
   color: #8a94a6;
+}
+
+.viewedFilterButton {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  color: #8a94a6;
+  border-radius: 999px;
+  background: transparent;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.viewedFilterButton:hover,
+.viewedFilterButton:focus {
+  color: #5f6f86 !important;
+  background: #eef2f7 !important;
+}
+
+.viewedFilterButton[aria-pressed='true'] {
+  color: #2f8f46 !important;
+  background: #eaf6ed !important;
 }
 
 .fileList {
@@ -37,6 +66,14 @@
   padding: 8px 4px 8px 12px !important;
   cursor: pointer;
   transition: 0.2s ease;
+}
+
+.fileList :global(.ant-list-item) {
+  border-block-end: 0 !important;
+}
+
+.fileList :global(.ant-list-item:not(:last-child)) {
+  box-shadow: inset 0 -1px 0 #edf1f6;
 }
 
 .fileItem:hover {
@@ -148,15 +185,15 @@
 }
 
 .viewedToggle {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   border: 1px solid #98a3b3;
-  border-radius: 5px;
+  border-radius: 4px;
   background: #fff;
   cursor: pointer;
   transition: border-color 0.18s ease, background-color 0.18s ease;
