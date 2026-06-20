@@ -16,6 +16,7 @@ export function MermaidDiagram({ chart }: Props) {
   // useId 生成稳定基础 ID，再清洗为 Mermaid 可接受的安全字符。
   const reactId = React.useId();
   const diagramId = React.useMemo(() => `mermaid-${reactId.replace(/[^a-zA-Z0-9_-]/g, '')}`, [reactId]);
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [svg, setSvg] = React.useState<string>('');
   const [error, setError] = React.useState<string>('');
 
@@ -32,7 +33,13 @@ export function MermaidDiagram({ chart }: Props) {
           securityLevel: 'strict',
           theme: 'default'
         });
-        const result = await mermaid.render(diagramId, chart);
+        mermaid.setParseErrorHandler(() => {});
+        const parseResult = await mermaid.parse(chart, { suppressErrors: true });
+        if (!parseResult) {
+          throw new Error('Mermaid 图表语法无效');
+        }
+
+        const result = await mermaid.render(diagramId, chart, containerRef.current ?? undefined);
         if (!isActive) return;
         setSvg(result.svg);
         setError('');
@@ -63,8 +70,8 @@ export function MermaidDiagram({ chart }: Props) {
   }
 
   if (!svg) {
-    return <div className={styles.mermaidLoading}>正在渲染图表...</div>;
+    return <div className={styles.mermaidLoading} ref={containerRef}>正在渲染图表...</div>;
   }
 
-  return <div className={styles.mermaidDiagram} dangerouslySetInnerHTML={{ __html: svg }} />;
+  return <div className={styles.mermaidDiagram} dangerouslySetInnerHTML={{ __html: svg }} ref={containerRef} />;
 }

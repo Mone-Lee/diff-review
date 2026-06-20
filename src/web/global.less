@@ -9,6 +9,14 @@ body {
   font-family: 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', sans-serif;
 }
 
+/*
+ * Mermaid 在语法错误时可能把错误 SVG 直接注入到 body 根下；
+ * 这里只兜底隐藏这类漂移节点，避免影响组件内正常图表渲染。
+ */
+body > div[id^='dmermaid-'] {
+  display: none !important;
+}
+
 *,
 *::before,
 *::after {
