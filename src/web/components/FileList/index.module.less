@@ -53,6 +53,10 @@
   background: rgba(47, 111, 237, 0.1);
 }
 
+.fileItemViewed {
+  opacity: 0.88;
+}
+
 .fileTree {
   padding: 2px 0 8px;
 }
@@ -143,6 +147,52 @@
   min-width: 0;
 }
 
+.viewedToggle {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #98a3b3;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.viewedToggle:hover {
+  border-color: #2f8f46;
+}
+
+.viewedToggleActive {
+  border-color: #2f8f46;
+  background: #5ead68;
+}
+
+.viewedToggleBox {
+  width: 10px;
+  height: 6px;
+  display: inline-block;
+  border-left: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  transform: rotate(-45deg) translateY(-1px);
+  transition: border-color 0.18s ease;
+}
+
+.viewedToggle:not(.viewedToggleActive) .viewedToggleBox {
+  width: 0;
+  height: 0;
+  border: 0;
+  transform: none;
+}
+
+.viewedToggleActive .viewedToggleBox {
+  border-left-color: #fff;
+  border-bottom-color: #fff;
+}
+
 .fileMeta :global(.ant-tag) {
   flex-shrink: 0;
 }
@@ -155,6 +205,10 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   font-size: 12px !important;
+}
+
+.fileNameViewed {
+  color: #94a3b8 !important;
 }
 
 .fileStats {

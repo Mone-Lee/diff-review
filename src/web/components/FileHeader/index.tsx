@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { Button, Card, Tag, Tooltip, Typography, message } from 'antd';
-import { MessageOutlined, CopyOutlined, ArrowsAltOutlined, ShrinkOutlined } from '@ant-design/icons';
+import { CheckOutlined, CopyOutlined, ArrowsAltOutlined, MessageOutlined, ShrinkOutlined } from '@ant-design/icons';
 import type { DiffFile, ReviewThread } from '../../../shared/types';
 import { CommentComposer } from '../CommentComposer';
 import { InlineThreadGroup } from '../InlineThreadGroup';
@@ -13,17 +13,21 @@ import styles from './index.module.less';
 type Props = {
   file: DiffFile;
   threads: ReviewThread[];
+  isViewed: boolean;
   showToggleAllLines: boolean;
   hasExpandedContext: boolean;
   onToggleAllLines: (filePath: string) => void;
+  onToggleViewed: (filePath: string) => void;
 };
 
 export function FileHeader({
   file,
   threads,
+  isViewed,
   showToggleAllLines,
   hasExpandedContext,
-  onToggleAllLines
+  onToggleAllLines,
+  onToggleViewed
 }: Props) {
   const { copyPrompt, createThread } = useReviewActions();
   const [open, setOpen] = React.useState(false);
@@ -71,6 +75,15 @@ export function FileHeader({
           <Button className={styles.headerAction} icon={<MessageOutlined />} type={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>
             文件级评论
           </Button>
+          <Tooltip title={isViewed ? "将文件标为待审查" : '将文件标为已审查'}>
+            <Button
+              className={`${styles.headerAction} ${styles.viewedButton} ${isViewed ? styles.viewedButtonActive : ''}`}
+              icon={isViewed ? <CheckOutlined /> : <span className={styles.viewedButtonIcon} aria-hidden="true" />}
+              onClick={() => onToggleViewed(file.path)}
+            >
+              Viewed
+            </Button>
+          </Tooltip>
         </div>
       </div>
       {open ? (

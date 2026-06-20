@@ -19,55 +19,27 @@ import {
 } from './contexts/ReviewActionsContext';
 import { CodeDiffViewer } from './components/DiffViewer';
 import { FileList } from './components/FileList';
-import { compareDiffFilePaths } from './components/FileList/utils';
 import { FileHeader } from './components/FileHeader';
 import { MarkdownPreviewPanel } from './components/MarkdownPreviewPanel';
 import { ThreadList } from './components/ThreadList';
 import { isThreadOnFileSnapshot } from '../shared/thread-utils';
 import { modeLabel } from './utils';
+import {
+  areFilesEqual,
+  areStringSetsEqual,
+  areThreadsEqual,
+  isImageFilePath,
+  readViewedFilePaths,
+  sessionRepoName,
+  sortFilesByPath,
+  viewedStorageKey,
+  writeViewedFilePaths
+} from './utils/app-state';
 import styles from './styles.module.less';
 
 type DiffViewMode = 'inline' | 'split';
 type MarkdownViewMode = 'preview' | 'diff';
 type ExpandAllRequest = { filePath: string; requestId: number };
-
-function isImageFilePath(path: string) {
-  return /\.(avif|bmp|gif|heic|heif|ico|jpe?g|png|svg|tiff?|webp)$/i.test(path);
-}
-
-function sessionRepoName(session: ReviewSession | null) {
-  if (!session) return '正在加载仓库';
-  return session.repoName || session.repoRoot.split(/[\\/]/).filter(Boolean).at(-1) || session.repoRoot;
-}
-
-function areThreadsEqual(left: ReviewThread[], right: ReviewThread[]) {
-  if (left === right) return true;
-  if (left.length !== right.length) return false;
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function areFilesEqual(left: DiffFile[], right: DiffFile[]) {
-  if (left === right) return true;
-  if (left.length !== right.length) return false;
-  return left.every((file, index) => {
-    const candidate = right[index];
-    return (
-      candidate &&
-      file.path === candidate.path &&
-      file.snapshotHash === candidate.snapshotHash &&
-      file.status === candidate.status &&
-      file.additions === candidate.additions &&
-      file.deletions === candidate.deletions
-    );
-  });
-}
-
-/**
- * 左侧列表按目录层级展开顺序展示，和树视图保持一致，避免全路径字典序打散同目录入口文件。
- */
-function sortFilesByPath(files: DiffFile[]) {
-  return [...files].sort((left, right) => compareDiffFilePaths(left.path, right.path));
-}
 
 export default function App() {
   const { message } = AntApp.useApp();
@@ -81,9 +53,11 @@ export default function App() {
   const [locateTarget, setLocateTarget] = React.useState<LocateTarget | null>(null);
   const [expandAllRequest, setExpandAllRequest] = React.useState<ExpandAllRequest | null>(null);
   const [expandedContextByFile, setExpandedContextByFile] = React.useState<Record<string, boolean>>({});
+  const [viewedFilePaths, setViewedFilePaths] = React.useState<Set<string>>(() => new Set());
   const sessionIdRef = React.useRef<string | null>(null);
   const focusedThreadIdRef = React.useRef<string | null>(null);
   const displayFiles = React.useMemo(() => sortFilesByPath(files), [files]);
+  const currentViewedStorageKey = React.useMemo(() => (session ? viewedStorageKey(session) : null), [session]);
   const selectedFile = files.find((file) => file.path === selectedPath) ?? displayFiles[0];
   const currentSnapshotThreads = React.useMemo(
     () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
@@ -130,6 +104,33 @@ export default function App() {
   }, [refreshReviewState]);
 
   React.useEffect(() => {
+    if (!currentViewedStorageKey) {
+      setViewedFilePaths(new Set());
+      return;
+    }
+
+    const nextViewedFilePaths = readViewedFilePaths(currentViewedStorageKey);
+    setViewedFilePaths((current) => (areStringSetsEqual(current, nextViewedFilePaths) ? current : nextViewedFilePaths));
+  }, [currentViewedStorageKey]);
+
+  /**
+   * 当文件列表变化时，会用当前 diff 里的 files 过滤一遍，只保留这次快照里仍然存在的路径，避免旧路径残留
+   */
+  React.useEffect(() => {
+    if (!currentViewedStorageKey) return;
+
+    const validFilePaths = new Set(files.map((file) => file.path));
+    const nextViewedFilePaths = new Set([...viewedFilePaths].filter((filePath) => validFilePaths.has(filePath)));
+
+    if (!areStringSetsEqual(viewedFilePaths, nextViewedFilePaths)) {
+      setViewedFilePaths(nextViewedFilePaths);
+      return;
+    }
+
+    writeViewedFilePaths(currentViewedStorageKey, nextViewedFilePaths);
+  }, [currentViewedStorageKey, files, viewedFilePaths]);
+
+  React.useEffect(() => {
     const syncVisibleReviewState = () => {
       if (document.visibilityState === 'visible') {
         void refreshReviewState();
@@ -161,6 +162,18 @@ export default function App() {
         ...current,
         [filePath]: expanded
       };
+    });
+  }
+
+  function toggleViewedFile(filePath: string) {
+    setViewedFilePaths((current) => {
+      const next = new Set(current);
+      if (next.has(filePath)) {
+        next.delete(filePath);
+      } else {
+        next.add(filePath);
+      }
+      return next;
     });
   }
 
@@ -234,7 +247,9 @@ export default function App() {
               files={displayFiles}
               threads={currentSnapshotThreads}
               selectedPath={selectedFile?.path ?? ''}
+              viewedFilePaths={viewedFilePaths}
               onSelectFile={setSelectedPath}
+              onToggleViewed={toggleViewedFile}
             />
           </aside>
 
@@ -271,9 +286,11 @@ export default function App() {
                   <FileHeader
                     file={selectedFile}
                     threads={selectedFileThreads}
+                    isViewed={viewedFilePaths.has(selectedFile.path)}
                     showToggleAllLines={!isImageFilePath(selectedFile.path) && (!selectedFile.isMarkdown || markdownViewMode === 'diff')}
                     hasExpandedContext={selectedFile ? (expandedContextByFile[selectedFile.path] ?? false) : false}
                     onToggleAllLines={toggleAllLines}
+                    onToggleViewed={toggleViewedFile}
                   />
                   {selectedFile.isMarkdown && markdownViewMode === 'preview' ? (
                     <MarkdownPreviewPanel

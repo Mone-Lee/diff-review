@@ -1,3 +1,6 @@
+/**
+ * 文件列表组件：负责在列表/树两种视图之间切换，展示文件状态、搜索结果、未解决评论数和 viewed 标记。
+ */
 import React from 'react';
 import { Empty, Input, List, Segmented, Tag, Typography, Tooltip } from 'antd';
 import debounce from 'lodash/debounce';
@@ -21,6 +24,7 @@ import {
   FILE_PATH_MAX_LENGTH,
   FILE_PATH_SUFFIX_LENGTH,
   FILE_TREE_INDENT_PX,
+  flattenFileTree,
   type FileListViewMode,
   type FileTreeNode,
   filterFileTree,
@@ -33,10 +37,12 @@ type FileListProps = {
   files: DiffFile[];
   threads: ReviewThread[];
   selectedPath: string;
+  viewedFilePaths: Set<string>;
   onSelectFile: (filePath: string) => void;
+  onToggleViewed: (filePath: string) => void;
 };
 
-export function FileList({ files, threads, selectedPath, onSelectFile }: FileListProps) {
+export function FileList({ files, threads, selectedPath, viewedFilePaths, onSelectFile, onToggleViewed }: FileListProps) {
   const [viewMode, setViewMode] = React.useState<FileListViewMode>('list');
   const [searchText, setSearchText] = React.useState('');
   const [debouncedSearchText, setDebouncedSearchText] = React.useState('');
@@ -48,14 +54,14 @@ export function FileList({ files, threads, selectedPath, onSelectFile }: FileLis
   const normalizedSearchText = debouncedSearchText.trim().toLowerCase();
   const hasSearch = normalizedSearchText.length > 0;
   const fileTree = React.useMemo(() => buildFileTree(files), [files]);
-  const filteredFiles = React.useMemo(() => {
-    if (!hasSearch) return files;
-    return files.filter((file) => file.path.toLowerCase().includes(normalizedSearchText));
-  }, [files, hasSearch, normalizedSearchText]);
   const visibleFileTree = React.useMemo(() => {
     if (!hasSearch) return fileTree;
     return filterFileTree(fileTree, normalizedSearchText);
   }, [fileTree, hasSearch, normalizedSearchText]);
+  const visibleListFiles = React.useMemo(() => {
+    if (!visibleFileTree) return [];
+    return flattenFileTree(visibleFileTree);
+  }, [visibleFileTree]);
   const unresolvedThreadCountByFilePath = React.useMemo(() => {
     const counts = new Map<string, number>();
     files.forEach((file) => {
@@ -103,18 +109,42 @@ export function FileList({ files, threads, selectedPath, onSelectFile }: FileLis
     setDebouncedSearchText(searchText);
   }
 
+  function renderViewedToggle(file: DiffFile) {
+    const isViewed = viewedFilePaths.has(file.path);
+
+    return (
+      <Tooltip title={isViewed ? '将文件标为待审查' : '将文件标为已审查'}>
+        <button
+          type="button"
+          className={`${styles.viewedToggle} ${isViewed ? styles.viewedToggleActive : ''}`}
+          aria-label={isViewed ? `取消标记 ${file.path} 为 已审查` : `标记 ${file.path} 为 已审查`}
+          aria-pressed={isViewed}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleViewed(file.path);
+          }}
+        >
+          <span className={styles.viewedToggleBox} aria-hidden="true" />
+        </button>
+      </Tooltip>
+    );
+  }
+
   function renderFileItem(file: DiffFile, displayPath = file.path, isTreeItem = false) {
     const isActive = file.path === selectedPath;
     const threadCount = unresolvedThreadCountByFilePath.get(file.path) ?? 0;
+    const isViewed = viewedFilePaths.has(file.path);
     const className = [
       styles.fileItem,
       isActive && isTreeItem ? styles.fileItemActive : '',
-      isActive && !isTreeItem ? styles.lineItemActive : ''
+      isActive && !isTreeItem ? styles.lineItemActive : '',
+      isViewed ? styles.fileItemViewed : ''
     ].filter(Boolean).join(' ');
 
     return (
       <List.Item className={className} onClick={() => onSelectFile(file.path)}>
         <div className={styles.fileMeta}>
+          {renderViewedToggle(file)}
           {isTreeItem ? <FileOutlined className={styles.fileIcon} /> : null}
           {!isTreeItem ? (
             <span className={`${styles.fileStatusBadge} ${styles[`fileStatusBadge${formatFileStatus(file.status)}`]}`}>
@@ -122,7 +152,7 @@ export function FileList({ files, threads, selectedPath, onSelectFile }: FileLis
             </span>
           ) : null}
           <Tooltip title={isTreeItem ? undefined : file.path}>
-            <Typography.Text strong className={styles.fileName} title={file.path}>
+            <Typography.Text strong className={`${styles.fileName} ${isViewed ? styles.fileNameViewed : ''}`} title={file.path}>
               {isTreeItem ? displayPath : middleEllipsis(file.path, FILE_PATH_MAX_LENGTH, FILE_PATH_SUFFIX_LENGTH)}
             </Typography.Text>
           </Tooltip>
@@ -209,7 +239,7 @@ export function FileList({ files, threads, selectedPath, onSelectFile }: FileLis
       {viewMode === 'list' ? (
         <List
           className={styles.fileList}
-          dataSource={filteredFiles}
+          dataSource={visibleListFiles}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的文件" /> }}
           renderItem={(file) => renderFileItem(file)}
         />

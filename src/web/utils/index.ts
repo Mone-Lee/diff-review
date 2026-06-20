@@ -1,7 +1,7 @@
 /**
  * Web 层通用格式化工具：提供会话模式与评论锚点的展示文本转换。
  */
-import type { ReviewSession, ReviewThread } from '../shared/types';
+import type { ReviewSession, ReviewThread } from '../../shared/types';
 
 export function modeLabel(session: ReviewSession): string {
   if (session.mode.kind === 'revision') return `范围：${session.mode.base}..${session.mode.target}`;

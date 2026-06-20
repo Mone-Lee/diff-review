@@ -21,6 +21,7 @@
   align-items: flex-start;
   gap: 8px;
   min-width: 0;
+  flex: 1;
 }
 
 .filePathText {
@@ -57,6 +58,47 @@
   padding: 0 10px;
   border-radius: 4px;
   font-size: 12px;
+}
+
+.viewedButton {
+  padding: 0 12px;
+  border: 1px solid #c8d3e0;
+  font-weight: 600;
+  color: #475569;
+  background: #fff;
+}
+
+.viewedButton :global(.ant-btn-icon) {
+  display: inline-flex;
+  align-items: center;
+}
+
+.viewedButton:hover,
+.viewedButton:focus {
+  color: #1e293b !important;
+  border-color: #94a3b8 !important;
+  background: #fff !important;
+}
+
+.viewedButtonActive,
+.viewedButtonActive:hover,
+.viewedButtonActive:focus {
+  color: #fff !important;
+  border-color: #2f8f46 !important;
+  background: #35a34f !important;
+  box-shadow: none;
+}
+
+.viewedButtonActive .viewedButtonIcon {
+  border-color: currentColor;
+}
+
+.viewedButtonIcon {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  border: 1px solid currentColor;
+  border-radius: 4px;
 }
 
 .threadCount {
