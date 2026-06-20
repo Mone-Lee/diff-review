@@ -5,12 +5,14 @@ import express from 'express';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
+import { parseUnifiedDiff } from '../core/diff-parser';
+import { diffHash, getDiff, readDiffFileContents, readDiffImageContent, readFileForPreview } from '../core/git';
 import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type MarkdownPreview, type PromptScope, type ReviewComment, type ReviewSession, type ReviewThread } from '../shared/types';
-import { readDiffFileContents, readDiffImageContent, readFileForPreview } from '../core/git';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
 import { readComments, writeComments } from './storage';
 import { getOpenThreadStatus, getThreadStatus, isThreadOnFileSnapshot, sameAnchor } from '../shared/thread-utils';
+import { FileWatcherService } from './file-watcher-service';
 
 export type ReviewServerState = {
   session: ReviewSession;
@@ -20,6 +22,7 @@ export type ReviewServerState = {
 
 export async function startServer(state: ReviewServerState, port = 4966): Promise<string> {
   let markdownPreviews = await buildMarkdownPreviewCache(state);
+  const fileWatcher = new FileWatcherService(state.session.repoRoot);
   const app = express();
   app.use(express.json({ limit: '2mb' }));
 
@@ -52,15 +55,38 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         res.status(400).json({ error: 'Review state must target the running repository' });
         return;
       }
-      const nextReviewState: ReviewServerState = {
+      const nextReviewState = {
         session: nextState.session,
         diffFiles: nextState.diffFiles,
         webDist: state.webDist
-      };
+      } satisfies ReviewServerState;
       markdownPreviews = await buildMarkdownPreviewCache(nextReviewState);
-      state.session = nextReviewState.session;
-      state.diffFiles = nextReviewState.diffFiles;
+      applyReviewState(state, nextReviewState);
+      fileWatcher.clearPendingChanges();
       res.json({ session: state.session, files: state.diffFiles });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/watch', (_req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive'
+    });
+    res.write(': connected\n\n');
+    fileWatcher.subscribe(res);
+  });
+
+  app.post('/api/refresh', async (_req, res, next) => {
+    try {
+      const nextReviewState = await rebuildReviewState(state);
+      markdownPreviews = await buildMarkdownPreviewCache(nextReviewState);
+      applyReviewState(state, nextReviewState);
+      fileWatcher.clearPendingChanges();
+      const comments = await readComments(state.session.repoRoot);
+      res.json({ session: state.session, files: state.diffFiles, threads: comments.threads });
     } catch (error) {
       next(error);
     }
@@ -369,7 +395,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     res.status(500).json({ error: error.message });
   });
 
-  return listen(app, port);
+  return listen(app, port, fileWatcher);
 }
 
 async function buildMarkdownPreviewCache(state: ReviewServerState): Promise<Map<string, MarkdownPreview>> {
@@ -392,13 +418,44 @@ async function buildMarkdownPreviewCache(state: ReviewServerState): Promise<Map<
   return previews;
 }
 
-function listen(app: express.Express, port: number): Promise<string> {
+function applyReviewState(currentState: ReviewServerState, nextState: Pick<ReviewServerState, 'session' | 'diffFiles'>) {
+  currentState.session = nextState.session;
+  currentState.diffFiles = nextState.diffFiles;
+}
+
+/**
+ * 依据当前 session.mode 重新读取仓库 diff，并为前端生成一个新的快照会话。
+ */
+async function rebuildReviewState(state: ReviewServerState): Promise<ReviewServerState> {
+  const diff = await getDiff(state.session.mode, state.session.repoRoot);
+  const diffFiles = parseUnifiedDiff(diff);
+  const session: ReviewSession = {
+    id: crypto.randomUUID(),
+    repoName: state.session.repoName,
+    repoRoot: state.session.repoRoot,
+    mode: state.session.mode,
+    diffHash: diffHash(diff),
+    createdAt: new Date().toISOString()
+  };
+
+  return {
+    session,
+    diffFiles,
+    webDist: state.webDist
+  };
+}
+
+function listen(app: express.Express, port: number, fileWatcher: FileWatcherService): Promise<string> {
   return new Promise((resolve, reject) => {
     const server = createServer(app);
 
+    server.once('close', () => {
+      fileWatcher.dispose();
+    });
+
     server.once('error', (error: NodeJS.ErrnoException) => {
       if (error.code === 'EADDRINUSE' && port !== 0) {
-        listen(app, 0).then(resolve, reject);
+        listen(app, 0, fileWatcher).then(resolve, reject);
         return;
       }
       reject(error);

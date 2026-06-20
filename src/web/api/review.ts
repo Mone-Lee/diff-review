@@ -1,7 +1,7 @@
 /**
  * Review API 封装：负责前端与 review 会话、评论线程、评论编辑和 prompt 生成接口之间的通信。
  */
-import type { CommentAnchor, DiffFile, ReviewSession, ReviewThread } from '../../shared/types';
+import type { CommentAnchor, DiffFile, ReviewSession, ReviewThread, ReviewWatchEvent } from '../../shared/types';
 
 export type PromptScope = { type: 'thread'; threadId: string } | { type: 'file-unresolved'; filePath: string } | { type: 'all-unresolved' };
 
@@ -18,6 +18,32 @@ export async function fetchReviewState() {
   const res = await fetch('/api/review-state');
   return (await res.json()) as ReviewState;
 }
+
+/**
+ * 主动请求服务端基于当前仓库状态重算最新 diff 快照。
+ */
+export async function refreshReviewSnapshot() {
+  const res = await fetch('/api/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({ error: '刷新 diff 失败' }))) as { error?: string };
+    throw new Error(data.error ?? '刷新 diff 失败');
+  }
+
+  return (await res.json()) as ReviewState;
+}
+
+/**
+ * 建立文件监听事件流，用于通知前端出现了可刷新的仓库变更。
+ */
+export function createReviewWatchEventSource() {
+  return new EventSource('/api/watch');
+}
+
+export type { ReviewWatchEvent };
 
 /**
  * 创建新的评论线程。

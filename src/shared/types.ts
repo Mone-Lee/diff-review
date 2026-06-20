@@ -107,6 +107,10 @@ export type PromptScope =
   | { type: 'file-unresolved'; filePath: string }
   | { type: 'all-unresolved' };
 
+export type ReviewWatchEvent =
+  | { type: 'connected'; hasPendingChanges: boolean }
+  | { type: 'change'; hasPendingChanges: true; changedAt: string }
+  | { type: 'synced'; hasPendingChanges: false };
 
 export const COMMENT_STATUS_TEXT_MAP: Record<ReviewThreadStatus, string> = {
   submit: '待提交',

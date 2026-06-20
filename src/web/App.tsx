@@ -6,10 +6,11 @@ import { App as AntApp, Button, Card, Layout, Segmented, Space, Tag, Typography 
 import {
   CopyOutlined,
   EyeOutlined,
-  PartitionOutlined
+  PartitionOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import type { DiffFile, ReviewSession, ReviewThread } from '../shared/types';
-import { fetchReviewState } from './api/review';
+import { fetchReviewState, refreshReviewSnapshot, type ReviewState } from './api/review';
 import {
   type LocateTarget,
   ReviewActionsProvider,
@@ -22,6 +23,7 @@ import { FileList } from './components/FileList';
 import { FileHeader } from './components/FileHeader';
 import { ImageDiffViewer } from './components/ImageDiffViewer';
 import { MarkdownPreviewPanel } from './components/MarkdownPreviewPanel';
+import { RefreshButton } from './components/RefreshButton';
 import { ThreadList } from './components/ThreadList';
 import { isThreadOnFileSnapshot } from '../shared/thread-utils';
 import { modeLabel } from './utils';
@@ -36,6 +38,7 @@ import {
   viewedStorageKey,
   writeViewedFilePaths
 } from './utils/app-state';
+import { useFileWatch } from './hooks/useFileWatch';
 import styles from './styles.module.less';
 
 type DiffViewMode = 'inline' | 'split';
@@ -55,8 +58,10 @@ export default function App() {
   const [expandAllRequest, setExpandAllRequest] = React.useState<ExpandAllRequest | null>(null);
   const [expandedContextByFile, setExpandedContextByFile] = React.useState<Record<string, boolean>>({});
   const [viewedFilePaths, setViewedFilePaths] = React.useState<Set<string>>(() => new Set());
+  const [refreshingSnapshot, setRefreshingSnapshot] = React.useState(false);
   const sessionIdRef = React.useRef<string | null>(null);
   const focusedThreadIdRef = React.useRef<string | null>(null);
+  const { clearPendingChanges, hasPendingChanges, lastChangedAt } = useFileWatch();
   const displayFiles = React.useMemo(() => sortFilesByPath(files), [files]);
   const currentViewedStorageKey = React.useMemo(() => (session ? viewedStorageKey(session) : null), [session]);
   const selectedFile = files.find((file) => file.path === selectedPath) ?? displayFiles[0];
@@ -71,8 +76,10 @@ export default function App() {
   );
   const unresolvedThreadsCount = currentSnapshotThreads.filter((thread) => thread.status !== 'resolved').length;
 
-  const refreshReviewState = React.useCallback(async (forceSnapshot = false) => {
-    const nextState = await fetchReviewState();
+  /**
+   * 将服务端返回的 review 状态合并进当前界面，并根据快照是否切换决定是否替换文件列表。
+   */
+  const applyReviewState = React.useCallback((nextState: ReviewState, forceSnapshot = false) => {
     const nextDisplayFiles = sortFilesByPath(nextState.files);
     const sessionChanged = forceSnapshot || sessionIdRef.current !== nextState.session.id;
     sessionIdRef.current = nextState.session.id;
@@ -100,6 +107,11 @@ export default function App() {
       setFocusedThreadId(null);
     }
   }, []);
+
+  const refreshReviewState = React.useCallback(async (forceSnapshot = false) => {
+    const nextState = await fetchReviewState();
+    applyReviewState(nextState, forceSnapshot);
+  }, [applyReviewState]);
 
   React.useEffect(() => {
     void refreshReviewState(true);
@@ -201,6 +213,24 @@ export default function App() {
     void message.success('提示词已复制到剪贴板');
   }, [message]);
 
+  /**
+   * 只有用户显式点击 Refresh 时才切换到最新 diff，避免编辑过程中的自动跳屏。
+   */
+  const handleRefreshSnapshot = React.useCallback(async () => {
+    setRefreshingSnapshot(true);
+    try {
+      const nextState = await refreshReviewSnapshot();
+      applyReviewState(nextState, true);
+      clearPendingChanges();
+      void message.success('已更新到最新 diff');
+    } catch (error) {
+      const nextMessage = error instanceof Error ? error.message : '刷新 diff 失败';
+      void message.error(nextMessage);
+    } finally {
+      setRefreshingSnapshot(false);
+    }
+  }, [applyReviewState, clearPendingChanges, message]);
+
   const setFocusedThreadIdWithRef = React.useCallback<React.Dispatch<React.SetStateAction<string | null>>>((value) => {
     setFocusedThreadId((current) => {
       const nextValue = typeof value === 'function' ? value(current) : value;
@@ -236,6 +266,15 @@ export default function App() {
                 <Typography.Text className={styles.productName}>Diff 审查台</Typography.Text>
                 <Typography.Text type="secondary">{session ? modeLabel(session) : '正在加载会话'}</Typography.Text>
               </div>
+
+              <RefreshButton
+                changedAt={lastChangedAt}
+                disabled={refreshingSnapshot}
+                hasPendingChanges={hasPendingChanges}
+                loading={refreshingSnapshot}
+                onRefresh={() => void handleRefreshSnapshot()}
+                className={styles.refreshButton}
+              />
             </div>
 
             <Card className={styles.sideCard}>
@@ -270,7 +309,9 @@ export default function App() {
                       onChange={(value) => setMarkdownViewMode(value as MarkdownViewMode)}
                     />
                   </div>
-                ) : selectedFileIsImage ? null : (
+                ) : selectedFileIsImage ? (
+                  <div className={styles.topToolbar} />
+                ) : (
                   <div className={styles.topToolbar}>
                     <Segmented
                       className={styles.viewModeSwitcher}
@@ -321,7 +362,17 @@ export default function App() {
               </>
             ) : (
               <Card className={styles.emptyStateCard} bordered={false}>
-                <Typography.Text type="secondary">未发现变更，当前工作区很安静。</Typography.Text>
+                <Space direction="vertical" size={12}>
+                  <Typography.Text type="secondary">未发现变更，当前工作区很安静。</Typography.Text>
+                  <Button
+                    icon={<ReloadOutlined />}
+                    loading={refreshingSnapshot}
+                    type="primary"
+                    onClick={() => void handleRefreshSnapshot()}
+                  >
+                    Refresh
+                  </Button>
+                </Space>
               </Card>
             )}
           </section>
