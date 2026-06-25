@@ -29,6 +29,7 @@ npx skills add Mone-Lee/diff-review
 
 - 查看当前工作区 diff、staged diff、指定 revision diff。
 - 代码文件使用 GitHub 风格 unified diff。
+- 图片文件支持 diff 查看。
 - Markdown 文件支持 `Preview / Code diff` 切换；`Code diff` 当前只支持 side-by-side，不支持 inline。
 - 支持文件级评论、代码行级评论、Markdown source line 评论。
 - Markdown 评论在两种视图间会按视图能力降级展示：
