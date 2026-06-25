@@ -143,7 +143,13 @@ npx --yes local-diff-reviewer \
 
 `thread` 评论会以 `author: "agent"` 写入：如果同一锚点已经存在 thread，会作为新的 comment 追加进去；否则创建 replied thread。`reply` 会向目标 thread 追加一条 agent 回复并把状态切到 replied。为避免 agent finding 反复注入导致刷屏，同一 thread 内相同正文的 agent comment 会被视为重复并跳过。若路径不在当前 diff 中、行号无法定位或内容重复，脚本会跳过并在终端打印 warning。
 
-当 agent 收到从 UI 复制出的 `[thread:<id>]` prompt 并完成处理后，应使用 `type: "reply"` 把处理结果写回原 thread，作为 `author: "agent"` 的 comment 保留在评论流里。回复内容应简要说明已修改什么，或说明为什么没有修改。
+当 agent 收到从 UI 复制出的 `[thread:<id>]` prompt 并完成处理后，应使用 `type: "reply"` 把处理结果写回原 thread，作为 `author: "agent"` 的 comment 保留在评论流里。回复内容默认保持结论式、尽量短：
+
+- 已按评论完成修改时，优先使用 `已处理`。
+- 需要补充一点点定位信息时，可使用 `已处理：xxx`。
+- 未修改时，再简短说明原因，例如 `未处理：当前实现已覆盖该场景。`
+
+除非用户明确需要更详细的回写说明，否则不要重复整段 diff、实现细节或长篇解释。
 
 从 UI 复制出的 prompt 示例：
 

@@ -36,7 +36,7 @@ npx --yes local-diff-reviewer [args...] \
 
 After a newly started script prints a local URL, open it in the Codex browser when available. If the script reports `Diff Review refreshed`, do not open another page: the already open review page updates automatically. If browser automation is not available, report the URL.
 
-When the user gives you copied prompt text containing `[thread:<id>]`, treat it as an existing review thread. After you answer or make code/doc changes for that thread, append a concise agent reply to the same thread with `--comment '{"type":"reply","threadId":"<id>","body":"..."}'` the next time you launch or refresh the viewer. If the viewer is already running and you can reach the API, post the same reply to `/api/threads/<id>/comments` with `author: "agent"`. Do this for every handled thread unless the user explicitly asks you not to write back. The reply should say what changed or why no change was made, not repeat the full diff.
+When the user gives you copied prompt text containing `[thread:<id>]`, treat it as an existing review thread. After you answer or make code/doc changes for that thread, append a concise agent reply to the same thread with `--comment '{"type":"reply","threadId":"<id>","body":"..."}'` the next time you launch or refresh the viewer. If the viewer is already running and you can reach the API, post the same reply to `/api/threads/<id>/comments` with `author: "agent"`. Do this for every handled thread unless the user explicitly asks you not to write back. Prefer conclusion-first, minimal replies such as `已处理`, `已处理：xxx`, or `未处理：原因...`; do not repeat the full diff or long implementation details unless the user explicitly wants that detail.
 
 ## Review Scope
 

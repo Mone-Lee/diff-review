@@ -254,6 +254,9 @@ item.fileSnapshotHash === file.snapshotHash && sameAnchor(item.anchor, thread.an
 快照。这样刷新到新 diff 后，agent 仍可以把处理结果回复到用户最初提出问题的
 历史 thread 上。
 
+默认建议 agent 使用结论式短回复，例如 `已处理`、`已处理：xxx`、`未处理：原因...`，
+避免在评论流里重复整段 diff 或冗长实现说明。
+
 ### 状态变更和删除
 
 回复、解决、重新打开、删除 thread，以及可编辑状态下的评论编辑/删除，均按
