@@ -2,7 +2,7 @@
  * Agent 评论导入工具：负责解析 `--comment` 输入、校验定位信息，并把外部评论安全并入当前 review 线程存储。
  */
 import type { CommentAnchor, DiffFile, ReviewThread } from '../shared/types';
-import { readComments, writeComments } from '../server/storage';
+import { updateComments } from '../server/storage';
 import { getOpenThreadStatus, sameAnchor } from '../shared/thread-utils';
 
 type ImportPosition =
@@ -33,40 +33,39 @@ export async function importAgentComments(repoRoot: string, diffHash: string, di
   const result: ImportCommentsResult = { imported: 0, skipped: [] };
   if (rawComments.length === 0) return result;
 
-  const store = await readComments(repoRoot);
-  for (let index = 0; index < rawComments.length; index += 1) {
-    const label = `--comment #${index + 1}`;
-    const parsed = parseImportComment(rawComments[index], label, result);
-    if (!parsed) continue;
+  await updateComments(repoRoot, (store) => {
+    for (let index = 0; index < rawComments.length; index += 1) {
+      const label = `--comment #${index + 1}`;
+      const parsed = parseImportComment(rawComments[index], label, result);
+      if (!parsed) continue;
 
-    if (parsed.type === 'reply') {
-      if (appendAgentReply(store.threads, parsed, result, label)) {
-        result.imported += 1;
+      if (parsed.type === 'reply') {
+        if (appendAgentReply(store.threads, parsed, result, label)) {
+          result.imported += 1;
+        }
+        continue;
       }
-      continue;
+
+      const thread = buildAgentThread(parsed, diffHash, diffFiles, result, label);
+      if (!thread) continue;
+      const existingThread = store.threads.find((item) => item.fileSnapshotHash === thread.fileSnapshotHash && sameAnchor(item.anchor, thread.anchor));
+      if (hasDuplicateAgentComment(store.threads, thread)) {
+        result.skipped.push(`${label}: duplicate agent comment skipped`);
+        continue;
+      }
+
+      if (existingThread) {
+        existingThread.comments.push(thread.comments[0]);
+        existingThread.status = getOpenThreadStatus(existingThread);
+        existingThread.updatedAt = thread.updatedAt;
+      } else {
+        store.threads.push(thread);
+      }
+      result.imported += 1;
     }
 
-    const thread = buildAgentThread(parsed, diffHash, diffFiles, result, label);
-    if (!thread) continue;
-    const existingThread = store.threads.find((item) => item.fileSnapshotHash === thread.fileSnapshotHash && sameAnchor(item.anchor, thread.anchor));
-    if (hasDuplicateAgentComment(store.threads, thread)) {
-      result.skipped.push(`${label}: duplicate agent comment skipped`);
-      continue;
-    }
-
-    if (existingThread) {
-      existingThread.comments.push(thread.comments[0]);
-      existingThread.status = getOpenThreadStatus(existingThread);
-      existingThread.updatedAt = thread.updatedAt;
-    } else {
-      store.threads.push(thread);
-    }
-    result.imported += 1;
-  }
-
-  if (result.imported > 0) {
-    await writeComments(repoRoot, store);
-  }
+    return { changed: result.imported > 0, result: undefined };
+  });
   return result;
 }
 

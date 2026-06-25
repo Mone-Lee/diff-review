@@ -155,6 +155,13 @@ return join(commentLogsDir(), `${repoName}-${repoHash}.comments.json`);
 
 因此，同一个仓库的不同 review session 会读取和写入同一份评论记录。
 
+为了避免同一仓库的多个评论修改请求并发执行时互相覆盖，评论更新会按
+`repoRoot` 在单个服务进程内串行化执行。也就是说，一次评论变更会在同一个
+队列里完成 `read -> modify -> write`，而不是只保证最后一次落盘是原子的。
+
+落盘仍使用“临时文件 + rename”替换主文件，这样既能避免 JSON 文件被写坏，也能
+减少并发写入留下半截内容的风险。
+
 ### 运行时记录
 
 运行时记录位于 `src/cli/runtime-registry.ts`。它保存 PID、端口和 Vite 子进程等

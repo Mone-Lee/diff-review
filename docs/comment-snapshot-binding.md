@@ -267,6 +267,11 @@ item.fileSnapshotHash === file.snapshotHash && sameAnchor(item.anchor, thread.an
 评论数据按 `repoRoot` 持久化到一份 JSON 文件，而不是按快照分别保存。这样
 重新执行 `/diff-review` 后仍能读到旧评论。
 
+为避免同一仓库的多个评论写请求并发执行时互相覆盖，服务端会按 `repoRoot`
+把评论修改串行化；一次修改会在同一个队列里完成 `read -> modify -> write`。
+最终落盘仍通过临时文件写入后 `rename` 替换主文件，降低 JSON 被写坏或留下
+脏尾巴的概率。
+
 读取存储时，`normalizeStore()` 使用如下键合并同一讨论位置的数据：
 
 ```ts

@@ -10,7 +10,7 @@ import { diffHash, getDiff, readDiffFileContents, readDiffImageContent, readFile
 import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type MarkdownPreview, type PromptScope, type ReviewComment, type ReviewSession, type ReviewThread } from '../shared/types';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
-import { readComments, writeComments } from './storage';
+import { readComments, updateComments } from './storage';
 import { getOpenThreadStatus, getThreadStatus, isThreadOnFileSnapshot, sameAnchor } from '../shared/thread-utils';
 import { FileWatcherService } from './file-watcher-service';
 
@@ -200,8 +200,6 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         res.status(400).json({ error: 'Comment file is not present in the current diff' });
         return;
       }
-      const store = await readComments(state.session.repoRoot);
-      const existingThread = store.threads.find((thread) => thread.fileSnapshotHash === file.snapshotHash && sameAnchor(thread.anchor, body.anchor));
       const comment: ReviewComment = {
         id: crypto.randomUUID(),
         body: commentBody,
@@ -209,28 +207,29 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         createdAt: now,
         updatedAt: now
       };
-      if (existingThread) {
-        existingThread.comments.push(comment);
-        existingThread.status = getOpenThreadStatus(existingThread);
-        existingThread.updatedAt = now;
-        await writeComments(state.session.repoRoot, store);
-        res.status(201).json(existingThread);
-        return;
-      }
+      const thread = await updateComments(state.session.repoRoot, (store) => {
+        const existingThread = store.threads.find((item) => item.fileSnapshotHash === file.snapshotHash && sameAnchor(item.anchor, body.anchor));
+        if (existingThread) {
+          existingThread.comments.push(comment);
+          existingThread.status = getOpenThreadStatus(existingThread);
+          existingThread.updatedAt = now;
+          return { changed: true, result: existingThread };
+        }
 
-      const thread: ReviewThread = {
-        id: crypto.randomUUID(),
-        filePath: body.filePath,
-        anchor: body.anchor,
-        diffHash: state.session.diffHash,
-        fileSnapshotHash: file.snapshotHash,
-        status: 'submit',
-        comments: [comment],
-        createdAt: now,
-        updatedAt: now
-      };
-      store.threads.push(thread);
-      await writeComments(state.session.repoRoot, store);
+        const nextThread: ReviewThread = {
+          id: crypto.randomUUID(),
+          filePath: body.filePath,
+          anchor: body.anchor,
+          diffHash: state.session.diffHash,
+          fileSnapshotHash: file.snapshotHash,
+          status: 'submit',
+          comments: [comment],
+          createdAt: now,
+          updatedAt: now
+        };
+        store.threads.push(nextThread);
+        return { changed: true, result: nextThread };
+      });
       res.status(201).json(thread);
     } catch (error) {
       next(error);
@@ -240,13 +239,6 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.post('/api/threads/:id/comments', async (req, res, next) => {
     try {
       const now = new Date().toISOString();
-      const store = await readComments(state.session.repoRoot);
-      const thread = store.threads.find((item) => item.id === req.params.id);
-      if (!thread) {
-        res.status(404).json({ error: 'Thread not found' });
-        return;
-      }
-
       const body = req.body as { body?: string; author?: 'user' | 'agent' };
       const commentBody = body.body?.trim();
       if (!commentBody) {
@@ -261,42 +253,61 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         createdAt: now,
         updatedAt: now
       };
-      thread.comments.push(comment);
-      if (thread.status !== 'resolved') {
-        thread.status = getOpenThreadStatus(thread);
-      }
-      thread.updatedAt = now;
-      await writeComments(state.session.repoRoot, store);
-      res.status(201).json(comment);
+      const commentResult = await updateComments(state.session.repoRoot, (store) => {
+        const thread = store.threads.find((item) => item.id === req.params.id);
+        if (!thread) {
+          throw new Error('THREAD_NOT_FOUND');
+        }
+        thread.comments.push(comment);
+        if (thread.status !== 'resolved') {
+          thread.status = getOpenThreadStatus(thread);
+        }
+        thread.updatedAt = now;
+        return { changed: true, result: comment };
+      });
+      res.status(201).json(commentResult);
     } catch (error) {
+      if (error instanceof Error && error.message === 'THREAD_NOT_FOUND') {
+        res.status(404).json({ error: 'Thread not found' });
+        return;
+      }
       next(error);
     }
   });
 
   app.patch('/api/threads/:id', async (req, res, next) => {
     try {
-      const store = await readComments(state.session.repoRoot);
-      const thread = store.threads.find((item) => item.id === req.params.id);
-      if (!thread) {
+      const thread = await updateComments(state.session.repoRoot, (store) => {
+        const currentThread = store.threads.find((item) => item.id === req.params.id);
+        if (!currentThread) {
+          throw new Error('THREAD_NOT_FOUND');
+        }
+        let changed = false;
+        if (req.body.status === 'resolved' || req.body.status === 'replied' || req.body.status === 'submit') {
+          currentThread.status = req.body.status === 'resolved' ? 'resolved' : getOpenThreadStatus(currentThread);
+          currentThread.updatedAt = new Date().toISOString();
+          changed = true;
+        }
+        return { changed, result: currentThread };
+      });
+      res.json(thread);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'THREAD_NOT_FOUND') {
         res.status(404).json({ error: 'Thread not found' });
         return;
       }
-      if (req.body.status === 'resolved' || req.body.status === 'replied' || req.body.status === 'submit') {
-        thread.status = req.body.status === 'resolved' ? 'resolved' : getOpenThreadStatus(thread);
-        thread.updatedAt = new Date().toISOString();
-      }
-      await writeComments(state.session.repoRoot, store);
-      res.json(thread);
-    } catch (error) {
       next(error);
     }
   });
 
   app.delete('/api/threads/:id', async (req, res, next) => {
     try {
-      const store = await readComments(state.session.repoRoot);
-      store.threads = store.threads.filter((item) => item.id !== req.params.id);
-      await writeComments(state.session.repoRoot, store);
+      await updateComments(state.session.repoRoot, (store) => {
+        const nextThreads = store.threads.filter((item) => item.id !== req.params.id);
+        const changed = nextThreads.length !== store.threads.length;
+        store.threads = nextThreads;
+        return { changed, result: undefined };
+      });
       res.status(204).end();
     } catch (error) {
       next(error);
@@ -306,36 +317,49 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.patch('/api/threads/:id/comments/:commentId', async (req, res, next) => {
     try {
       const now = new Date().toISOString();
-      const store = await readComments(state.session.repoRoot);
-      const thread = store.threads.find((item) => item.id === req.params.id);
-      if (!thread) {
-        res.status(404).json({ error: 'Thread not found' });
-        return;
-      }
-      if (getThreadStatus(thread) !== 'submit') {
-        res.status(400).json({ error: 'Only submitted comments can be edited' });
-        return;
-      }
-      const comment = thread.comments.find((item) => item.id === req.params.commentId);
-      if (!comment) {
-        res.status(404).json({ error: 'Comment not found' });
-        return;
-      }
-      if (comment.author === 'agent') {
-        res.status(400).json({ error: 'Agent comments are read-only' });
-        return;
-      }
       const nextBody = String(req.body?.body ?? '').trim();
       if (!nextBody) {
         res.status(400).json({ error: 'Comment body is required' });
         return;
       }
-      comment.body = nextBody;
-      comment.updatedAt = now;
-      thread.updatedAt = now;
-      await writeComments(state.session.repoRoot, store);
+      const comment = await updateComments(state.session.repoRoot, (store) => {
+        const thread = store.threads.find((item) => item.id === req.params.id);
+        if (!thread) {
+          throw new Error('THREAD_NOT_FOUND');
+        }
+        if (getThreadStatus(thread) !== 'submit') {
+          throw new Error('THREAD_NOT_EDITABLE');
+        }
+        const currentComment = thread.comments.find((item) => item.id === req.params.commentId);
+        if (!currentComment) {
+          throw new Error('COMMENT_NOT_FOUND');
+        }
+        if (currentComment.author === 'agent') {
+          throw new Error('AGENT_COMMENT_READ_ONLY');
+        }
+        currentComment.body = nextBody;
+        currentComment.updatedAt = now;
+        thread.updatedAt = now;
+        return { changed: true, result: currentComment };
+      });
       res.json(comment);
     } catch (error) {
+      if (error instanceof Error && error.message === 'THREAD_NOT_FOUND') {
+        res.status(404).json({ error: 'Thread not found' });
+        return;
+      }
+      if (error instanceof Error && error.message === 'THREAD_NOT_EDITABLE') {
+        res.status(400).json({ error: 'Only submitted comments can be edited' });
+        return;
+      }
+      if (error instanceof Error && error.message === 'COMMENT_NOT_FOUND') {
+        res.status(404).json({ error: 'Comment not found' });
+        return;
+      }
+      if (error instanceof Error && error.message === 'AGENT_COMMENT_READ_ONLY') {
+        res.status(400).json({ error: 'Agent comments are read-only' });
+        return;
+      }
       next(error);
     }
   });
@@ -343,31 +367,44 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.delete('/api/threads/:id/comments/:commentId', async (req, res, next) => {
     try {
       const now = new Date().toISOString();
-      const store = await readComments(state.session.repoRoot);
-      const thread = store.threads.find((item) => item.id === req.params.id);
-      if (!thread) {
+      await updateComments(state.session.repoRoot, (store) => {
+        const thread = store.threads.find((item) => item.id === req.params.id);
+        if (!thread) {
+          throw new Error('THREAD_NOT_FOUND');
+        }
+        if (getThreadStatus(thread) !== 'submit') {
+          throw new Error('THREAD_NOT_EDITABLE');
+        }
+        const comment = thread.comments.find((item) => item.id === req.params.commentId);
+        if (!comment) {
+          throw new Error('COMMENT_NOT_FOUND');
+        }
+        if (comment.author === 'agent') {
+          throw new Error('AGENT_COMMENT_READ_ONLY');
+        }
+        thread.comments = thread.comments.filter((item) => item.id !== req.params.commentId);
+        thread.updatedAt = now;
+        store.threads = store.threads.filter((item) => item.id !== thread.id || thread.comments.length > 0);
+        return { changed: true, result: undefined };
+      });
+      res.status(204).end();
+    } catch (error) {
+      if (error instanceof Error && error.message === 'THREAD_NOT_FOUND') {
         res.status(404).json({ error: 'Thread not found' });
         return;
       }
-      if (getThreadStatus(thread) !== 'submit') {
+      if (error instanceof Error && error.message === 'THREAD_NOT_EDITABLE') {
         res.status(400).json({ error: 'Only submitted comments can be deleted' });
         return;
       }
-      const comment = thread.comments.find((item) => item.id === req.params.commentId);
-      if (!comment) {
+      if (error instanceof Error && error.message === 'COMMENT_NOT_FOUND') {
         res.status(404).json({ error: 'Comment not found' });
         return;
       }
-      if (comment.author === 'agent') {
+      if (error instanceof Error && error.message === 'AGENT_COMMENT_READ_ONLY') {
         res.status(400).json({ error: 'Agent comments are read-only' });
         return;
       }
-      thread.comments = thread.comments.filter((item) => item.id !== req.params.commentId);
-      thread.updatedAt = now;
-      store.threads = store.threads.filter((item) => item.id !== thread.id || thread.comments.length > 0);
-      await writeComments(state.session.repoRoot, store);
-      res.status(204).end();
-    } catch (error) {
       next(error);
     }
   });

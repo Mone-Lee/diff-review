@@ -12,26 +12,64 @@ export type CommentStore = {
   threads: ReviewThread[];
 };
 
+export type CommentStoreUpdateResult<T> = {
+  changed: boolean;
+  result: T;
+};
+
+const commentWriteQueues = new Map<string, Promise<void>>();
+
 export async function readComments(repoRoot: string): Promise<CommentStore> {
   return readCommentStore(repoRoot);
 }
 
-export async function attachLegacyComments(repoRoot: string, diffHash: string, diffFiles: DiffFile[]): Promise<void> {
-  const store = await readCommentStore(repoRoot);
-  let changed = false;
-  for (const thread of store.threads) {
-    if (!thread.diffHash) {
-      thread.diffHash = diffHash;
-      changed = true;
-    }
-    const file = diffFiles.find((item) => item.path === thread.filePath);
-    // 旧数据没有文件快照：同一整体快照可直接迁移；待处理评论仍挂回可见文件，避免升级后无处处理。
-    if (!thread.fileSnapshotHash && file && (thread.diffHash === diffHash || getThreadStatus(thread) === 'submit')) {
-      thread.fileSnapshotHash = file.snapshotHash;
-      changed = true;
+/**
+ * 同一 repo 的评论修改需要串行执行，避免多个 read-modify-write 并发时互相覆盖。
+ */
+export async function updateComments<T>(
+  repoRoot: string,
+  updater: (store: CommentStore) => Promise<CommentStoreUpdateResult<T>> | CommentStoreUpdateResult<T>
+): Promise<T> {
+  const previousQueue = commentWriteQueues.get(repoRoot) ?? Promise.resolve();
+  const queuedWrite = previousQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const store = await readCommentStore(repoRoot);
+      const { changed, result } = await updater(store);
+      if (changed) {
+        await writeComments(repoRoot, store);
+      }
+      return result;
+    });
+  const queueTail = queuedWrite.then(() => undefined, () => undefined);
+  commentWriteQueues.set(repoRoot, queueTail);
+
+  try {
+    return await queuedWrite;
+  } finally {
+    if (commentWriteQueues.get(repoRoot) === queueTail) {
+      commentWriteQueues.delete(repoRoot);
     }
   }
-  if (changed) await writeComments(repoRoot, store);
+}
+
+export async function attachLegacyComments(repoRoot: string, diffHash: string, diffFiles: DiffFile[]): Promise<void> {
+  await updateComments(repoRoot, (store) => {
+    let changed = false;
+    for (const thread of store.threads) {
+      if (!thread.diffHash) {
+        thread.diffHash = diffHash;
+        changed = true;
+      }
+      const file = diffFiles.find((item) => item.path === thread.filePath);
+      // 旧数据没有文件快照：同一整体快照可直接迁移；待处理评论仍挂回可见文件，避免升级后无处处理。
+      if (!thread.fileSnapshotHash && file && (thread.diffHash === diffHash || getThreadStatus(thread) === 'submit')) {
+        thread.fileSnapshotHash = file.snapshotHash;
+        changed = true;
+      }
+    }
+    return { changed, result: undefined };
+  });
 }
 
 async function readCommentStore(repoRoot: string): Promise<CommentStore> {
