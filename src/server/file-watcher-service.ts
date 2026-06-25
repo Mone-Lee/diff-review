@@ -6,6 +6,8 @@ import { watch, type FSWatcher } from 'node:fs';
 import type { Response } from 'express';
 import type { ReviewWatchEvent } from '../shared/types';
 
+const IGNORED_REPO_PATH_PREFIXES = ['node_modules', 'dist'];
+
 export class FileWatcherService {
   private readonly clients = new Set<Response>();
   private readonly watchers: FSWatcher[] = [];
@@ -89,7 +91,10 @@ export class FileWatcherService {
 
   private tryWatch(path: string, options?: { recursive?: boolean }) {
     try {
-      const watcher = watch(path, options ?? {}, () => {
+      const watcher = watch(path, options ?? {}, (_eventType, filename) => {
+        if (path === this.repoRoot && this.shouldIgnoreRepoChange(filename)) {
+          return;
+        }
         this.handleChange();
       });
       this.watchers.push(watcher);
@@ -103,6 +108,15 @@ export class FileWatcherService {
     this.clients.forEach((client) => {
       this.send(client, event);
     });
+  }
+
+  /**
+   * 过滤 dev server 产物目录，避免 npm run dev 之类的启动副作用误触发 Refresh。
+   */
+  private shouldIgnoreRepoChange(filename: string | Buffer | null): boolean {
+    if (!filename) return false;
+    const normalizedPath = String(filename).replaceAll('\\', '/').replace(/^\.\//, '');
+    return IGNORED_REPO_PATH_PREFIXES.some((prefix) => normalizedPath === prefix || normalizedPath.startsWith(`${prefix}/`));
   }
 
   private send(res: Response, event: ReviewWatchEvent) {
