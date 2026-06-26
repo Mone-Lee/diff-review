@@ -16,7 +16,7 @@ Use this skill when the user asks for `/diff-review`, wants to inspect current w
 - `/diff-review staged`: review staged diff.
 - `/diff-review <base> <target>`: review diff between two Git revisions.
 - `/diff-review --new-session`: preserve the current snapshot and open a separate review session.
-- `/diff-review stop`: stop all review runtimes created for the current workspace repository.
+- `/diff-review stop`: force close all review runtimes created for the current workspace repository.
 
 Do not ask the user to run a shell CLI manually. Determine the target workspace/repository from the user's active environment context, then run the package command with that repository as the command working directory:
 
@@ -25,6 +25,8 @@ npx --yes local-diff-reviewer [args...]
 ```
 
 Set the shell/tool `cwd` to `/absolute/path/to/target/workspace` before running the command. Do not pass `--repo` from this skill; older published CLI versions treat unknown args as revision args. Do not use the skill package directory or this skill's install directory as the review target unless that is the workspace the user asked to review.
+
+When the user asks to `stop`, `关闭`, `结束`, or otherwise shut down Diff Review for the current project, execute `/diff-review stop` immediately. Do not only explain the command or leave the existing runtime running.
 
 When you have concrete review findings or answers to existing review comments, preload them with one `--comment` JSON argument per comment before launching the viewer:
 

@@ -179,8 +179,8 @@ function logImportResult(comments: string[], result: Awaited<ReturnType<typeof i
 async function stopCommand(repo: string | undefined): Promise<void> {
   const repoRoot = await getRepoRoot(repo ?? process.cwd());
   const hasRecord = await hasRuntimeRecord(repoRoot);
-  const { stopped, stale } = await stopRecordedRuntimes(repoRoot);
-  const total = stopped.length + stale.length;
+  const { stopped, forced, stale } = await stopRecordedRuntimes(repoRoot);
+  const total = stopped.length + forced.length + stale.length;
   if (total === 0) {
     if (hasRecord) {
       console.log('No running review process found for this repo.');
@@ -195,6 +195,14 @@ async function stopCommand(repo: string | undefined): Promise<void> {
     console.log(
       `- pid=${entry.pid} vitePid=${entry.vitePid ?? '-'} apiPort=${entry.apiPort} vitePort=${entry.vitePort ?? '-'} vite=${entry.usesVite ? 'yes' : 'no'} startedAt=${entry.startedAt}`
     );
+  }
+  if (forced.length > 0) {
+    console.log(`Force killed review runtimes: ${forced.length}`);
+    for (const entry of forced) {
+      console.log(
+        `- pid=${entry.pid} vitePid=${entry.vitePid ?? '-'} apiPort=${entry.apiPort} vitePort=${entry.vitePort ?? '-'} vite=${entry.usesVite ? 'yes' : 'no'} startedAt=${entry.startedAt}`
+      );
+    }
   }
   if (stale.length > 0) {
     console.log(`Skipped stale records: ${stale.length}`);

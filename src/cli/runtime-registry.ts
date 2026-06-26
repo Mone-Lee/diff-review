@@ -2,7 +2,7 @@
  * 整体流程说明
  * 1. 启动 review 时，`recordRuntime` 会把当前仓库对应的运行信息写入本地注册表文件。
  * 2. 写入前会过滤掉已失效的旧 PID，避免注册表不断积累脏数据。
- * 3. 执行 `stop` 时，`stopRecordedRuntimes` 读取当前仓库注册表并逐条尝试发送 SIGTERM。
+ * 3. 执行 `stop` 时，`stopRecordedRuntimes` 会先发送 SIGTERM，超时未退出再升级为 SIGKILL。
  * 4. 若记录中存在 `vitePid`，会与主进程一并回收，覆盖 `--dev` 场景的端口占用。
  * 5. stop 执行后会清空该仓库注册表；无法终止或已失效的记录会归入 stale 结果用于提示。
  * 6. 读取注册表时遇到文件缺失或损坏，按空记录处理，确保主流程可继续执行。
@@ -31,6 +31,10 @@ type RuntimeStore = {
   entries: RuntimeEntry[];
 };
 
+const TERM_WAIT_MS = 800;
+const KILL_WAIT_MS = 1200;
+const POLL_INTERVAL_MS = 100;
+
 export async function recordRuntime(entry: RuntimeEntry): Promise<void> {
   const path = runtimePath(entry.repoRoot);
   const store = await readRuntime(path);
@@ -46,10 +50,15 @@ export async function getLiveRuntimes(repoRoot: string): Promise<RuntimeEntry[]>
   return store.entries.filter((entry) => isPidAlive(entry.pid)).sort((left, right) => right.startedAt.localeCompare(left.startedAt));
 }
 
-export async function stopRecordedRuntimes(repoRoot: string): Promise<{ stopped: RuntimeEntry[]; stale: RuntimeEntry[] }> {
+export async function stopRecordedRuntimes(repoRoot: string): Promise<{
+  stopped: RuntimeEntry[];
+  forced: RuntimeEntry[];
+  stale: RuntimeEntry[];
+}> {
   const path = runtimePath(repoRoot);
   const store = await readRuntime(path);
   const stopped: RuntimeEntry[] = [];
+  const forced: RuntimeEntry[] = [];
   const stale: RuntimeEntry[] = [];
 
   for (const entry of store.entries) {
@@ -59,18 +68,23 @@ export async function stopRecordedRuntimes(repoRoot: string): Promise<{ stopped:
       stale.push(entry);
       continue;
     }
-    try {
-      if (parentAlive) process.kill(entry.pid, 'SIGTERM');
-      if (viteAlive) process.kill(entry.vitePid as number, 'SIGTERM');
+    const termination = await terminateRuntime(entry);
+    if (termination.status === 'stopped') {
       stopped.push(entry);
-    } catch {
+      continue;
+    }
+    if (termination.status === 'forced') {
+      forced.push(entry);
+      continue;
+    }
+    if (termination.status === 'stale') {
       stale.push(entry);
     }
   }
 
   // 每次 stop 后重置注册表，避免陈旧记录长期堆积。
   await writeRuntime(path, { entries: [] });
-  return { stopped, stale };
+  return { stopped, forced, stale };
 }
 
 function runtimePath(repoRoot: string): string {
@@ -127,6 +141,61 @@ function isPidAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+// stop 会优先给子进程和主进程发送 SIGTERM；若宽限期后仍存活，再升级为 SIGKILL。
+async function terminateRuntime(entry: RuntimeEntry): Promise<{ status: 'stopped' | 'forced' | 'stale' }> {
+  const pids = collectTargetPids(entry);
+  if (pids.length === 0) return { status: 'stale' };
+
+  const terminated = await terminatePids(pids, 'SIGTERM', TERM_WAIT_MS);
+  if (terminated) return { status: 'stopped' };
+
+  const forced = await terminatePids(pids, 'SIGKILL', KILL_WAIT_MS);
+  return forced ? { status: 'forced' } : { status: 'stale' };
+}
+
+function collectTargetPids(entry: RuntimeEntry): number[] {
+  const pids: number[] = [];
+  if (typeof entry.vitePid === 'number' && isPidAlive(entry.vitePid)) pids.push(entry.vitePid);
+  if (isPidAlive(entry.pid)) pids.push(entry.pid);
+  return pids;
+}
+
+async function terminatePids(
+  pids: number[],
+  signal: NodeJS.Signals,
+  waitMs: number
+): Promise<boolean> {
+  let signaled = false;
+
+  for (const pid of pids) {
+    if (!isPidAlive(pid)) continue;
+    try {
+      process.kill(pid, signal);
+      signaled = true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (!signaled) return true;
+  return waitForExit(pids, waitMs);
+}
+
+async function waitForExit(pids: number[], waitMs: number): Promise<boolean> {
+  const deadline = Date.now() + waitMs;
+
+  while (Date.now() < deadline) {
+    if (pids.every((pid) => !isPidAlive(pid))) return true;
+    await sleep(POLL_INTERVAL_MS);
+  }
+
+  return pids.every((pid) => !isPidAlive(pid));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function hasRuntimeRecord(repoRoot: string): Promise<boolean> {
