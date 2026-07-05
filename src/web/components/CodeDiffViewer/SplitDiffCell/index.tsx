@@ -19,6 +19,7 @@ type Props = {
   activeLine: string | null;
   setActiveLine: React.Dispatch<React.SetStateAction<string | null>>;
   threads: ReviewThread[];
+  style?: React.CSSProperties;
 };
 
 export function SplitDiffCell({
@@ -28,7 +29,8 @@ export function SplitDiffCell({
   fileStatus,
   activeLine,
   setActiveLine,
-  threads
+  threads,
+  style
 }: Props) {
   const { createThread } = useReviewActions();
   const cellThreads = cell.lineNumber
@@ -51,6 +53,7 @@ export function SplitDiffCell({
   return (
     <div
       className={className}
+      style={style}
       data-review-anchor={cell.lineNumber ? `${cell.side}:${cell.lineNumber}` : undefined}
       data-split-copy-side={cell.side}
     >

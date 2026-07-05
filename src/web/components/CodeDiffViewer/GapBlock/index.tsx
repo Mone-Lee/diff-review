@@ -48,8 +48,8 @@ export function GapBlock({
   return (
     <React.Fragment>
       {leadingHunkHeader}
-      {viewMode === 'inline'
-        ? visibleRows.map(({ key, line }, index) => (
+      {viewMode === 'inline' ? (
+        visibleRows.map(({ key, line }, index) => (
             <InlineDiffLine
               key={`${key}-${index}`}
               filePath={filePath}
@@ -62,9 +62,12 @@ export function GapBlock({
               threads={threads}
             />
           ))
-        : visibleRows.map(({ key, line }) => (
-            <div className={styles.splitRow} key={key}>
+      ) : (
+        <div className={styles.splitTable}>
+          {visibleRows.map(({ key, line }, rowIndex) => (
               <SplitDiffCell
+                key={`${key}-old`}
+                style={{ gridColumn: 1, gridRow: rowIndex + 1 }}
                 cell={
                   line.oldLineNumber
                     ? { lineNumber: line.oldLineNumber, content: line.content, type: 'context', side: 'old' }
@@ -77,7 +80,11 @@ export function GapBlock({
                 setActiveLine={setActiveLine}
                 threads={threads}
               />
+          ))}
+          {visibleRows.map(({ key, line }, rowIndex) => (
               <SplitDiffCell
+                key={`${key}-new`}
+                style={{ gridColumn: 2, gridRow: rowIndex + 1 }}
                 cell={
                   line.newLineNumber
                     ? { lineNumber: line.newLineNumber, content: line.content, type: 'context', side: 'new' }
@@ -90,8 +97,9 @@ export function GapBlock({
                 setActiveLine={setActiveLine}
                 threads={threads}
               />
-            </div>
           ))}
+        </div>
+      )}
     </React.Fragment>
   );
 }

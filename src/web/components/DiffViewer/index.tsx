@@ -379,28 +379,39 @@ export function CodeDiffViewer({
                     ))
                   ) : (
                     <div className={styles.splitTable}>
-                      {buildSplitRows(block.hunk).map((row) => (
-                        <div className={styles.splitRow} key={row.key}>
-                          <SplitDiffCell
-                            cell={row.oldCell}
-                            rowKey={row.key}
-                            filePath={file.path}
-                            fileStatus={file.status}
-                            activeLine={activeLine}
-                            setActiveLine={setActiveLine}
-                            threads={threads}
-                          />
-                          <SplitDiffCell
-                            cell={row.newCell}
-                            rowKey={row.key}
-                            filePath={file.path}
-                            fileStatus={file.status}
-                            activeLine={activeLine}
-                            setActiveLine={setActiveLine}
-                            threads={threads}
-                          />
-                        </div>
-                      ))}
+                      {(() => {
+                        const rows = buildSplitRows(block.hunk);
+                        return (
+                          <>
+                            {rows.map((row, rowIndex) => (
+                              <SplitDiffCell
+                                key={`${row.key}-old`}
+                                style={{ gridColumn: 1, gridRow: rowIndex + 1 }}
+                                cell={row.oldCell}
+                                rowKey={row.key}
+                                filePath={file.path}
+                                fileStatus={file.status}
+                                activeLine={activeLine}
+                                setActiveLine={setActiveLine}
+                                threads={threads}
+                              />
+                            ))}
+                            {rows.map((row, rowIndex) => (
+                              <SplitDiffCell
+                                key={`${row.key}-new`}
+                                style={{ gridColumn: 2, gridRow: rowIndex + 1 }}
+                                cell={row.newCell}
+                                rowKey={row.key}
+                                filePath={file.path}
+                                fileStatus={file.status}
+                                activeLine={activeLine}
+                                setActiveLine={setActiveLine}
+                                threads={threads}
+                              />
+                            ))}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                 </>
