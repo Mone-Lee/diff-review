@@ -28,12 +28,38 @@ type Props = {
   viewMode: 'inline' | 'split';
 };
 
+function getSelectionContainerElement(node: Node | null) {
+  if (!node) return null;
+  return node instanceof HTMLElement ? node : node.parentElement;
+}
+
+function getSplitCopySideFromNode(node: Node | null) {
+  const element = getSelectionContainerElement(node);
+  const side = element?.closest<HTMLElement>('[data-split-copy-side]')?.dataset.splitCopySide;
+  return side === 'old' || side === 'new' ? side : null;
+}
+
+function getSelectedSplitTexts(container: HTMLElement, range: Range, side: 'old' | 'new') {
+  return [...container.querySelectorAll<HTMLElement>(`[data-split-copy-side="${side}"] [data-split-copy-content="true"]`)]
+    .filter((element) => range.intersectsNode(element))
+    .map((element) => element.textContent ?? '');
+}
+
 function getGapVisibleCount(gap: GapDescriptor, expandedGapLines: Record<string, number>) {
   return Math.min(expandedGapLines[gap.key] ?? 0, gap.hiddenCount);
 }
 
 function getGapDirection(gap: GapDescriptor, gapExpandDirection: Record<string, GapExpandDirection>) {
   return gapExpandDirection[gap.key] ?? gap.direction;
+}
+
+function setSplitSelectionLock(container: HTMLDivElement | null, side: 'old' | 'new' | null) {
+  if (!container) return;
+  if (side) {
+    container.dataset.selectionLockedSide = side;
+    return;
+  }
+  delete container.dataset.selectionLockedSide;
 }
 
 export function CodeDiffViewer({
@@ -49,6 +75,8 @@ export function CodeDiffViewer({
   const [gapExpandDirection, setGapExpandDirection] = React.useState<Record<string, GapExpandDirection>>({});
   const fileContents = useDiffFileContents(file.path, file.snapshotHash);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const splitCopySideRef = React.useRef<'old' | 'new' | null>(null);
+  const isSplitSelectingRef = React.useRef(false);
   const autoScrollKeyRef = React.useRef('');
   const handledExpandRequestRef = React.useRef('');
   const gapDescriptors = React.useMemo(() => buildGapDescriptors(file, fileContents), [file, fileContents]);
@@ -68,10 +96,13 @@ export function CodeDiffViewer({
   React.useLayoutEffect(() => {
     if (scrollRef.current) {
       scrollToContentTop(scrollRef.current);
+      setSplitSelectionLock(scrollRef.current, null);
     }
     setActiveLine(null);
     setExpandedGapLines({});
     setGapExpandDirection({});
+    splitCopySideRef.current = null;
+    isSplitSelectingRef.current = false;
     handledExpandRequestRef.current = '';
   }, [file.path, file.snapshotHash]);
 
@@ -100,6 +131,28 @@ export function CodeDiffViewer({
   React.useEffect(() => {
     onExpandedContextChange(file.path, hasExpandedContext);
   }, [file.path, hasExpandedContext, onExpandedContextChange]);
+
+  React.useEffect(() => {
+    if (viewMode !== 'split') return;
+
+    function clearSelectionLock() {
+      if (!splitCopySideRef.current && !isSplitSelectingRef.current) return;
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.toString()) return;
+      splitCopySideRef.current = null;
+      isSplitSelectingRef.current = false;
+      setSplitSelectionLock(scrollRef.current, null);
+    }
+
+    document.addEventListener('selectionchange', clearSelectionLock);
+    window.addEventListener('mouseup', clearSelectionLock);
+    window.addEventListener('dragend', clearSelectionLock);
+    return () => {
+      document.removeEventListener('selectionchange', clearSelectionLock);
+      window.removeEventListener('mouseup', clearSelectionLock);
+      window.removeEventListener('dragend', clearSelectionLock);
+    };
+  }, [viewMode]);
 
   useAutoScrollToFirstThread({
     file,
@@ -230,8 +283,57 @@ export function CodeDiffViewer({
     );
   }
 
+  function handleMouseDownCapture(event: React.MouseEvent<HTMLDivElement>) {
+    if (viewMode !== 'split') return;
+    splitCopySideRef.current = event.target instanceof Node ? getSplitCopySideFromNode(event.target) : null;
+    isSplitSelectingRef.current = Boolean(splitCopySideRef.current);
+    setSplitSelectionLock(scrollRef.current, splitCopySideRef.current);
+  }
+
+  function handleMouseMoveCapture(event: React.MouseEvent<HTMLDivElement>) {
+    if (viewMode !== 'split' || isSplitSelectingRef.current) return;
+    const side = event.target instanceof Node ? getSplitCopySideFromNode(event.target) : null;
+    setSplitSelectionLock(scrollRef.current, side);
+  }
+
+  function handleMouseLeave() {
+    if (isSplitSelectingRef.current) return;
+    setSplitSelectionLock(scrollRef.current, null);
+  }
+
+  function handleCopy(event: React.ClipboardEvent<HTMLDivElement>) {
+    if (viewMode !== 'split') return;
+
+    const selection = window.getSelection();
+    const container = scrollRef.current;
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !container) return;
+
+    const range = selection.getRangeAt(0);
+    const oldTexts = getSelectedSplitTexts(container, range, 'old');
+    const newTexts = getSelectedSplitTexts(container, range, 'new');
+    if (oldTexts.length === 0 && newTexts.length === 0) return;
+
+    const fallbackSide = file.status === 'deleted' ? 'old' : 'new';
+    const preferredSide =
+      splitCopySideRef.current ?? getSplitCopySideFromNode(selection.anchorNode) ?? fallbackSide;
+    const preferredTexts = preferredSide === 'old' ? oldTexts : newTexts;
+    const fallbackTexts = preferredSide === 'old' ? newTexts : oldTexts;
+    const text = (preferredTexts.length > 0 ? preferredTexts : fallbackTexts).join('\n');
+    if (!text) return;
+
+    event.preventDefault();
+    event.clipboardData.setData('text/plain', text);
+  }
+
   return (
-    <div className={styles.diffCard} ref={scrollRef}>
+    <div
+      className={styles.diffCard}
+      ref={scrollRef}
+      onMouseDownCapture={handleMouseDownCapture}
+      onMouseMoveCapture={handleMouseMoveCapture}
+      onMouseLeave={handleMouseLeave}
+      onCopy={handleCopy}
+    >
       {renderedBlocks.map((block) =>
         block.type === 'gap' ? (
           <GapBlock

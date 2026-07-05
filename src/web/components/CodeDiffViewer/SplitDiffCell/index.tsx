@@ -49,12 +49,16 @@ export function SplitDiffCell({
           : styles.splitCell;
 
   return (
-    <div className={className} data-review-anchor={cell.lineNumber ? `${cell.side}:${cell.lineNumber}` : undefined}>
+    <div
+      className={className}
+      data-review-anchor={cell.lineNumber ? `${cell.side}:${cell.lineNumber}` : undefined}
+      data-split-copy-side={cell.side}
+    >
       <button className={styles.lineNo} onClick={() => cell.lineNumber && setActiveLine(cellKey)}>{cell.lineNumber ?? ''}</button>
       <span className={cell.type === 'add' ? `${styles.lineSign} ${styles.signAdd}` : cell.type === 'remove' ? `${styles.lineSign} ${styles.signRemove}` : styles.lineSign}>
         {getLineSign(cell.type)}
       </span>
-      <pre className={styles.codeLine}>{cell.content || ' '}</pre>
+      <pre className={styles.codeLine} data-split-copy-content="true">{cell.content || ' '}</pre>
       {cell.lineNumber && cellThreads.length === 0 ? (
         <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setActiveLine(cellKey)}>
           <MessageOutlined />

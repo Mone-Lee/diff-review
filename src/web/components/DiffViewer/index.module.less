@@ -25,3 +25,23 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
+
+.diffCard[data-selection-locked-side='old'] [data-split-copy-side='new'] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.diffCard[data-selection-locked-side='new'] [data-split-copy-side='old'] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.diffCard:has([data-split-copy-side='old']:hover) [data-split-copy-side='new'] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.diffCard:has([data-split-copy-side='new']:hover) [data-split-copy-side='old'] {
+  -webkit-user-select: none;
+  user-select: none;
+}
