@@ -39,6 +39,17 @@ function getSplitCopySideFromNode(node: Node | null) {
   return side === 'old' || side === 'new' ? side : null;
 }
 
+function getSplitCopyContentFromNode(node: Node | null) {
+  const element = getSelectionContainerElement(node);
+  return element?.closest<HTMLElement>('[data-split-copy-content="true"]') ?? null;
+}
+
+function isSelectionInsideSingleSplitContent(range: Range) {
+  const startContent = getSplitCopyContentFromNode(range.startContainer);
+  const endContent = getSplitCopyContentFromNode(range.endContainer);
+  return Boolean(startContent && startContent === endContent);
+}
+
 function getSelectedSplitTexts(container: HTMLElement, range: Range, side: 'old' | 'new') {
   return [...container.querySelectorAll<HTMLElement>(`[data-split-copy-side="${side}"] [data-split-copy-content="true"]`)]
     .filter((element) => range.intersectsNode(element))
@@ -309,6 +320,8 @@ export function CodeDiffViewer({
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !container) return;
 
     const range = selection.getRangeAt(0);
+    if (isSelectionInsideSingleSplitContent(range)) return;
+
     const oldTexts = getSelectedSplitTexts(container, range, 'old');
     const newTexts = getSelectedSplitTexts(container, range, 'new');
     if (oldTexts.length === 0 && newTexts.length === 0) return;
