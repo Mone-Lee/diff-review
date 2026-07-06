@@ -4,9 +4,10 @@
 import type { ReviewSession, ReviewThread } from '../../shared/types';
 
 export function modeLabel(session: ReviewSession): string {
+  if (session.mode.kind === 'revision' && session.mode.targetLabel) return `范围：${session.mode.targetLabel}`;
   if (session.mode.kind === 'revision') return `范围：${session.mode.base}..${session.mode.target}`;
   if (session.mode.kind === 'staged') return '范围：暂存区';
-  if (session.mode.kind === 'working') return '范围：工作区';
+  if (session.mode.kind === 'working') return session.mode.base ? `范围：${session.mode.base}..工作区` : '范围：工作区';
   return '范围：未知';
 }
 

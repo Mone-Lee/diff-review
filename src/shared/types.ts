@@ -1,13 +1,19 @@
 /**
  * 审查模式决定本次 diff 的来源：
- * `working` 表示审查工作区中尚未暂存的变更；
+ * `working` 表示审查工作区变更；带 base 时表示从某个 ref 到当前工作树的完整对比；
  * `staged` 表示审查已经 git add 但尚未提交的变更；
  * `revision` 表示审查两个 revision 之间的差异，base/target 可以是 commit、branch 或 tag。
  */
 export type ReviewMode =
-  | { kind: 'working' }
+  | { kind: 'working'; base?: string }
   | { kind: 'staged' }
-  | { kind: 'revision'; base: string; target: string };
+  | { kind: 'revision'; base: string; target: string; targetLabel?: string };
+
+export type GitCommitSummary = {
+  hash: string;
+  shortHash: string;
+  subject: string;
+};
 
 export type DiffLineType = 'context' | 'add' | 'remove';
 

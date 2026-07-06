@@ -6,8 +6,8 @@ import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
 import { parseUnifiedDiff } from '../core/diff-parser';
-import { diffHash, getDiff, readDiffFileContents, readDiffImageContent, readFileForPreview } from '../core/git';
-import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type MarkdownPreview, type PromptScope, type ReviewComment, type ReviewSession, type ReviewThread } from '../shared/types';
+import { diffHash, getDefaultWorkingBase, getDiff, getRecentCommits, readDiffFileContents, readDiffImageContent, readFileForPreview } from '../core/git';
+import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type MarkdownPreview, type PromptScope, type ReviewComment, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
 import { readComments, updateComments } from './storage';
@@ -48,6 +48,18 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     }
   });
 
+  app.get('/api/compare-options', async (_req, res, next) => {
+    try {
+      const [defaultBase, recentCommits] = await Promise.all([
+        getDefaultWorkingBase(state.session.repoRoot),
+        getRecentCommits(state.session.repoRoot, 10)
+      ]);
+      res.json({ defaultBase, recentCommits });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/api/review-state', async (req, res, next) => {
     try {
       const nextState = req.body as Pick<ReviewServerState, 'session' | 'diffFiles'>;
@@ -82,6 +94,20 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.post('/api/refresh', async (_req, res, next) => {
     try {
       const nextReviewState = await rebuildReviewState(state);
+      markdownPreviews = await buildMarkdownPreviewCache(nextReviewState);
+      applyReviewState(state, nextReviewState);
+      fileWatcher.clearPendingChanges();
+      const comments = await readComments(state.session.repoRoot);
+      res.json({ session: state.session, files: state.diffFiles, threads: comments.threads });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/compare', async (req, res, next) => {
+    try {
+      const mode = normalizeReviewMode(req.body?.mode);
+      const nextReviewState = await rebuildReviewState(state, mode);
       markdownPreviews = await buildMarkdownPreviewCache(nextReviewState);
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
@@ -463,14 +489,15 @@ function applyReviewState(currentState: ReviewServerState, nextState: Pick<Revie
 /**
  * 依据当前 session.mode 重新读取仓库 diff，并为前端生成一个新的快照会话。
  */
-async function rebuildReviewState(state: ReviewServerState): Promise<ReviewServerState> {
-  const diff = await getDiff(state.session.mode, state.session.repoRoot);
+async function rebuildReviewState(state: ReviewServerState, overrideMode?: ReviewMode): Promise<ReviewServerState> {
+  const mode = overrideMode ?? state.session.mode;
+  const diff = await getDiff(mode, state.session.repoRoot);
   const diffFiles = parseUnifiedDiff(diff);
   const session: ReviewSession = {
     id: crypto.randomUUID(),
     repoName: state.session.repoName,
     repoRoot: state.session.repoRoot,
-    mode: state.session.mode,
+    mode,
     diffHash: diffHash(diff),
     createdAt: new Date().toISOString()
   };
@@ -480,6 +507,29 @@ async function rebuildReviewState(state: ReviewServerState): Promise<ReviewServe
     diffFiles,
     webDist: state.webDist
   };
+}
+
+function normalizeReviewMode(value: unknown): ReviewMode {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Review mode is required');
+  }
+
+  const mode = value as Partial<ReviewMode>;
+  if (mode.kind === 'staged') return { kind: 'staged' };
+  if (mode.kind === 'working') {
+    return typeof mode.base === 'string' && mode.base.trim() ? { kind: 'working', base: mode.base.trim() } : { kind: 'working' };
+  }
+  if (mode.kind === 'revision') {
+    const base = typeof mode.base === 'string' ? mode.base.trim() : '';
+    const target = typeof mode.target === 'string' ? mode.target.trim() : '';
+    const targetLabel = typeof mode.targetLabel === 'string' ? mode.targetLabel.trim() : '';
+    if (!base || !target) {
+      throw new Error('Base and target are required');
+    }
+    return targetLabel ? { kind: 'revision', base, target, targetLabel } : { kind: 'revision', base, target };
+  }
+
+  throw new Error('Unsupported review mode');
 }
 
 function listen(app: express.Express, port: number, fileWatcher: FileWatcherService): Promise<string> {

@@ -2,15 +2,15 @@
  * Web 主界面容器：负责加载会话数据、调度子组件和处理核心交互动作。
  */
 import React from 'react';
-import { App as AntApp, Button, Card, Layout, Segmented, Space, Tag, Typography } from 'antd';
+import { App as AntApp, Button, Card, Layout, Segmented, Space, Typography } from 'antd';
 import {
   CopyOutlined,
   EyeOutlined,
   PartitionOutlined,
   ReloadOutlined
 } from '@ant-design/icons';
-import type { DiffFile, ReviewSession, ReviewThread } from '../shared/types';
-import { fetchReviewState, refreshReviewSnapshot, type ReviewState } from './api/review';
+import type { DiffFile, ReviewMode, ReviewSession, ReviewThread } from '../shared/types';
+import { applyReviewComparison, fetchReviewState, refreshReviewSnapshot, type ReviewState } from './api/review';
 import {
   type LocateTarget,
   ReviewActionsProvider,
@@ -25,6 +25,7 @@ import { ImageDiffViewer } from './components/ImageDiffViewer';
 import { MarkdownPreviewPanel } from './components/MarkdownPreviewPanel';
 import { RefreshButton } from './components/RefreshButton';
 import { ThreadList } from './components/ThreadList';
+import { VersionCompareControl } from './components/VersionCompareControl';
 import { isThreadOnFileSnapshot } from '../shared/thread-utils';
 import { modeLabel } from './utils';
 import {
@@ -59,6 +60,7 @@ export default function App() {
   const [expandedContextByFile, setExpandedContextByFile] = React.useState<Record<string, boolean>>({});
   const [viewedFilePaths, setViewedFilePaths] = React.useState<Set<string>>(() => new Set());
   const [refreshingSnapshot, setRefreshingSnapshot] = React.useState(false);
+  const [applyingComparison, setApplyingComparison] = React.useState(false);
   const sessionIdRef = React.useRef<string | null>(null);
   const focusedThreadIdRef = React.useRef<string | null>(null);
   const { clearPendingChanges, hasPendingChanges, lastChangedAt } = useFileWatch();
@@ -231,6 +233,21 @@ export default function App() {
     }
   }, [applyReviewState, clearPendingChanges, message]);
 
+  const handleApplyComparison = React.useCallback(async (mode: ReviewMode) => {
+    setApplyingComparison(true);
+    try {
+      const nextState = await applyReviewComparison(mode);
+      applyReviewState(nextState, true);
+      clearPendingChanges();
+      void message.success('已切换对比范围');
+    } catch (error) {
+      const nextMessage = error instanceof Error ? error.message : '切换对比失败';
+      void message.error(nextMessage);
+    } finally {
+      setApplyingComparison(false);
+    }
+  }, [applyReviewState, clearPendingChanges, message]);
+
   const setFocusedThreadIdWithRef = React.useCallback<React.Dispatch<React.SetStateAction<string | null>>>((value) => {
     setFocusedThreadId((current) => {
       const nextValue = typeof value === 'function' ? value(current) : value;
@@ -277,12 +294,12 @@ export default function App() {
               />
             </div>
 
-            <Card className={styles.sideCard}>
-              <Space size={8} wrap>
-                <Tag color="blue">{session?.mode.kind === 'revision' ? '混合模式' : '本地模式'}</Tag>
-                <Tag color="gold">{files.length} files</Tag>
-              </Space>
-            </Card>
+            <VersionCompareControl
+              session={session}
+              filesCount={files.length}
+              loading={applyingComparison}
+              onApply={(mode) => void handleApplyComparison(mode)}
+            />
 
             <FileList
               files={displayFiles}

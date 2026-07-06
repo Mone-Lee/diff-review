@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import { join, normalize, relative } from 'node:path';
-import type { DiffFile, ReviewMode } from '../shared/types';
+import type { DiffFile, GitCommitSummary, ReviewMode } from '../shared/types';
 
 const execFileAsync = promisify(execFile);
 
@@ -22,6 +22,12 @@ export async function getDiff(mode: ReviewMode, repoRoot: string): Promise<strin
 
   if (mode.kind === 'revision') {
     return execGitStdout(['diff', '--no-ext-diff', '--no-color', mode.base, mode.target], repoRoot);
+  }
+
+  if (mode.base) {
+    const trackedDiff = await execGitStdout(['diff', '--no-ext-diff', '--no-color', mode.base], repoRoot);
+    const untrackedDiff = await getUntrackedDiff(repoRoot);
+    return [trackedDiff, untrackedDiff].filter(Boolean).join('\n');
   }
 
   const trackedDiff = await execGitStdout(['diff', '--no-ext-diff', '--no-color'], repoRoot);
@@ -51,7 +57,7 @@ export async function readFileForPreview(file: DiffFile, mode: ReviewMode, repoR
   }
 
   if (file.status === 'deleted') {
-    return { content: await gitShow(`HEAD:${targetPath}`, repoRoot), deleted: true };
+    return { content: await gitShow(`${mode.base ?? 'HEAD'}:${targetPath}`, repoRoot), deleted: true };
   }
 
   return { content: await readFile(join(repoRoot, targetPath), 'utf8'), deleted: false };
@@ -97,6 +103,7 @@ export async function readDiffImageContent(
     if (file.status === 'added') return null;
     if (mode.kind === 'staged') return gitShowBuffer(`HEAD:${path}`, repoRoot);
     if (mode.kind === 'revision') return gitShowBuffer(`${mode.base}:${path}`, repoRoot);
+    if (mode.base) return gitShowBuffer(`${mode.base}:${path}`, repoRoot);
     return gitShowBuffer(`HEAD:${path}`, repoRoot);
   }
 
@@ -118,6 +125,29 @@ export function diffHash(diff: string): string {
   return createHash('sha256').update(diff).digest('hex').slice(0, 16);
 }
 
+export async function getDefaultWorkingBase(repoRoot: string): Promise<string | undefined> {
+  if (await gitRefExists('master', repoRoot)) return 'master';
+  if (await gitRefExists('main', repoRoot)) return 'main';
+  return undefined;
+}
+
+export async function getRecentCommits(repoRoot: string, limit = 10): Promise<GitCommitSummary[]> {
+  const stdout = await execGitStdout(['log', `-${limit}`, '--pretty=format:%H%x1f%h%x1f%s'], repoRoot);
+  return stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [hash, shortHash, ...subjectParts] = line.split('\x1f');
+      return {
+        hash,
+        shortHash,
+        subject: subjectParts.join('\x1f')
+      };
+    })
+    .filter((commit) => commit.hash && commit.shortHash);
+}
+
 function isSafeRepoPath(repoRoot: string, path: string): boolean {
   const normalized = normalize(join(repoRoot, path));
   const rel = relative(repoRoot, normalized);
@@ -126,6 +156,15 @@ function isSafeRepoPath(repoRoot: string, path: string): boolean {
 
 async function gitShow(revPath: string, repoRoot: string): Promise<string> {
   return execGitStdout(['show', revPath], repoRoot);
+}
+
+async function gitRefExists(ref: string, repoRoot: string): Promise<boolean> {
+  try {
+    await execGit(['rev-parse', '--verify', '--quiet', ref], repoRoot);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function gitShowBuffer(revPath: string, repoRoot: string): Promise<Buffer> {
@@ -144,6 +183,7 @@ async function readDiffSideContent(file: DiffFile, mode: ReviewMode, repoRoot: s
     if (file.status === 'added') return '';
     if (mode.kind === 'staged') return gitShow(`HEAD:${path}`, repoRoot);
     if (mode.kind === 'revision') return gitShow(`${mode.base}:${path}`, repoRoot);
+    if (mode.base) return gitShow(`${mode.base}:${path}`, repoRoot);
     return gitShow(`HEAD:${path}`, repoRoot);
   }
 

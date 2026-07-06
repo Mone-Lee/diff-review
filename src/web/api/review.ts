@@ -1,7 +1,7 @@
 /**
  * Review API 封装：负责前端与 review 会话、评论线程、评论编辑和 prompt 生成接口之间的通信。
  */
-import type { CommentAnchor, DiffFile, ReviewSession, ReviewThread, ReviewWatchEvent } from '../../shared/types';
+import type { CommentAnchor, DiffFile, GitCommitSummary, ReviewMode, ReviewSession, ReviewThread, ReviewWatchEvent } from '../../shared/types';
 
 export type PromptScope = { type: 'thread'; threadId: string } | { type: 'file-unresolved'; filePath: string } | { type: 'all-unresolved' };
 
@@ -9,6 +9,11 @@ export type ReviewState = {
   session: ReviewSession;
   files: DiffFile[];
   threads: ReviewThread[];
+};
+
+export type CompareOptions = {
+  defaultBase?: string;
+  recentCommits: GitCommitSummary[];
 };
 
 /**
@@ -31,6 +36,36 @@ export async function refreshReviewSnapshot() {
   if (!res.ok) {
     const data = (await res.json().catch(() => ({ error: '刷新 diff 失败' }))) as { error?: string };
     throw new Error(data.error ?? '刷新 diff 失败');
+  }
+
+  return (await res.json()) as ReviewState;
+}
+
+/**
+ * 读取版本对比入口需要的默认 base 和最近提交列表。
+ */
+export async function fetchCompareOptions() {
+  const res = await fetch('/api/compare-options');
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({ error: '读取版本列表失败' }))) as { error?: string };
+    throw new Error(data.error ?? '读取版本列表失败');
+  }
+  return (await res.json()) as CompareOptions;
+}
+
+/**
+ * 根据用户选择的版本范围切换当前 review 快照。
+ */
+export async function applyReviewComparison(mode: ReviewMode) {
+  const res = await fetch('/api/compare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode })
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({ error: '切换对比失败' }))) as { error?: string };
+    throw new Error(data.error ?? '切换对比失败');
   }
 
   return (await res.json()) as ReviewState;
