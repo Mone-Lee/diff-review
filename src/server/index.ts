@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDefaultWorkingBase, getDiff, getRecentCommits, readDiffFileContents, readDiffImageContent, readFileForPreview } from '../core/git';
-import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type MarkdownPreview, type PromptScope, type ReviewComment, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
+import { REVIEW_REFRESH_PROTOCOL, isRefreshableReviewMode, type DiffFile, type MarkdownPreview, type PromptScope, type ReviewComment, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
 import { readComments, updateComments } from './storage';
@@ -93,6 +93,10 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
 
   app.post('/api/refresh', async (_req, res, next) => {
     try {
+      if (!isRefreshableReviewMode(state.session.mode)) {
+        res.status(400).json({ error: '当前对比范围不包含可刷新的工作区或暂存区' });
+        return;
+      }
       const nextReviewState = await rebuildReviewState(state);
       markdownPreviews = await buildMarkdownPreviewCache(nextReviewState);
       applyReviewState(state, nextReviewState);

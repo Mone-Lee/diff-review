@@ -9,6 +9,10 @@ export type ReviewMode =
   | { kind: 'staged' }
   | { kind: 'revision'; base: string; target: string; targetLabel?: string };
 
+export function isRefreshableReviewMode(mode: ReviewMode): boolean {
+  return mode.kind === 'working' || mode.kind === 'staged';
+}
+
 export type GitCommitSummary = {
   hash: string;
   shortHash: string;

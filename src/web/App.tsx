@@ -9,7 +9,7 @@ import {
   PartitionOutlined,
   ReloadOutlined
 } from '@ant-design/icons';
-import type { DiffFile, ReviewMode, ReviewSession, ReviewThread } from '../shared/types';
+import { isRefreshableReviewMode, type DiffFile, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
 import { applyReviewComparison, fetchReviewState, refreshReviewSnapshot, type ReviewState } from './api/review';
 import {
   type LocateTarget,
@@ -68,6 +68,7 @@ export default function App() {
   const currentViewedStorageKey = React.useMemo(() => (session ? viewedStorageKey(session) : null), [session]);
   const selectedFile = files.find((file) => file.path === selectedPath) ?? displayFiles[0];
   const selectedFileIsImage = selectedFile ? isImageFilePath(selectedFile.path) : false;
+  const canRefreshSnapshot = session ? isRefreshableReviewMode(session.mode) : false;
   const currentSnapshotThreads = React.useMemo(
     () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
     [files, threads]
@@ -219,6 +220,7 @@ export default function App() {
    * 只有用户显式点击 Refresh 时才切换到最新 diff，避免编辑过程中的自动跳屏。
    */
   const handleRefreshSnapshot = React.useCallback(async () => {
+    if (!canRefreshSnapshot) return;
     setRefreshingSnapshot(true);
     try {
       const nextState = await refreshReviewSnapshot();
@@ -231,7 +233,7 @@ export default function App() {
     } finally {
       setRefreshingSnapshot(false);
     }
-  }, [applyReviewState, clearPendingChanges, message]);
+  }, [applyReviewState, canRefreshSnapshot, clearPendingChanges, message]);
 
   const handleApplyComparison = React.useCallback(async (mode: ReviewMode) => {
     setApplyingComparison(true);
@@ -284,14 +286,16 @@ export default function App() {
                 <Typography.Text type="secondary">{session ? modeLabel(session) : '正在加载会话'}</Typography.Text>
               </div>
 
-              <RefreshButton
-                changedAt={lastChangedAt}
-                disabled={refreshingSnapshot}
-                hasPendingChanges={hasPendingChanges}
-                loading={refreshingSnapshot}
-                onRefresh={() => void handleRefreshSnapshot()}
-                className={styles.refreshButton}
-              />
+              {canRefreshSnapshot ? (
+                <RefreshButton
+                  changedAt={lastChangedAt}
+                  disabled={refreshingSnapshot}
+                  hasPendingChanges={hasPendingChanges}
+                  loading={refreshingSnapshot}
+                  onRefresh={() => void handleRefreshSnapshot()}
+                  className={styles.refreshButton}
+                />
+              ) : null}
             </div>
 
             <VersionCompareControl
@@ -381,14 +385,16 @@ export default function App() {
               <Card className={styles.emptyStateCard} bordered={false}>
                 <Space direction="vertical" size={12}>
                   <Typography.Text type="secondary">未发现变更，当前工作区很安静。</Typography.Text>
-                  <Button
-                    icon={<ReloadOutlined />}
-                    loading={refreshingSnapshot}
-                    type="primary"
-                    onClick={() => void handleRefreshSnapshot()}
-                  >
-                    Refresh
-                  </Button>
+                  {canRefreshSnapshot ? (
+                    <Button
+                      icon={<ReloadOutlined />}
+                      loading={refreshingSnapshot}
+                      type="primary"
+                      onClick={() => void handleRefreshSnapshot()}
+                    >
+                      Refresh
+                    </Button>
+                  ) : null}
                 </Space>
               </Card>
             )}
