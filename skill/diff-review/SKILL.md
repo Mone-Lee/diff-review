@@ -27,6 +27,7 @@ npx --yes local-diff-reviewer [args...]
 Set the shell/tool `cwd` to `/absolute/path/to/target/workspace` before running the command. Do not pass `--repo` from this skill; older published CLI versions treat unknown args as revision args. Do not use the skill package directory or this skill's install directory as the review target unless that is the workspace the user asked to review.
 
 When the user asks to `stop`, `关闭`, `结束`, or otherwise shut down Diff Review for the current project, execute `/diff-review stop` immediately. Do not only explain the command or leave the existing runtime running.
+If `/diff-review stop` completes but the review port that was in use is still reachable, treat that as a likely sign that another repository is still using that port or that the current workspace did not shut down cleanly.
 
 When you have concrete review findings or answers to existing review comments, preload them with one `--comment` JSON argument per comment before launching the viewer:
 

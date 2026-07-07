@@ -10,6 +10,7 @@
 
 import { createHash } from 'node:crypto';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createServer as createNetServer } from 'node:net';
 import { homedir, platform } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
@@ -144,15 +145,20 @@ function isPidAlive(pid: number): boolean {
 }
 
 // stop 会优先给子进程和主进程发送 SIGTERM；若宽限期后仍存活，再升级为 SIGKILL。
+// 只有当相关 PID 退出且 API/Vite 端口都真正释放后，才算停止成功。
 async function terminateRuntime(entry: RuntimeEntry): Promise<{ status: 'stopped' | 'forced' | 'stale' }> {
   const pids = collectTargetPids(entry);
-  if (pids.length === 0) return { status: 'stale' };
+  const ports = collectRuntimePorts(entry);
+  if (pids.length === 0) {
+    return (await waitForRuntimeRelease(pids, ports, TERM_WAIT_MS)) ? { status: 'stopped' } : { status: 'stale' };
+  }
 
   const terminated = await terminatePids(pids, 'SIGTERM', TERM_WAIT_MS);
-  if (terminated) return { status: 'stopped' };
+  if (terminated && (await waitForRuntimeRelease(pids, ports, TERM_WAIT_MS))) return { status: 'stopped' };
 
   const forced = await terminatePids(pids, 'SIGKILL', KILL_WAIT_MS);
-  return forced ? { status: 'forced' } : { status: 'stale' };
+  if (forced && (await waitForRuntimeRelease(pids, ports, KILL_WAIT_MS))) return { status: 'forced' };
+  return { status: 'stale' };
 }
 
 function collectTargetPids(entry: RuntimeEntry): number[] {
@@ -160,6 +166,18 @@ function collectTargetPids(entry: RuntimeEntry): number[] {
   if (typeof entry.vitePid === 'number' && isPidAlive(entry.vitePid)) pids.push(entry.vitePid);
   if (isPidAlive(entry.pid)) pids.push(entry.pid);
   return pids;
+}
+
+function collectRuntimePorts(entry: RuntimeEntry): number[] {
+  const ports = new Set<number>();
+  const { apiPort, vitePort } = entry;
+  if (Number.isInteger(apiPort) && apiPort > 0) {
+    ports.add(apiPort);
+  }
+  if (typeof vitePort === 'number' && Number.isInteger(vitePort) && vitePort > 0) {
+    ports.add(vitePort);
+  }
+  return [...ports];
 }
 
 async function terminatePids(
@@ -192,6 +210,57 @@ async function waitForExit(pids: number[], waitMs: number): Promise<boolean> {
   }
 
   return pids.every((pid) => !isPidAlive(pid));
+}
+
+/**
+ * stop 不应只看进程是否退出；只有监听端口也释放了，浏览器页面才会真正不可访问。
+ */
+async function waitForRuntimeRelease(pids: number[], ports: number[], waitMs: number): Promise<boolean> {
+  const deadline = Date.now() + waitMs;
+
+  while (Date.now() < deadline) {
+    if (pids.every((pid) => !isPidAlive(pid)) && (await arePortsFree(ports))) {
+      return true;
+    }
+    await sleep(POLL_INTERVAL_MS);
+  }
+
+  return pids.every((pid) => !isPidAlive(pid)) && (await arePortsFree(ports));
+}
+
+async function arePortsFree(ports: number[]): Promise<boolean> {
+  const results = await Promise.all(ports.map((port) => isPortFree(port)));
+  return results.every(Boolean);
+}
+
+function isPortFree(port: number): Promise<boolean> {
+  if (!Number.isInteger(port) || port <= 0) return Promise.resolve(true);
+
+  return new Promise((resolve, reject) => {
+    const server = createNetServer();
+    let settled = false;
+
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      settled = true;
+      if (error.code === 'EADDRINUSE') {
+        resolve(false);
+        return;
+      }
+      reject(error);
+    });
+
+    server.listen(port, '127.0.0.1', () => {
+      server.close((error) => {
+        if (settled) return;
+        settled = true;
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(true);
+      });
+    });
+  });
 }
 
 function sleep(ms: number): Promise<void> {

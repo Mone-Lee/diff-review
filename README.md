@@ -61,6 +61,8 @@ local-diff-reviewer --repo /path/to/project
 停止当前项目已启动的 review 进程：
 
 - `stop`：按当前 Git 仓库范围强制关闭该仓库启动过的 review 运行进程（包含其 API 端口进程）；会先尝试优雅退出，超时后自动升级为强制终止。
+- `stop` 是按仓库生效，不是全局关闭所有 review 页面；如果本次 review 实际使用的端口在 stop 后仍可访问，往往表示该端口已经被别的仓库复用，或当前仓库仍有页面未停干净。
+- `stop` 成功时会等待相关 API/Vite 端口真正释放，而不只是等待进程收到退出信号。
 
 ```bash
 local-diff-reviewer stop
@@ -109,6 +111,7 @@ npx skills add Mone-Lee/diff-review
 ```
 
 skill 会以目标 workspace 作为命令工作目录运行 `npx --yes local-diff-reviewer [args...]`，因此 `/diff-review` 会审查当前项目，而不是 skill 安装目录。用户要求停止、关闭或结束当前项目的 Diff Review 时，skill 应直接执行 `/diff-review stop`，而不是只提示这条命令。
+如果 `/diff-review stop` 后本次 review 实际使用的端口仍可访问，说明该端口上的页面很可能属于其他仓库，或当前 workspace 的 review 还没有停干净。
 
 ### 预置 agent 评论
 

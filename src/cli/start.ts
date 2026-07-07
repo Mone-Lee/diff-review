@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDefaultWorkingBase, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
-import { getLiveRuntimes, hasRuntimeRecord, recordRuntime, stopRecordedRuntimes } from './runtime-registry';
+import { getLiveRuntimes, hasRuntimeRecord, recordRuntime, stopRecordedRuntimes, type RuntimeEntry } from './runtime-registry';
 import { startServer } from '../server';
 import { attachLegacyComments } from '../server/storage';
 import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type ReviewSession } from '../shared/types';
@@ -179,14 +179,17 @@ function logImportResult(comments: string[], result: Awaited<ReturnType<typeof i
 async function stopCommand(repo: string | undefined): Promise<void> {
   const repoRoot = await getRepoRoot(repo ?? process.cwd());
   const hasRecord = await hasRuntimeRecord(repoRoot);
+  const activeRuntimes = await getLiveRuntimes(repoRoot);
   const { stopped, forced, stale } = await stopRecordedRuntimes(repoRoot);
   const total = stopped.length + forced.length + stale.length;
   if (total === 0) {
     if (hasRecord) {
       console.log('No running review process found for this repo.');
+      await logRuntimePortOccupancy(repoRoot, activeRuntimes);
       return;
     }
     console.log('No review runtime record found for this repo.');
+    await logRuntimePortOccupancy(repoRoot, activeRuntimes);
     return;
   }
 
@@ -207,6 +210,66 @@ async function stopCommand(repo: string | undefined): Promise<void> {
   if (stale.length > 0) {
     console.log(`Skipped stale records: ${stale.length}`);
   }
+  await logRuntimePortOccupancy(repoRoot, activeRuntimes);
+}
+
+/**
+ * `stop` 只按当前仓库回收 runtime；如果这次运行过的实际端口仍能访问，
+ * 需要明确告诉用户是当前仓库未停干净，还是端口已经被别的仓库复用。
+ */
+async function logRuntimePortOccupancy(currentRepoRoot: string, runtimes: RuntimeEntry[]): Promise<void> {
+  const ports = collectRuntimePorts(runtimes);
+  if (ports.length === 0) return;
+
+  for (const port of ports) {
+    const session = await inspectReviewSessionAtPort(port);
+    if (!session) continue;
+
+    if (session.repoRoot === currentRepoRoot) {
+      console.warn(`Note: http://127.0.0.1:${port} is still serving this repo (${session.repoName}).`);
+      continue;
+    }
+
+    console.warn(`Note: http://127.0.0.1:${port} is still serving repo ${session.repoName} (${session.repoRoot}).`);
+  }
+}
+
+/**
+ * 通过运行中页面的 `/api/session` 判断默认端口上是否仍有 diff-review 服务，
+ * 这样 stop 之后即使端口被其他仓库复用，也能给出具体归属提示。
+ */
+async function inspectReviewSessionAtPort(
+  port: number
+): Promise<Pick<ReviewSession, 'repoName' | 'repoRoot'> | undefined> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/session`);
+    if (!response.ok) return undefined;
+    const session = (await response.json()) as Partial<ReviewSession>;
+    if (typeof session.repoName !== 'string' || typeof session.repoRoot !== 'string') {
+      return undefined;
+    }
+    return {
+      repoName: session.repoName,
+      repoRoot: session.repoRoot
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function collectRuntimePorts(runtimes: RuntimeEntry[]): number[] {
+  const ports = new Set<number>();
+
+  for (const runtime of runtimes) {
+    if (Number.isInteger(runtime.apiPort) && runtime.apiPort > 0) {
+      ports.add(runtime.apiPort);
+    }
+    if (typeof runtime.vitePort === 'number' && Number.isInteger(runtime.vitePort) && runtime.vitePort > 0) {
+      ports.add(runtime.vitePort);
+    }
+  }
+
+  return [...ports].sort((left, right) => left - right);
 }
 
 function parsePort(url: string): number {
