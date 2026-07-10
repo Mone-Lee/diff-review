@@ -8,7 +8,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
-import { diffHash, getDefaultWorkingBase, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
+import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
 import { getLiveRuntimes, hasRuntimeRecord, recordRuntime, stopRecordedRuntimes, type RuntimeEntry } from './runtime-registry';
 import { startServer } from '../server';
 import { attachLegacyComments } from '../server/storage';
@@ -25,7 +25,7 @@ async function main() {
     return;
   }
   const repoRoot = await getRepoRoot(repo ?? process.cwd());
-  const mode = await resolveInitialReviewMode(reviewArgs, repoRoot);
+  const mode = resolveInitialReviewMode(reviewArgs);
   const diff = await getDiff(mode, repoRoot);
   const diffFiles = parseUnifiedDiff(diff);
   const session: ReviewSession = {
@@ -278,10 +278,9 @@ function parsePort(url: string): number {
   return Number.isNaN(port) ? 0 : port;
 }
 
-async function resolveInitialReviewMode(reviewArgs: string[], repoRoot: string): Promise<ReviewSession['mode']> {
+function resolveInitialReviewMode(reviewArgs: string[]): ReviewSession['mode'] {
   if (reviewArgs.filter(Boolean).length > 0) return parseReviewMode(reviewArgs);
-  const base = await getDefaultWorkingBase(repoRoot);
-  return base ? { kind: 'working', base } : { kind: 'working' };
+  return { kind: 'working' };
 }
 
 function modeLabel(mode: ReviewSession['mode']): string {
