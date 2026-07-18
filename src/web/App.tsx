@@ -2,15 +2,16 @@
  * Web 主界面容器：负责加载会话数据、调度子组件和处理核心交互动作。
  */
 import React from 'react';
-import { App as AntApp, Button, Card, Layout, Segmented, Space, Typography } from 'antd';
+import { App as AntApp, Button, Card, Layout, Popconfirm, Segmented, Space, Typography } from 'antd';
 import {
   CopyOutlined,
   EyeOutlined,
   PartitionOutlined,
+  PoweroffOutlined,
   ReloadOutlined
 } from '@ant-design/icons';
 import { isRefreshableReviewMode, type DiffFile, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
-import { applyReviewComparison, fetchReviewState, refreshReviewSnapshot, type ReviewState } from './api/review';
+import { applyReviewComparison, fetchReviewState, refreshReviewSnapshot, shutdownReviewRuntime, type ReviewState } from './api/review';
 import {
   type LocateTarget,
   ReviewActionsProvider,
@@ -61,6 +62,7 @@ export default function App() {
   const [viewedFilePaths, setViewedFilePaths] = React.useState<Set<string>>(() => new Set());
   const [refreshingSnapshot, setRefreshingSnapshot] = React.useState(false);
   const [applyingComparison, setApplyingComparison] = React.useState(false);
+  const [shuttingDownRuntime, setShuttingDownRuntime] = React.useState(false);
   const sessionIdRef = React.useRef<string | null>(null);
   const focusedThreadIdRef = React.useRef<string | null>(null);
   const { clearPendingChanges, hasPendingChanges, lastChangedAt } = useFileWatch();
@@ -117,7 +119,7 @@ export default function App() {
   }, [applyReviewState]);
 
   React.useEffect(() => {
-    void refreshReviewState(true);
+    refreshReviewState(true).catch(() => undefined);
   }, [refreshReviewState]);
 
   React.useEffect(() => {
@@ -150,7 +152,7 @@ export default function App() {
   React.useEffect(() => {
     const syncVisibleReviewState = () => {
       if (document.visibilityState === 'visible') {
-        void refreshReviewState();
+        refreshReviewState().catch(() => undefined);
       }
     };
 
@@ -213,7 +215,7 @@ export default function App() {
   }, [files, locateTarget]);
 
   const handlePromptCopied = React.useCallback(() => {
-    void message.success('提示词已复制到剪贴板');
+    message.success('提示词已复制到剪贴板');
   }, [message]);
 
   /**
@@ -226,10 +228,10 @@ export default function App() {
       const nextState = await refreshReviewSnapshot();
       applyReviewState(nextState, true);
       clearPendingChanges();
-      void message.success('已更新到最新 diff');
+      message.success('已更新到最新 diff');
     } catch (error) {
       const nextMessage = error instanceof Error ? error.message : '刷新 diff 失败';
-      void message.error(nextMessage);
+      message.error(nextMessage);
     } finally {
       setRefreshingSnapshot(false);
     }
@@ -241,14 +243,26 @@ export default function App() {
       const nextState = await applyReviewComparison(mode);
       applyReviewState(nextState, true);
       clearPendingChanges();
-      void message.success('已切换对比范围');
+      message.success('已切换对比范围');
     } catch (error) {
       const nextMessage = error instanceof Error ? error.message : '切换对比失败';
-      void message.error(nextMessage);
+      message.error(nextMessage);
     } finally {
       setApplyingComparison(false);
     }
   }, [applyReviewState, clearPendingChanges, message]);
+
+  const handleShutdownRuntime = React.useCallback(async () => {
+    setShuttingDownRuntime(true);
+    try {
+      await shutdownReviewRuntime();
+      message.success('当前 Diff Review 任务已关闭，刷新页面查看效果。');
+    } catch (error) {
+      const nextMessage = error instanceof Error ? error.message : '关闭任务失败';
+      message.error(nextMessage);
+      setShuttingDownRuntime(false);
+    }
+  }, [message]);
 
   const setFocusedThreadIdWithRef = React.useCallback<React.Dispatch<React.SetStateAction<string | null>>>((value) => {
     setFocusedThreadId((current) => {
@@ -286,13 +300,35 @@ export default function App() {
                 <Typography.Text type="secondary">{session ? modeLabel(session) : '正在加载会话'}</Typography.Text>
               </div>
 
+              <Popconfirm
+                title="关闭当前 Diff Review 任务？"
+                description="确认后这个页面对应的本地服务会停止。"
+                okText="关闭"
+                cancelText="取消"
+                okButtonProps={{ danger: true, loading: shuttingDownRuntime }}
+                onConfirm={handleShutdownRuntime}
+              >
+                <Button
+                  aria-label="关闭当前 Diff Review 任务"
+                  className={styles.shutdownButton}
+                  danger
+                  disabled={shuttingDownRuntime}
+                  icon={<PoweroffOutlined />}
+                  loading={shuttingDownRuntime}
+                  size="small"
+                  type="text"
+                />
+              </Popconfirm>
+
               {canRefreshSnapshot ? (
                 <RefreshButton
                   changedAt={lastChangedAt}
                   disabled={refreshingSnapshot}
                   hasPendingChanges={hasPendingChanges}
                   loading={refreshingSnapshot}
-                  onRefresh={() => void handleRefreshSnapshot()}
+                  onRefresh={() => {
+                    handleRefreshSnapshot().catch(() => undefined);
+                  }}
                   className={styles.refreshButton}
                 />
               ) : null}
@@ -302,7 +338,9 @@ export default function App() {
               session={session}
               filesCount={files.length}
               loading={applyingComparison}
-              onApply={(mode) => void handleApplyComparison(mode)}
+              onApply={(mode) => {
+                handleApplyComparison(mode).catch(() => undefined);
+              }}
             />
 
             <FileList
@@ -390,7 +428,9 @@ export default function App() {
                       icon={<ReloadOutlined />}
                       loading={refreshingSnapshot}
                       type="primary"
-                      onClick={() => void handleRefreshSnapshot()}
+                      onClick={() => {
+                        handleRefreshSnapshot().catch(() => undefined);
+                      }}
                     >
                       Refresh
                     </Button>
@@ -403,7 +443,14 @@ export default function App() {
           <aside className={styles.threadRail}>
             <div className={styles.threadRailHeader}>
               <Typography.Title className={styles.threadRailTitle} level={4}>评论 ({unresolvedThreadsCount})</Typography.Title>
-              <Button disabled={unresolvedThreadsCount === 0} icon={<CopyOutlined />} type="primary" onClick={() => void reviewActions.copyPrompt({ type: 'all-unresolved' })}>
+              <Button
+                disabled={unresolvedThreadsCount === 0}
+                icon={<CopyOutlined />}
+                type="primary"
+                onClick={() => {
+                  reviewActions.copyPrompt({ type: 'all-unresolved' }).catch(() => undefined);
+                }}
+              >
                 批量提交给 Agent
               </Button>
             </div>

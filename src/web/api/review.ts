@@ -17,6 +17,32 @@ export type CompareOptions = {
 };
 
 /**
+ * API 失败时尽量保留状态码和响应正文，方便定位代理、静态页或非 JSON 错误。
+ */
+async function getErrorMessage(res: Response, fallback: string): Promise<string> {
+  const text = await res.text().catch(() => '');
+  const detail = parseErrorDetail(text);
+  const status = `${res.status} ${res.statusText}`.trim();
+
+  return detail ? `${fallback} (${status}): ${detail}` : `${fallback} (${status})`;
+}
+
+function parseErrorDetail(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+
+  try {
+    const data = JSON.parse(trimmed) as { error?: unknown; message?: unknown };
+    const detail = typeof data.error === 'string' ? data.error : typeof data.message === 'string' ? data.message : '';
+    if (detail) return detail;
+  } catch {
+    // 非 JSON 响应正文也保留摘要，常见于代理错误或静态资源回退。
+  }
+
+  return trimmed.length > 300 ? `${trimmed.slice(0, 300)}...` : trimmed;
+}
+
+/**
  * 读取当前 review 会话的完整状态快照。
  */
 export async function fetchReviewState() {
@@ -34,11 +60,24 @@ export async function refreshReviewSnapshot() {
   });
 
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({ error: '刷新 diff 失败' }))) as { error?: string };
-    throw new Error(data.error ?? '刷新 diff 失败');
+    throw new Error(await getErrorMessage(res, '刷新 diff 失败'));
   }
 
   return (await res.json()) as ReviewState;
+}
+
+/**
+ * 请求服务端关闭当前 review runtime。
+ */
+export async function shutdownReviewRuntime() {
+  const res = await fetch('/api/shutdown', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, '关闭任务失败'));
+  }
 }
 
 /**
@@ -47,8 +86,7 @@ export async function refreshReviewSnapshot() {
 export async function fetchCompareOptions() {
   const res = await fetch('/api/compare-options');
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({ error: '读取版本列表失败' }))) as { error?: string };
-    throw new Error(data.error ?? '读取版本列表失败');
+    throw new Error(await getErrorMessage(res, '读取版本列表失败'));
   }
   return (await res.json()) as CompareOptions;
 }
@@ -64,8 +102,7 @@ export async function applyReviewComparison(mode: ReviewMode) {
   });
 
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({ error: '切换对比失败' }))) as { error?: string };
-    throw new Error(data.error ?? '切换对比失败');
+    throw new Error(await getErrorMessage(res, '切换对比失败'));
   }
 
   return (await res.json()) as ReviewState;
@@ -102,8 +139,7 @@ export async function patchReviewThread(id: string, status: ReviewThread['status
   });
 
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({ error: '更新评论状态失败' }))) as { error?: string };
-    throw new Error(data.error ?? '更新评论状态失败');
+    throw new Error(await getErrorMessage(res, '更新评论状态失败'));
   }
 }
 
@@ -140,8 +176,7 @@ export async function patchReviewComment(threadId: string, commentId: string, bo
   });
 
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({ error: '编辑评论失败' }))) as { error?: string };
-    throw new Error(data.error ?? '编辑评论失败');
+    throw new Error(await getErrorMessage(res, '编辑评论失败'));
   }
 }
 

@@ -451,6 +451,14 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     }
   });
 
+  app.post('/api/shutdown', (_req, res) => {
+    res.json({ ok: true });
+    setTimeout(() => {
+      process.kill(process.pid, 'SIGTERM');
+      setTimeout(() => process.exit(0), 200);
+    }, 50);
+  });
+
   const webDist = state.webDist ?? join(process.cwd(), 'dist', 'web');
   if (existsSync(webDist)) {
     // 生产模式使用静态资源托管并回退到 SPA 入口。
