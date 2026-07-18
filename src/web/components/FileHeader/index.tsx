@@ -40,7 +40,7 @@ export function FileHeader({
   // 复制完整文件路径，并给出轻量提示反馈。
   async function copyFilePath() {
     await navigator.clipboard.writeText(file.path);
-    void messageApi.success('完整文件路径已复制到剪贴板');
+    messageApi.success('完整文件路径已复制到剪贴板');
   }
 
   return (
@@ -65,11 +65,21 @@ export function FileHeader({
             type="text"
             icon={<CopyOutlined />}
             aria-label="复制完整文件路径"
-            onClick={() => void copyFilePath()}
+            onClick={() => {
+              copyFilePath().catch(() => undefined);
+            }}
           />
         </div>
         <div className={styles.headerActions}>
-          <Button disabled={fileThreads.length === 0} type='primary' className={styles.headerAction} icon={<CopyOutlined />} onClick={() => void copyPrompt({ type: 'file-unresolved', filePath: file.path })}>
+          <Button
+            disabled={fileThreads.length === 0}
+            type='primary'
+            className={styles.headerAction}
+            icon={<CopyOutlined />}
+            onClick={() => {
+              copyPrompt({ type: 'file-unresolved', filePath: file.path }).catch(() => undefined);
+            }}
+          >
             批量提交当前文件的review
           </Button>
           <Button className={styles.headerAction} icon={<MessageOutlined />} type={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>

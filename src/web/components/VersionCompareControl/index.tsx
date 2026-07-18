@@ -24,11 +24,11 @@ export function VersionCompareControl({ session, filesCount, loading, onApply }:
   const triggerLabel = session ? comparisonLabel(session.mode, compareOptions?.recentCommits ?? []) : '选择对比范围';
 
   React.useEffect(() => {
-    void fetchCompareOptions()
+    fetchCompareOptions()
       .then((options) => setCompareOptions(options))
       .catch((error) => {
         const nextMessage = error instanceof Error ? error.message : '读取版本列表失败';
-        void message.warning(nextMessage);
+        message.warning(nextMessage);
       });
   }, [message]);
 

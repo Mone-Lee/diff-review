@@ -25,7 +25,7 @@ export function CommentComposer({ style, placeholder, onSubmit, submitLabel = 'æ
         event.preventDefault();
         if (!body.trim()) return;
         setSubmitting(true);
-        void onSubmit(body.trim())
+        onSubmit(body.trim())
           .then(() => setBody(''))
           .finally(() => setSubmitting(false));
       }}

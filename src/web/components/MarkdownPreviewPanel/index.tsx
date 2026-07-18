@@ -285,8 +285,7 @@ export function MarkdownPreviewPanel({
       }
       return renderCommentableBlock(getNodeStartLine(node), <ol {...props}>{children}</ol>);
     },
-    li({ children, node, ...props }) {
-      void node;
+    li({ children, node: _node, ...props }) {
       return <li {...props}>{children}</li>;
     },
     blockquote({ children, node, ...props }) {
@@ -322,8 +321,7 @@ export function MarkdownPreviewPanel({
       );
     },
     // 行内 code 与代码块中的 code 分开样式处理。
-    code({ className, children, node, ...props }) {
-      void node;
+    code({ className, children, node: _node, ...props }) {
       if (className) {
         return (
           <code className={className} {...props}>
@@ -349,8 +347,7 @@ export function MarkdownPreviewPanel({
       );
     },
     // 链接仅在通过安全校验后渲染；外链自动新开窗口。
-    a({ href, children, node, ...props }) {
-      void node;
+    a({ href, children, node: _node, ...props }) {
       const safeHref = href ?? '';
 
       if (!safeHref || !isSafeUrl(safeHref)) {
@@ -365,8 +362,7 @@ export function MarkdownPreviewPanel({
       );
     },
     // 图片地址仅在通过安全校验后渲染，并启用懒加载。
-    img({ src, alt, node, ...props }) {
-      void node;
+    img({ src, alt, node: _node, ...props }) {
       const safeSrc = src ?? '';
 
       if (!safeSrc || !isSafeUrl(safeSrc)) {

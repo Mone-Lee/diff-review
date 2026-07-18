@@ -200,7 +200,7 @@ export function InlineThreadGroup({
               icon={<CopyOutlined />}
               onClick={(event) => {
                 event.stopPropagation();
-                void copyThreadPrompt({ type: 'thread', threadId: actionThread.id });
+                copyThreadPrompt({ type: 'thread', threadId: actionThread.id }).catch(() => undefined);
               }}
             >
               复制
@@ -241,7 +241,7 @@ export function InlineThreadGroup({
               icon={<ReloadOutlined />}
               onClick={(event) => {
                 event.stopPropagation();
-                void patchThread(actionThread.id, 'submit');
+                patchThread(actionThread.id, 'submit').catch(() => undefined);
               }}
             >
               重新打开
@@ -253,7 +253,7 @@ export function InlineThreadGroup({
               icon={<CheckOutlined />}
               onClick={(event) => {
                 event.stopPropagation();
-                void patchThread(actionThread.id, 'resolved');
+                patchThread(actionThread.id, 'resolved').catch(() => undefined);
               }}
             >
               确认完成

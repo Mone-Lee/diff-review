@@ -28,7 +28,7 @@ export function useDiffFileContents(filePath: string, snapshotHash: string) {
       }
     }
 
-    void loadFileContents();
+    loadFileContents().catch(() => undefined);
 
     return () => {
       cancelled = true;

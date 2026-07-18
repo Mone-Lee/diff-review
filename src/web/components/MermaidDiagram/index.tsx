@@ -51,7 +51,7 @@ export function MermaidDiagram({ chart }: Props) {
       }
     }
 
-    void renderDiagram();
+    renderDiagram().catch(() => undefined);
 
     return () => {
       isActive = false;
