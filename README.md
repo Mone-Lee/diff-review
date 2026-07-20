@@ -9,7 +9,7 @@ AI chat 里的本地代码审查工具。可以直接用 CLI 打开，也可以�
 Try it first:
 
 ```bash
-npx --yes local-diff-reviewer
+npx --yes local-diff-reviewer@latest
 ```
 
 Install and use:
@@ -110,7 +110,7 @@ local-diff-reviewer --repo /path/to/project staged
 npx skills add Mone-Lee/diff-review
 ```
 
-skill 会以目标 workspace 作为命令工作目录运行 `npx --yes local-diff-reviewer [args...]`，因此 `/diff-review` 会审查当前项目，而不是 skill 安装目录。用户要求停止、关闭或结束当前项目的 Diff Review 时，skill 应直接执行 `/diff-review stop`，而不是只提示这条命令。
+skill 会以目标 workspace 作为命令工作目录运行 `npx --yes local-diff-reviewer@latest [args...]`，因此 `/diff-review` 会审查当前项目，而不是 skill 安装目录，并尽量避免 npm 复用旧的 npx 缓存。用户要求停止、关闭或结束当前项目的 Diff Review 时，skill 应直接执行 `/diff-review stop`，而不是只提示这条命令。
 如果 `/diff-review stop` 后本次 review 实际使用的端口仍可访问，说明该端口上的页面很可能属于其他仓库，或当前 workspace 的 review 还没有停干净。
 
 ### 预置 agent 评论
@@ -120,28 +120,28 @@ CLI 支持重复传入 `--comment <json>`，用于在打开 UI 前把 agent 审�
 代码 diff 行评论：
 
 ```bash
-npx --yes local-diff-reviewer \
+npx --yes local-diff-reviewer@latest \
   --comment '{"type":"thread","filePath":"src/foo.ts","position":{"side":"new","line":36},"body":"这里没有处理空数组，可能导致运行时报错。"}'
 ```
 
 Markdown source line 评论：
 
 ```bash
-npx --yes local-diff-reviewer \
+npx --yes local-diff-reviewer@latest \
   --comment '{"type":"thread","filePath":"README.md","position":{"type":"markdown","line":22},"body":"这里可以补充 old/new side 的例子。"}'
 ```
 
 文件级评论：
 
 ```bash
-npx --yes local-diff-reviewer \
+npx --yes local-diff-reviewer@latest \
   --comment '{"type":"thread","filePath":"src/foo.ts","body":"这个文件的错误处理策略需要统一。"}'
 ```
 
 回复已有 thread：
 
 ```bash
-npx --yes local-diff-reviewer \
+npx --yes local-diff-reviewer@latest \
   --comment '{"type":"reply","threadId":"<thread-id>","body":"同意，这里应该按 repoRoot 隔离评论存储。"}'
 ```
 

@@ -2,7 +2,7 @@
  * Review 服务端入口：负责暴露会话、diff、评论、预览与 prompt 相关 API，并维护运行时 review 状态。
  */
 import express from 'express';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
 import { parseUnifiedDiff } from '../core/diff-parser';
@@ -20,6 +20,8 @@ export type ReviewServerState = {
   webDist?: string;
 };
 
+const packageVersion = readPackageVersion();
+
 export async function startServer(state: ReviewServerState, port = 4966): Promise<string> {
   let markdownPreviews = await buildMarkdownPreviewCache(state);
   const fileWatcher = new FileWatcherService(state.session.repoRoot);
@@ -36,7 +38,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
 
   // 提供服务端能力声明，供 CLI 在刷新前做版本兼容探测。
   app.get('/api/capabilities', (_req, res) => {
-    res.json({ reviewRefreshProtocol: REVIEW_REFRESH_PROTOCOL });
+    res.json({ appVersion: packageVersion, reviewRefreshProtocol: REVIEW_REFRESH_PROTOCOL });
   });
 
   app.get('/api/review-state', async (_req, res, next) => {
@@ -566,6 +568,15 @@ function listen(app: express.Express, port: number, fileWatcher: FileWatcherServ
       resolve(`http://127.0.0.1:${actualPort}`);
     });
   });
+}
+
+function readPackageVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(join(resolve(import.meta.dirname, '../..'), 'package.json'), 'utf8')) as { version?: unknown };
+    return typeof pkg.version === 'string' ? pkg.version : 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 function selectPromptThreads(threads: ReviewThread[], scope: PromptScope, currentFiles: DiffFile[]): ReviewThread[] {

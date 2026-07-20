@@ -2,7 +2,7 @@
  * CLI 入口：负责解析命令行参数、采集当前仓库 diff、复用或启动 review 服务，并协调浏览器打开流程。
  */
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,16 +16,27 @@ import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type ReviewSession } from '../s
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const builtWebDist = join(packageRoot, 'dist', 'web');
+const defaultApiPort = 4966;
+const packageVersion = readPackageVersion();
 
 async function main() {
   // CLI 参数只负责确定审查模式，真正的数据都来自当前仓库状态。
   const { command, dev, newSession, repo, reviewArgs, comments } = parseCliOptions(process.argv.slice(2));
+  if (command === 'help') {
+    printHelp();
+    return;
+  }
+  if (command === 'version') {
+    console.log(packageVersion);
+    return;
+  }
   if (command === 'stop') {
     await stopCommand(repo);
     return;
   }
   const repoRoot = await getRepoRoot(repo ?? process.cwd());
   const mode = resolveInitialReviewMode(reviewArgs);
+  logStartup(repoRoot, mode);
   const diff = await getDiff(mode, repoRoot);
   const diffFiles = parseUnifiedDiff(diff);
   const session: ReviewSession = {
@@ -53,6 +64,8 @@ async function main() {
   }
 
   const hasBuiltWeb = existsSync(join(builtWebDist, 'index.html'));
+  const defaultPortSession = await inspectReviewSessionAtPort(defaultApiPort);
+  logDefaultPortOccupancy(repoRoot, defaultPortSession);
   const apiUrl = await startServer({ session, diffFiles, webDist: hasBuiltWeb ? builtWebDist : undefined });
   // 非 --dev 模式下优先复用已构建的静态页面，避免每次都起 Vite。
   const useVite = dev || !hasBuiltWeb;
@@ -74,8 +87,8 @@ async function main() {
 
   console.log(`Diff Review is running: ${uiUrl}`);
   console.log(`Repo: ${session.repoName} (${repoRoot})`);
-  if (!useVite && uiUrl !== 'http://127.0.0.1:4966') {
-    console.log(`Default port 4966 is busy; using ${uiUrl}`);
+  if (!useVite && uiUrl !== `http://127.0.0.1:${defaultApiPort}`) {
+    logDefaultPortFallback(uiUrl, defaultPortSession);
   }
   console.log(`Mode: ${modeLabel(mode)}`);
   console.log(`Files: ${diffFiles.length}`);
@@ -83,14 +96,14 @@ async function main() {
 }
 
 function parseCliOptions(args: string[]): {
-  command: 'review' | 'stop';
+  command: 'review' | 'stop' | 'help' | 'version';
   dev: boolean;
   newSession: boolean;
   repo: string | undefined;
   reviewArgs: string[];
   comments: string[];
 } {
-  let command: 'review' | 'stop' = 'review';
+  let command: 'review' | 'stop' | 'help' | 'version' = 'review';
   const reviewArgs: string[] = [];
   const comments: string[] = [];
   let repo: string | undefined;
@@ -102,6 +115,14 @@ function parseCliOptions(args: string[]): {
     const arg = args[index];
     if (arg === '--dev') {
       dev = true;
+      continue;
+    }
+    if (arg === '--help' || arg === '-h' || arg === 'help') {
+      command = 'help';
+      continue;
+    }
+    if (arg === '--version' || arg === '-v' || arg === 'version') {
+      command = 'version';
       continue;
     }
     if (arg === '--new-session') {
@@ -152,8 +173,9 @@ async function refreshRunningReview(session: ReviewSession, diffFiles: DiffFile[
       // 仅复用声明了同版本刷新协议的运行中服务，避免把新快照推给旧实现导致评论丢失展示。
       const capabilityResponse = await fetch(`${apiUrl}/api/capabilities`);
       if (!capabilityResponse.ok) continue;
-      const capabilities = (await capabilityResponse.json()) as { reviewRefreshProtocol?: unknown };
+      const capabilities = (await capabilityResponse.json()) as { appVersion?: unknown; reviewRefreshProtocol?: unknown };
       if (capabilities.reviewRefreshProtocol !== REVIEW_REFRESH_PROTOCOL) continue;
+      if (capabilities.appVersion !== packageVersion) continue;
       const response = await fetch(`${apiUrl}/api/review-state`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -168,11 +190,57 @@ async function refreshRunningReview(session: ReviewSession, diffFiles: DiffFile[
   return undefined;
 }
 
+function logStartup(repoRoot: string, mode: ReviewSession['mode']) {
+  console.log(`Diff Review ${packageVersion} starting...`);
+  console.log(`Repo: ${basename(repoRoot)} (${repoRoot})`);
+  console.log(`Mode: ${modeLabel(mode)}`);
+  console.log('Collecting git diff...');
+}
+
+function logDefaultPortOccupancy(
+  repoRoot: string,
+  session: Pick<ReviewSession, 'repoName' | 'repoRoot'> | undefined
+) {
+  if (!session || session.repoRoot === repoRoot) return;
+  console.warn(`Default port ${defaultApiPort} is serving repo ${session.repoName} (${session.repoRoot}).`);
+}
+
+function logDefaultPortFallback(uiUrl: string, session: Pick<ReviewSession, 'repoName' | 'repoRoot'> | undefined) {
+  if (session) {
+    console.log(`Default port ${defaultApiPort} is busy with repo ${session.repoName}; using ${uiUrl}`);
+    return;
+  }
+  console.log(`Default port ${defaultApiPort} is busy; using ${uiUrl}`);
+}
+
 function logImportResult(comments: string[], result: Awaited<ReturnType<typeof importAgentComments>>) {
   if (comments.length === 0) return;
   console.log(`Agent comments imported: ${result.imported}`);
   for (const skipped of result.skipped) {
     console.warn(`Skipped ${skipped}`);
+  }
+}
+
+function printHelp() {
+  console.log(`local-diff-reviewer ${packageVersion}`);
+  console.log('');
+  console.log('Usage: local-diff-reviewer [working|staged|<base> <target>] [--new-session] [--repo <path>]');
+  console.log('       local-diff-reviewer stop [--repo <path>]');
+  console.log('');
+  console.log('Options:');
+  console.log('  --new-session      Open a separate review session instead of refreshing an existing one.');
+  console.log('  --repo <path>      Review a repository other than the current working directory.');
+  console.log('  --comment <json>   Import an agent comment before opening the viewer.');
+  console.log('  --version, -v      Print the CLI version.');
+  console.log('  --help, -h         Print this help.');
+}
+
+function readPackageVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as { version?: unknown };
+    return typeof pkg.version === 'string' ? pkg.version : 'unknown';
+  } catch {
+    return 'unknown';
   }
 }
 
