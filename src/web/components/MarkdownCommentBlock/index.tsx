@@ -13,6 +13,7 @@ type Props = {
   lineNumber: number;
   filePath: string;
   lineThreads: ReviewThread[];
+  selectionThreads?: ReviewThread[];
   children: React.ReactNode;
   className?: string;
 };
@@ -23,33 +24,37 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
   lineNumber,
   filePath,
   lineThreads,
+  selectionThreads = [],
   children,
   className
 }: Props) {
   const { createThread } = useReviewActions();
   const [isComposerOpen, setIsComposerOpen] = React.useState(false);
   const blockClassName = [styles.markdownCommentBlock, className].filter(Boolean).join(' ');
+  const visibleThreads = [...lineThreads, ...selectionThreads];
 
   return (
     <div className={blockClassName} data-review-anchor={`line:${lineNumber}`} data-review-line={lineNumber}>
-      <div className={styles.markdownCommentContent}>{children}</div>
+      <div className={styles.markdownCommentContent} data-markdown-comment-content>{children}</div>
       {lineThreads.length === 0 ? (
-        <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setIsComposerOpen(true)}>
+        <button className={styles.commentTrigger} type="button" aria-label="添加行评论" data-review-ignore-selection onClick={() => setIsComposerOpen(true)}>
           <MessageOutlined />
         </button>
       ) : null}
       {isComposerOpen ? (
-        <CommentPopover
-          onCancel={() => setIsComposerOpen(false)}
-          onSubmit={async (body) => {
-            await createThread({ type: 'markdown-line', filePath, lineNumber, blockId: `line-${lineNumber}` }, body);
-            setIsComposerOpen(false);
-          }}
-        />
+        <div data-review-ignore-selection>
+          <CommentPopover
+            onCancel={() => setIsComposerOpen(false)}
+            onSubmit={async (body) => {
+              await createThread({ type: 'markdown-line', filePath, lineNumber, blockId: `line-${lineNumber}` }, body);
+              setIsComposerOpen(false);
+            }}
+          />
+        </div>
       ) : null}
-      {lineThreads.length > 0 ? (
-        <div className={styles.inlineThreadStack}>
-          <InlineThreadGroup threads={lineThreads} />
+      {visibleThreads.length > 0 ? (
+        <div className={styles.inlineThreadStack} data-review-ignore-selection>
+          <InlineThreadGroup threads={visibleThreads} />
         </div>
       ) : null}
     </div>

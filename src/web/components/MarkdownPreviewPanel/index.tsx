@@ -7,7 +7,8 @@
  * 4) 对 mermaid 代码块交由 MermaidDiagram 组件渲染。
  */
 import React from 'react';
-import { Alert, Spin } from 'antd';
+import { Alert, Button, Input, Spin } from 'antd';
+import { CloseOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
@@ -20,6 +21,7 @@ import { fetchMarkdownPreview } from '../../api/content';
 import styles from './index.module.less';
 import { MarkdownCommentBlock } from '../MarkdownCommentBlock';
 import { MermaidDiagram } from '../MermaidDiagram';
+import { useReviewActions } from '../../contexts/ReviewActionsContext';
 import {
   extractText,
   findMarkdownAnchor,
@@ -47,6 +49,12 @@ type Props = {
   threads: ReviewThread[];
   locateTarget: { threadId: string; anchor: CommentAnchor } | null;
 };
+
+type MarkdownSelectionDraft = {
+  anchor: Extract<CommentAnchor, { type: 'markdown-selection' }>;
+  position: { left: number; top: number };
+};
+
 type MarkdownAstNode = {
   type?: string;
   value?: string;
@@ -114,18 +122,167 @@ const MARKDOWN_REHYPE_PLUGINS: PluggableList = [
   rehypeRaw,
   [rehypeSanitize, MARKDOWN_REHYPE_SANITIZE_SCHEMA]
 ];
+const MARKDOWN_SELECTION_HIGHLIGHT_NAME = 'diff-review-markdown-selection';
+const MARKDOWN_SELECTION_HIGHLIGHT_STYLE_ID = 'diff-review-markdown-selection-style';
+
+type HighlightConstructor = new (...ranges: Range[]) => unknown;
+type HighlightRegistry = {
+  set: (name: string, highlight: unknown) => void;
+  delete: (name: string) => void;
+};
+
+function getNodeElement(node: Node | null) {
+  if (!node) return null;
+  return node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
+}
+
+function closestCommentBlock(node: Node | null, markdownBody: HTMLElement) {
+  const element = getNodeElement(node);
+  const block = element?.closest<HTMLElement>('[data-review-line]');
+  return block && markdownBody.contains(block) ? block : null;
+}
+
+function isIgnoredSelectionNode(node: Node | null) {
+  return Boolean(getNodeElement(node)?.closest('[data-review-ignore-selection]'));
+}
+
+function getCommentBlockContent(block: HTMLElement) {
+  return block.querySelector<HTMLElement>('[data-markdown-comment-content]');
+}
+
+function getTextOffset(root: HTMLElement, node: Node, offset: number) {
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  range.setEnd(node, offset);
+  const textOffset = range.toString().length;
+  range.detach();
+  return textOffset;
+}
+
+function getSelectionPopoverPosition(range: Range, scrollContainer: HTMLElement) {
+  const rect = range.getBoundingClientRect();
+  const containerRect = scrollContainer.getBoundingClientRect();
+  const maxLeft = Math.max(8, scrollContainer.clientWidth - 454);
+
+  return {
+    left: Math.min(Math.max(rect.left - containerRect.left + scrollContainer.scrollLeft, 8), maxLeft),
+    top: Math.max(rect.top - containerRect.top + scrollContainer.scrollTop - 56, 8)
+  };
+}
+
+function buildSelectionDraft(selection: Selection, markdownBody: HTMLElement, scrollContainer: HTMLElement, filePath: string): MarkdownSelectionDraft | null {
+  if (selection.rangeCount === 0 || selection.isCollapsed) return null;
+  if (isIgnoredSelectionNode(selection.anchorNode) || isIgnoredSelectionNode(selection.focusNode)) return null;
+
+  const selectedText = selection.toString().trim();
+  if (!selectedText) return null;
+
+  const range = selection.getRangeAt(0);
+  if (!markdownBody.contains(range.commonAncestorContainer)) return null;
+
+  const startBlock = closestCommentBlock(range.startContainer, markdownBody);
+  const endBlock = closestCommentBlock(range.endContainer, markdownBody);
+  if (!startBlock || !endBlock) return null;
+
+  const startContent = getCommentBlockContent(startBlock);
+  const endContent = getCommentBlockContent(endBlock);
+  if (!startContent || !endContent) return null;
+  if (!startContent.contains(range.startContainer) || !endContent.contains(range.endContainer)) return null;
+
+  const startLine = Number(startBlock.dataset.reviewLine);
+  const endLine = Number(endBlock.dataset.reviewLine);
+  if (!Number.isInteger(startLine) || !Number.isInteger(endLine)) return null;
+
+  return {
+    anchor: {
+      type: 'markdown-selection',
+      filePath,
+      startLine,
+      endLine,
+      startOffset: getTextOffset(startContent, range.startContainer, range.startOffset),
+      endOffset: getTextOffset(endContent, range.endContainer, range.endOffset),
+      selectedText,
+      blockId: `line-${startLine}`
+    },
+    position: getSelectionPopoverPosition(range, scrollContainer)
+  };
+}
+
+function getHighlightApi() {
+  const HighlightValue = (window as Window & { Highlight?: HighlightConstructor }).Highlight;
+  const highlights = (CSS as typeof CSS & { highlights?: HighlightRegistry }).highlights;
+  if (!HighlightValue || !highlights) return null;
+  ensureSelectionHighlightStyle();
+  return { HighlightValue, highlights };
+}
+
+function ensureSelectionHighlightStyle() {
+  if (document.getElementById(MARKDOWN_SELECTION_HIGHLIGHT_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = MARKDOWN_SELECTION_HIGHLIGHT_STYLE_ID;
+  style.textContent = `::highlight(${MARKDOWN_SELECTION_HIGHLIGHT_NAME}) { background: #fff36d; }`;
+  document.head.appendChild(style);
+}
+
+function findTextPosition(root: HTMLElement, offset: number) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let remaining = Math.max(0, offset);
+  let lastTextNode: Text | null = null;
+
+  while (walker.nextNode()) {
+    const textNode = walker.currentNode as Text;
+    lastTextNode = textNode;
+    if (remaining <= textNode.data.length) {
+      return { node: textNode, offset: remaining };
+    }
+    remaining -= textNode.data.length;
+  }
+
+  return lastTextNode ? { node: lastTextNode, offset: lastTextNode.data.length } : null;
+}
+
+function createHighlightRange(markdownBody: HTMLElement, anchor: Extract<CommentAnchor, { type: 'markdown-selection' }>) {
+  const startBlock = markdownBody.querySelector<HTMLElement>(`[data-review-line="${anchor.startLine}"]`);
+  const endBlock = markdownBody.querySelector<HTMLElement>(`[data-review-line="${anchor.endLine}"]`);
+  const startContent = startBlock ? getCommentBlockContent(startBlock) : null;
+  const endContent = endBlock ? getCommentBlockContent(endBlock) : null;
+  if (!startContent || !endContent) return null;
+
+  const start = findTextPosition(startContent, anchor.startOffset);
+  const end = findTextPosition(endContent, anchor.endOffset);
+  if (!start || !end) return null;
+
+  const range = document.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset);
+  return range.collapsed ? null : range;
+}
+
+function getAnchorPreviewLine(anchor: CommentAnchor) {
+  if (anchor.type === 'markdown-selection') return anchor.startLine;
+  if (anchor.type === 'markdown-line') return anchor.lineNumber;
+  if (anchor.type === 'diff-line' && anchor.side === 'new') return anchor.lineNumber;
+  return null;
+}
 
 export function MarkdownPreviewPanel({
   file,
   threads,
   locateTarget
 }: Props) {
+  const { createThread } = useReviewActions();
   const [preview, setPreview] = React.useState<MarkdownPreview | null>(null);
+  const [selectionDraft, setSelectionDraft] = React.useState<MarkdownSelectionDraft | null>(null);
+  const [selectionBody, setSelectionBody] = React.useState('');
+  const [isSubmittingSelection, setIsSubmittingSelection] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const markdownBodyRef = React.useRef<HTMLDivElement | null>(null);
   const autoScrollKeyRef = React.useRef('');
 
   React.useEffect(() => {
     setPreview(null);
+    setSelectionDraft(null);
+    setSelectionBody('');
     fetchMarkdownPreview(file.path)
       .then((data) => setPreview(data))
       .catch(() => setPreview(null));
@@ -166,7 +323,10 @@ export function MarkdownPreviewPanel({
     }
     if (locateTarget.anchor.type === 'diff-line' && locateTarget.anchor.side !== 'new') return;
 
-    const scrollLine = getMarkdownScrollLine(preview, locateTarget.anchor.lineNumber);
+    const anchorLine = getAnchorPreviewLine(locateTarget.anchor);
+    if (!anchorLine) return;
+
+    const scrollLine = getMarkdownScrollLine(preview, anchorLine);
     const target = scrollContainer.querySelector<HTMLElement>(`[data-review-line="${scrollLine}"]`) ?? findMarkdownAnchor(scrollContainer, scrollLine);
     if (target) {
       scrollToTarget(scrollContainer, target);
@@ -175,17 +335,76 @@ export function MarkdownPreviewPanel({
     }
   }, [file.path, locateTarget, preview]);
 
-  const threadsByLine = React.useMemo(() => {
-    const nextThreadsByLine = new Map<number, ReviewThread[]>();
+  const { lineThreadsByLine, selectionThreadsByLine } = React.useMemo(() => {
+    const nextLineThreadsByLine = new Map<number, ReviewThread[]>();
+    const nextSelectionThreadsByLine = new Map<number, ReviewThread[]>();
     for (const thread of threads) {
       if (thread.anchor.filePath !== file.path || !preview) continue;
       const displayLineNumber = getPreviewThreadLine(preview, thread);
       if (!displayLineNumber) continue;
-      const lineThreads = nextThreadsByLine.get(displayLineNumber) ?? [];
+      const targetMap = thread.anchor.type === 'markdown-selection' ? nextSelectionThreadsByLine : nextLineThreadsByLine;
+      const lineThreads = targetMap.get(displayLineNumber) ?? [];
       lineThreads.push(thread);
-      nextThreadsByLine.set(displayLineNumber, lineThreads);
+      targetMap.set(displayLineNumber, lineThreads);
     }
-    return nextThreadsByLine;
+    return {
+      lineThreadsByLine: nextLineThreadsByLine,
+      selectionThreadsByLine: nextSelectionThreadsByLine
+    };
+  }, [file.path, preview, threads]);
+
+  React.useEffect(() => {
+    if (!preview) return undefined;
+
+    const updateSelectionDraft = () => {
+      const selection = window.getSelection();
+      const markdownBody = markdownBodyRef.current;
+      const scrollContainer = scrollRef.current;
+      if (!selection || !markdownBody || !scrollContainer) return;
+
+      const nextDraft = buildSelectionDraft(selection, markdownBody, scrollContainer, file.path);
+      if (nextDraft) {
+        setSelectionDraft(nextDraft);
+        return;
+      }
+
+      if (!isIgnoredSelectionNode(selection.anchorNode) && !isIgnoredSelectionNode(selection.focusNode)) {
+        setSelectionDraft(null);
+      }
+    };
+
+    const scheduleSelectionUpdate = () => {
+      window.setTimeout(updateSelectionDraft, 0);
+    };
+
+    document.addEventListener('mouseup', scheduleSelectionUpdate);
+    document.addEventListener('keyup', scheduleSelectionUpdate);
+
+    return () => {
+      document.removeEventListener('mouseup', scheduleSelectionUpdate);
+      document.removeEventListener('keyup', scheduleSelectionUpdate);
+    };
+  }, [file.path, preview]);
+
+  React.useEffect(() => {
+    const markdownBody = markdownBodyRef.current;
+    const highlightApi = getHighlightApi();
+    if (!markdownBody || !highlightApi) return undefined;
+
+    const ranges = threads
+      .filter((thread) => thread.filePath === file.path && thread.anchor.type === 'markdown-selection')
+      .map((thread) => createHighlightRange(markdownBody, thread.anchor as Extract<CommentAnchor, { type: 'markdown-selection' }>))
+      .filter((range): range is Range => Boolean(range));
+
+    if (ranges.length > 0) {
+      highlightApi.highlights.set(MARKDOWN_SELECTION_HIGHLIGHT_NAME, new highlightApi.HighlightValue(...ranges));
+    } else {
+      highlightApi.highlights.delete(MARKDOWN_SELECTION_HIGHLIGHT_NAME);
+    }
+
+    return () => {
+      highlightApi.highlights.delete(MARKDOWN_SELECTION_HIGHLIGHT_NAME);
+    };
   }, [file.path, preview, threads]);
 
   // 所有块级评论入口都尽量统一走这一层包装。
@@ -203,7 +422,8 @@ export function MarkdownPreviewPanel({
       <MarkdownCommentBlock
         lineNumber={lineNumber}
         filePath={file.path}
-        lineThreads={threadsByLine.get(lineNumber) ?? []}
+        lineThreads={lineThreadsByLine.get(lineNumber) ?? []}
+        selectionThreads={selectionThreadsByLine.get(lineNumber) ?? []}
         className={options?.className}
       >
         {content}
@@ -211,7 +431,8 @@ export function MarkdownPreviewPanel({
     );
   }, [
     file.path,
-    threadsByLine
+    lineThreadsByLine,
+    selectionThreadsByLine
   ]);
 
   // 标题单独走这一层，是为了统一清掉 heading 自身的 margin-top，
@@ -389,7 +610,7 @@ export function MarkdownPreviewPanel({
     <div className={styles.markdownShell} ref={scrollRef}>
       {preview.deleted ? <Alert className={styles.deletedBanner} message="该文件已删除，仅展示删除前预览" type="warning" showIcon /> : null}
       <article className={styles.markdownArticle}>
-        <div className={styles.markdownBody}>
+        <div className={styles.markdownBody} ref={markdownBodyRef}>
           <ReactMarkdown
             remarkPlugins={MARKDOWN_REMARK_PLUGINS}
             rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
@@ -400,6 +621,47 @@ export function MarkdownPreviewPanel({
           </ReactMarkdown>
         </div>
       </article>
+      {selectionDraft ? (
+        <form
+          className={styles.selectionComposer}
+          data-review-ignore-selection
+          style={{ left: selectionDraft.position.left, top: selectionDraft.position.top }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!selectionBody.trim() || isSubmittingSelection) return;
+            setIsSubmittingSelection(true);
+            createThread(selectionDraft.anchor, selectionBody.trim())
+              .then(() => {
+                setSelectionBody('');
+                setSelectionDraft(null);
+                window.getSelection()?.removeAllRanges();
+              })
+              .finally(() => setIsSubmittingSelection(false));
+          }}
+        >
+          <Input
+            autoFocus
+            className={styles.selectionComposerInput}
+            placeholder="Add a comment..."
+            value={selectionBody}
+            onChange={(event) => setSelectionBody(event.target.value)}
+          />
+          <Button htmlType="submit" loading={isSubmittingSelection} type="primary">
+            保存
+          </Button>
+          <Button
+            aria-label="关闭"
+            className={styles.selectionComposerClose}
+            icon={<CloseOutlined />}
+            type="text"
+            onClick={() => {
+              setSelectionBody('');
+              setSelectionDraft(null);
+              window.getSelection()?.removeAllRanges();
+            }}
+          />
+        </form>
+      ) : null}
     </div>
   );
 }

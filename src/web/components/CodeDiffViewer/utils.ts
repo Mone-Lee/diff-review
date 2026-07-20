@@ -8,6 +8,7 @@ export const GAP_EXPAND_STEP = 20;
 
 function threadAnchorOrder(thread: ReviewThread) {
   if (thread.anchor.type === 'file') return 0;
+  if (thread.anchor.type === 'markdown-selection') return thread.anchor.startLine;
   return thread.anchor.lineNumber;
 }
 

@@ -12,13 +12,22 @@ export function sameAnchor(left: CommentAnchor, right: CommentAnchor): boolean {
   if (left.type === 'markdown-line' && right.type === 'markdown-line') {
     return left.lineNumber === right.lineNumber;
   }
+  if (left.type === 'markdown-selection' && right.type === 'markdown-selection') {
+    return (
+      left.startLine === right.startLine &&
+      left.endLine === right.endLine &&
+      left.startOffset === right.startOffset &&
+      left.endOffset === right.endOffset
+    );
+  }
   return false;
 }
 
 export function anchorKey(anchor: CommentAnchor): string {
   if (anchor.type === 'file') return `file:${anchor.filePath}`;
   if (anchor.type === 'diff-line') return `diff:${anchor.filePath}:${anchor.side}:${anchor.lineNumber}`;
-  return `markdown:${anchor.filePath}:${anchor.lineNumber}`;
+  if (anchor.type === 'markdown-line') return `markdown:${anchor.filePath}:${anchor.lineNumber}`;
+  return `markdown-selection:${anchor.filePath}:${anchor.startLine}:${anchor.endLine}:${anchor.startOffset}:${anchor.endOffset}`;
 }
 
 export function isThreadOnFileSnapshot(thread: ReviewThread, file: DiffFile): boolean {

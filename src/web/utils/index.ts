@@ -14,7 +14,12 @@ export function modeLabel(session: ReviewSession): string {
 export function formatAnchor(thread: ReviewThread): string {
   if (thread.anchor.type === 'file') return thread.filePath;
   if (thread.anchor.type === 'diff-line') return `${thread.filePath}:${thread.anchor.side}:${thread.anchor.lineNumber}`;
+  if (thread.anchor.type === 'markdown-selection') return `${thread.filePath}:${formatLineRange(thread.anchor.startLine, thread.anchor.endLine)}`;
   return `${thread.filePath}:${thread.anchor.lineNumber}`;
+}
+
+function formatLineRange(startLine: number, endLine: number) {
+  return startLine === endLine ? String(startLine) : `${startLine}-${endLine}`;
 }
 
 export function formatFileStatus(status: string): string {

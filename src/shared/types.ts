@@ -53,7 +53,17 @@ export type DiffFile = {
 export type CommentAnchor =
   | { type: 'file'; filePath: string }
   | { type: 'diff-line'; filePath: string; side: 'old' | 'new'; lineNumber: number }
-  | { type: 'markdown-line'; filePath: string; lineNumber: number; blockId?: string };
+  | { type: 'markdown-line'; filePath: string; lineNumber: number; blockId?: string }
+  | {
+    type: 'markdown-selection';
+    filePath: string;
+    startLine: number;
+    endLine: number;
+    startOffset: number;
+    endOffset: number;
+    selectedText: string;
+    blockId?: string;
+  };
 
 export type ReviewComment = {
   id: string;
