@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process';
 
 const args = process.argv.slice(2);
-const commandArgs = ['--yes', 'local-diff-reviewer@latest', ...args];
+const commandArgs = ['--yes', '--registry=https://registry.npmjs.org/', 'local-diff-reviewer@latest', ...args];
 
 const child = spawn('npx', commandArgs, {
   cwd: process.cwd(),
