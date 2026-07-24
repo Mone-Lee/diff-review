@@ -100,6 +100,43 @@ Copilot 可使用独立 `hooks.json`：
 
 `copilot-plan` 会检查 hook 输入中是否包含 `exit_plan_mode`，只在该工具调用上继续处理。计划文本会从输入里的 `plan`、`content`、`markdown` 或 `message` 字段中提取。
 
+## 流程图
+
+```mermaid
+flowchart TD
+  Agent[Agent 产出 plan mode 计划] --> Entry{触发来源}
+
+  Entry -->|Codex Stop hook| CodexHook[local-diff-reviewer plan-hook]
+  Entry -->|Copilot preToolUse hook| CopilotHook[local-diff-reviewer copilot-plan]
+
+  CodexHook --> CodexCheck{permission_mode 是否为 plan}
+  CodexCheck -->|否| Pass[输出 continue true 并放行]
+  CodexCheck -->|是| ReadInput[读取 hook stdin]
+
+  CopilotHook --> CopilotCheck{是否调用 exit_plan_mode}
+  CopilotCheck -->|否| Pass
+  CopilotCheck -->|是| ReadInput
+
+  ReadInput --> Extract{能否提取计划文本}
+  Extract -->|否| Pass
+  Extract -->|是| VirtualFile[创建计划虚拟 Markdown 文件]
+
+  VirtualFile --> Server[启动 Diff Review 本地服务]
+  Server --> Browser[打开计划审查页面]
+  Browser --> Wait[hook 子进程阻塞轮询审查结果]
+
+  Wait --> Review{用户 UI 决策}
+  Review -->|通过计划| Approve[POST approve 到 /api/plan-review-result]
+  Review -->|退回评论| RequestChanges[POST requestChanges 到 /api/plan-review-result]
+
+  Approve --> Continue[stdout 输出 continue true]
+  RequestChanges --> CollectComments[读取当前计划未解决评论]
+  CollectComments --> Stop[stdout 输出 continue false 和 stopReason]
+
+  Continue --> AgentContinue[Agent 继续执行]
+  Stop --> AgentRevise[Agent 收到反馈并修改计划]
+```
+
 ## 响应流程
 
 1. Agent 进入 plan mode 并产出计划。
