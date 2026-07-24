@@ -9,10 +9,13 @@ import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
+import { buildPlanReviewSnapshot, formatPlanHookOutput, readHookInputFromStdin } from '../core/plan-review';
+import { installCodexPlanHook } from './hooks-installer';
 import { getLiveRuntimes, hasRuntimeRecord, recordRuntime, stopRecordedRuntimes, type RuntimeEntry } from './runtime-registry';
 import { startServer } from '../server';
-import { attachLegacyComments } from '../server/storage';
-import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type ReviewSession } from '../shared/types';
+import { attachLegacyComments, readComments } from '../server/storage';
+import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type PlanReviewResult, type ReviewSession } from '../shared/types';
+import { isThreadOnFileSnapshot } from '../shared/thread-utils';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const builtWebDist = join(packageRoot, 'dist', 'web');
@@ -28,6 +31,14 @@ async function main() {
   }
   if (command === 'version') {
     console.log(packageVersion);
+    return;
+  }
+  if (command === 'install-hooks') {
+    await installHooksCommand(reviewArgs);
+    return;
+  }
+  if (command === 'plan-hook' || command === 'copilot-plan') {
+    await planHookCommand(dev, command === 'copilot-plan' ? 'copilot' : 'codex');
     return;
   }
   if (command === 'stop') {
@@ -96,14 +107,14 @@ async function main() {
 }
 
 function parseCliOptions(args: string[]): {
-  command: 'review' | 'stop' | 'help' | 'version';
+  command: 'review' | 'stop' | 'install-hooks' | 'plan-hook' | 'copilot-plan' | 'help' | 'version';
   dev: boolean;
   newSession: boolean;
   repo: string | undefined;
   reviewArgs: string[];
   comments: string[];
 } {
-  let command: 'review' | 'stop' | 'help' | 'version' = 'review';
+  let command: 'review' | 'stop' | 'install-hooks' | 'plan-hook' | 'copilot-plan' | 'help' | 'version' = 'review';
   const reviewArgs: string[] = [];
   const comments: string[] = [];
   let repo: string | undefined;
@@ -131,6 +142,18 @@ function parseCliOptions(args: string[]): {
     }
     if (arg === 'stop') {
       command = 'stop';
+      continue;
+    }
+    if (arg === 'plan-hook' || arg === 'codex-plan-hook') {
+      command = 'plan-hook';
+      continue;
+    }
+    if (arg === 'install-hooks' || arg === 'install-plan-hooks') {
+      command = 'install-hooks';
+      continue;
+    }
+    if (arg === 'copilot-plan' || arg === 'copilot-plan-hook') {
+      command = 'copilot-plan';
       continue;
     }
     if (arg === '--repo') {
@@ -226,11 +249,18 @@ function printHelp() {
   console.log('');
   console.log('Usage: local-diff-reviewer [working|staged|<base> <target>] [--new-session] [--repo <path>]');
   console.log('       local-diff-reviewer stop [--repo <path>]');
+  console.log('       local-diff-reviewer install-hooks [--project]');
+  console.log('       local-diff-reviewer plan-hook');
+  console.log('       local-diff-reviewer copilot-plan');
   console.log('');
   console.log('Options:');
   console.log('  --new-session      Open a separate review session instead of refreshing an existing one.');
   console.log('  --repo <path>      Review a repository other than the current working directory.');
   console.log('  --comment <json>   Import an agent comment before opening the viewer.');
+  console.log('  install-hooks      Install the Codex plan-mode Stop hook into hooks.json.');
+  console.log('  --project          With install-hooks, write .codex/hooks.json in the current workspace.');
+  console.log('  plan-hook          Run as a Codex Stop hook for plan-mode review.');
+  console.log('  copilot-plan       Run as a Copilot plan-mode hook for exit_plan_mode review.');
   console.log('  --version, -v      Print the CLI version.');
   console.log('  --help, -h         Print this help.');
 }
@@ -279,6 +309,87 @@ async function stopCommand(repo: string | undefined): Promise<void> {
     console.log(`Skipped stale records: ${stale.length}`);
   }
   await logRuntimePortOccupancy(repoRoot, activeRuntimes);
+}
+
+async function installHooksCommand(args: string[]): Promise<void> {
+  const project = args.includes('--project');
+  const result = await installCodexPlanHook({ project, cwd: process.cwd() });
+  console.log(`${result.changed ? 'Installed' : 'Already installed'} Codex plan hook: ${result.path}`);
+  console.log('Open /hooks in Codex to review and trust this hook before it can run.');
+}
+
+async function planHookCommand(dev: boolean, runtime: 'codex' | 'copilot'): Promise<void> {
+  const input = await readHookInputFromStdin();
+  const snapshot = await buildPlanReviewSnapshot(input, process.cwd(), {
+    requireCodexPlanStop: runtime === 'codex',
+    requireCopilotExitPlan: runtime === 'copilot'
+  });
+  if (!snapshot) {
+    console.log(JSON.stringify({ continue: true, suppressOutput: true }));
+    return;
+  }
+
+  const hasBuiltWeb = existsSync(join(builtWebDist, 'index.html'));
+  const apiUrl = await startServer({
+    session: snapshot.session,
+    diffFiles: snapshot.diffFiles,
+    virtualFiles: snapshot.virtualFiles,
+    webDist: hasBuiltWeb ? builtWebDist : undefined
+  });
+  const useVite = dev || !hasBuiltWeb;
+  const vitePort = useVite ? await findAvailablePort(5173) : undefined;
+  const uiUrl = useVite ? `http://127.0.0.1:${vitePort}` : apiUrl;
+  const vitePid = useVite && vitePort ? startVite(apiUrl, vitePort) : undefined;
+
+  await recordRuntime({
+    pid: process.pid,
+    vitePid,
+    vitePort,
+    repoRoot: snapshot.session.repoRoot,
+    repoName: snapshot.session.repoName,
+    startedAt: snapshot.session.createdAt,
+    apiPort: parsePort(apiUrl),
+    usesVite: useVite
+  });
+  openBrowser(uiUrl);
+  console.error(`Plan Review is running: ${uiUrl}`);
+
+  const result = await waitForPlanReviewResult(apiUrl);
+  const comments = await readComments(snapshot.session.repoRoot);
+  const currentPlanThreads = comments.threads.filter((thread) => snapshot.diffFiles.some((file) => isThreadOnFileSnapshot(thread, file)));
+  const output = formatPlanHookOutput(result, currentPlanThreads);
+  console.log(JSON.stringify(output));
+  if (typeof vitePid === 'number') {
+    process.kill(vitePid, 'SIGTERM');
+  }
+  process.exit(0);
+}
+
+async function waitForPlanReviewResult(apiUrl: string): Promise<NonNullable<Awaited<ReturnType<typeof readPlanReviewResult>>>> {
+  while (true) {
+    const result = await readPlanReviewResult(apiUrl);
+    if (result) return result;
+    await sleep(800);
+  }
+}
+
+async function readPlanReviewResult(apiUrl: string): Promise<PlanReviewResult | null> {
+  const response = await fetch(`${apiUrl}/api/plan-review-result`);
+  if (!response.ok) throw new Error(`Failed to read plan review result: ${response.status}`);
+  const body = (await response.json()) as { result?: unknown };
+  if (!body.result || typeof body.result !== 'object') return null;
+  const result = body.result as { decision?: unknown; feedback?: unknown; decidedAt?: unknown };
+  if (result.decision !== 'approved' && result.decision !== 'changes-requested') return null;
+  const decision = result.decision;
+  return {
+    decision,
+    feedback: typeof result.feedback === 'string' ? result.feedback : undefined,
+    decidedAt: typeof result.decidedAt === 'string' ? result.decidedAt : new Date().toISOString()
+  };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
