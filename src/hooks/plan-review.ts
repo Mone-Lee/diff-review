@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import type { DiffFile, PlanReviewResult, ReviewSession, ReviewThread } from '../shared/types';
-import { formatPrompt } from './prompt';
+import { formatPrompt } from '../core/prompt';
 
 export type CodexHookInput = {
   cwd?: unknown;
@@ -35,14 +35,21 @@ export type PlanReviewSnapshotOptions = {
   requireCopilotExitPlan?: boolean;
 };
 
+// 计划审查不会落真实仓库文件；这个前缀只用于在 Diff Review UI 中标识虚拟 Markdown 快照。
 const PLAN_FILE_PREFIX = '.diff-review-plan';
 
+/**
+ * 从 hook 子进程 stdin 读取 Codex/Copilot 传入的 JSON payload；空输入按可放行的空对象处理。
+ */
 export async function readHookInputFromStdin(): Promise<CodexHookInput> {
   const text = await readStream(process.stdin);
   if (!text.trim()) return {};
   return JSON.parse(text) as CodexHookInput;
 }
 
+/**
+ * 把 hook 输入转换成一次 plan review 会话；不属于目标 hook 场景或无法提取计划时返回 null 让 CLI 直接放行。
+ */
 export async function buildPlanReviewSnapshot(
   input: CodexHookInput,
   fallbackCwd: string,
@@ -58,6 +65,7 @@ export async function buildPlanReviewSnapshot(
 
   const sessionId = typeof input.session_id === 'string' && input.session_id ? input.session_id : crypto.randomUUID();
   const turnId = typeof input.turn_id === 'string' && input.turn_id ? input.turn_id : crypto.randomUUID();
+  // planPath 是评论绑定的关键路径：同一轮计划的评论只回流给这个虚拟文件快照。
   const planPath = `${PLAN_FILE_PREFIX}/${sessionId}-${turnId}.md`;
   const diffFiles = [createPlanDiffFile(planPath, planText)];
   const diffDigest = createHash('sha256').update(planText).digest('hex').slice(0, 16);
@@ -80,6 +88,9 @@ export async function buildPlanReviewSnapshot(
   };
 }
 
+/**
+ * 根据 UI 决策生成 hook stdout：通过时继续执行，退回时把未解决评论格式化成 agent 可读反馈。
+ */
 export function formatPlanHookOutput(result: PlanReviewResult, threads: ReviewThread[]): PlanHookOutput {
   if (result.decision === 'approved') {
     return {
@@ -97,6 +108,9 @@ export function formatPlanHookOutput(result: PlanReviewResult, threads: ReviewTh
   };
 }
 
+/**
+ * 计划文本优先取 hook payload 中的内联字段；Codex Stop hook 缺少内联文本时再从 transcript 中兜底提取。
+ */
 async function extractPlanText(input: CodexHookInput): Promise<string> {
   const inlinePlan = findInlinePlanText(input);
   if (inlinePlan) return inlinePlan;
@@ -122,6 +136,9 @@ function findInlinePlanText(value: unknown): string {
   return candidates.sort((left, right) => right.length - left.length)[0]?.trim() ?? '';
 }
 
+/**
+ * Copilot 的 hook payload 层级不固定，因此递归查找 exit_plan_mode 来判断是否需要拦截。
+ */
 function containsExitPlanMode(value: unknown): boolean {
   if (typeof value === 'string') return value === 'exit_plan_mode';
   if (!value || typeof value !== 'object') return false;
@@ -151,6 +168,9 @@ function isPlanTextKey(key: string): boolean {
   return normalized === 'plan' || normalized === 'content' || normalized === 'markdown' || normalized === 'message';
 }
 
+/**
+ * 将计划 Markdown 包装成“新增文件”的 diff 结构，从而复用现有行级评论、Markdown preview 和评论侧栏。
+ */
 function createPlanDiffFile(path: string, content: string): DiffFile {
   const lines = content.replace(/\r\n/g, '\n').split('\n');
   if (lines.at(-1) === '') lines.pop();

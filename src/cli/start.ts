@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
-import { buildPlanReviewSnapshot, formatPlanHookOutput, readHookInputFromStdin } from '../core/plan-review';
-import { installCodexPlanHook } from './hooks-installer';
+import { installCodexPlanHook } from '../hooks/hooks-installer';
+import { buildPlanReviewSnapshot, formatPlanHookOutput, readHookInputFromStdin } from '../hooks/plan-review';
 import { getLiveRuntimes, hasRuntimeRecord, recordRuntime, stopRecordedRuntimes, type RuntimeEntry } from './runtime-registry';
 import { startServer } from '../server';
 import { attachLegacyComments, readComments } from '../server/storage';
@@ -318,6 +318,9 @@ async function installHooksCommand(args: string[]): Promise<void> {
   console.log('Open /hooks in Codex to review and trust this hook before it can run.');
 }
 
+/**
+ * plan-hook/copilot-plan 的阻塞入口：打开本地审查页后等待 UI 决策，再把 hook JSON 写回 stdout。
+ */
 async function planHookCommand(dev: boolean, runtime: 'codex' | 'copilot'): Promise<void> {
   const input = await readHookInputFromStdin();
   const snapshot = await buildPlanReviewSnapshot(input, process.cwd(), {
@@ -354,6 +357,7 @@ async function planHookCommand(dev: boolean, runtime: 'codex' | 'copilot'): Prom
   openBrowser(uiUrl);
   console.error(`Plan Review is running: ${uiUrl}`);
 
+  // 这个 API 是 hook 子进程和浏览器 UI 的本地同步点；拿到结果前不能退出，否则 agent 收不到审查结论。
   const result = await waitForPlanReviewResult(apiUrl);
   const comments = await readComments(snapshot.session.repoRoot);
   const currentPlanThreads = comments.threads.filter((thread) => snapshot.diffFiles.some((file) => isThreadOnFileSnapshot(thread, file)));
@@ -365,6 +369,9 @@ async function planHookCommand(dev: boolean, runtime: 'codex' | 'copilot'): Prom
   process.exit(0);
 }
 
+/**
+ * 轮询等待计划审查结果；服务端在用户点击通过或退回评论后才会返回有效 result。
+ */
 async function waitForPlanReviewResult(apiUrl: string): Promise<NonNullable<Awaited<ReturnType<typeof readPlanReviewResult>>>> {
   while (true) {
     const result = await readPlanReviewResult(apiUrl);
@@ -373,6 +380,9 @@ async function waitForPlanReviewResult(apiUrl: string): Promise<NonNullable<Awai
   }
 }
 
+/**
+ * 从本地服务读取 UI 决策，并收敛成 hook 输出层只关心的 approved / changes-requested 两种状态。
+ */
 async function readPlanReviewResult(apiUrl: string): Promise<PlanReviewResult | null> {
   const response = await fetch(`${apiUrl}/api/plan-review-result`);
   if (!response.ok) throw new Error(`Failed to read plan review result: ${response.status}`);
