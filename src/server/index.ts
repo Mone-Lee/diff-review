@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDefaultWorkingBase, getDiff, getRecentCommits, readDiffFileContents, readDiffImageContent, readFileForPreview } from '../core/git';
-import { REVIEW_REFRESH_PROTOCOL, isRefreshableReviewMode, type DiffFile, type MarkdownPreview, type PromptScope, type ReviewComment, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
+import { REVIEW_REFRESH_PROTOCOL, isRefreshableReviewMode, type DiffFile, type MarkdownPreview, type PlanReviewResult, type PromptScope, type ReviewComment, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
 import { readComments, updateComments } from './storage';
@@ -18,6 +18,8 @@ export type ReviewServerState = {
   session: ReviewSession;
   diffFiles: DiffFile[];
   webDist?: string;
+  virtualFiles?: Record<string, string>;
+  planResult?: PlanReviewResult;
 };
 
 const packageVersion = readPackageVersion();
@@ -48,6 +50,14 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     } catch (error) {
       next(error);
     }
+  });
+
+  app.get('/api/plan-review-result', (_req, res) => {
+    if (state.session.reviewKind !== 'plan') {
+      res.status(404).json({ error: 'Current session is not a plan review' });
+      return;
+    }
+    res.json({ result: state.planResult ?? null });
   });
 
   app.get('/api/compare-options', async (_req, res, next) => {
@@ -110,6 +120,28 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     }
   });
 
+  app.post('/api/plan-review-result', async (req, res, next) => {
+    try {
+      if (state.session.reviewKind !== 'plan') {
+        res.status(400).json({ error: 'Current session is not a plan review' });
+        return;
+      }
+      if (req.body?.decision !== 'approved' && req.body?.decision !== 'changes-requested') {
+        res.status(400).json({ error: 'Unsupported plan review decision' });
+        return;
+      }
+      state.planResult = {
+        decision: req.body.decision,
+        feedback: typeof req.body.feedback === 'string' ? req.body.feedback.trim() : undefined,
+        decidedAt: new Date().toISOString()
+      };
+      const comments = await readComments(state.session.repoRoot);
+      res.json({ result: state.planResult, threads: selectPromptThreads(comments.threads, { type: 'all-unresolved' }, state.diffFiles) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/api/compare', async (req, res, next) => {
     try {
       const mode = normalizeReviewMode(req.body?.mode);
@@ -150,6 +182,13 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       const file = state.diffFiles.find((item) => item.path === filePath || item.oldPath === filePath);
       if (!file) {
         res.status(404).json({ error: 'Diff file not found' });
+        return;
+      }
+
+      const virtualContent = readVirtualContent(state, file.path);
+      if (typeof virtualContent === 'string') {
+        const newLines = splitContentLines(virtualContent);
+        res.json({ oldLines: [], newLines, oldTotalLines: 0, newTotalLines: newLines.length });
         return;
       }
 
@@ -481,7 +520,11 @@ async function buildMarkdownPreviewCache(state: ReviewServerState): Promise<Map<
     state.diffFiles
       .filter((file) => file.isMarkdown)
       .map(async (file) => {
-        const { content, deleted } = await readFileForPreview(file, state.session.mode, state.session.repoRoot);
+        const virtualContent = readVirtualContent(state, file.path);
+        const { content, deleted } =
+          typeof virtualContent === 'string'
+            ? { content: virtualContent, deleted: false }
+            : await readFileForPreview(file, state.session.mode, state.session.repoRoot);
         const preview: MarkdownPreview = {
           filePath: file.path,
           content,
@@ -493,6 +536,16 @@ async function buildMarkdownPreviewCache(state: ReviewServerState): Promise<Map<
       })
   );
   return previews;
+}
+
+function readVirtualContent(state: ReviewServerState, filePath: string): string | undefined {
+  return state.virtualFiles?.[filePath];
+}
+
+function splitContentLines(content: string): string[] {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return lines;
 }
 
 function applyReviewState(currentState: ReviewServerState, nextState: Pick<ReviewServerState, 'session' | 'diffFiles'>) {

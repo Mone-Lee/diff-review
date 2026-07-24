@@ -105,6 +105,16 @@ export type ReviewSession = {
   diffHash: string;
   /** 本次审查快照创建时间，使用 ISO 时间字符串。 */
   createdAt: string;
+  /** `diff` 复用现有代码审查；`plan` 表示由 agent plan-mode hook 创建的虚拟 Markdown 审查。 */
+  reviewKind?: 'diff' | 'plan';
+};
+
+export type PlanReviewDecision = 'approved' | 'changes-requested';
+
+export type PlanReviewResult = {
+  decision: PlanReviewDecision;
+  feedback?: string;
+  decidedAt: string;
 };
 
 export type MarkdownBlock = {

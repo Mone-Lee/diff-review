@@ -1,7 +1,7 @@
 /**
  * Review API 封装：负责前端与 review 会话、评论线程、评论编辑和 prompt 生成接口之间的通信。
  */
-import type { CommentAnchor, DiffFile, GitCommitSummary, ReviewMode, ReviewSession, ReviewThread, ReviewWatchEvent } from '../../shared/types';
+import type { CommentAnchor, DiffFile, GitCommitSummary, PlanReviewResult, ReviewMode, ReviewSession, ReviewThread, ReviewWatchEvent } from '../../shared/types';
 
 export type PromptScope = { type: 'thread'; threadId: string } | { type: 'file-unresolved'; filePath: string } | { type: 'all-unresolved' };
 
@@ -190,4 +190,21 @@ export async function requestReviewPrompt(scope: PromptScope) {
     body: JSON.stringify(scope)
   });
   return (await res.json()) as { prompt: string };
+}
+
+/**
+ * 提交 plan hook 的最终审查结论，供阻塞中的 CLI hook 返回给 agent。
+ */
+export async function submitPlanReviewResult(decision: PlanReviewResult['decision'], feedback?: string) {
+  const res = await fetch('/api/plan-review-result', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision, feedback })
+  });
+
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, '提交计划审查结果失败'));
+  }
+
+  return (await res.json()) as { result: PlanReviewResult };
 }

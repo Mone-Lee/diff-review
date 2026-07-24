@@ -4,14 +4,16 @@
 import React from 'react';
 import { App as AntApp, Button, Card, Layout, Popconfirm, Segmented, Space, Typography } from 'antd';
 import {
+  CheckCircleOutlined,
   CopyOutlined,
   EyeOutlined,
   PartitionOutlined,
   PoweroffOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  RollbackOutlined
 } from '@ant-design/icons';
 import { isRefreshableReviewMode, type DiffFile, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
-import { applyReviewComparison, fetchReviewState, refreshReviewSnapshot, shutdownReviewRuntime, type ReviewState } from './api/review';
+import { applyReviewComparison, fetchReviewState, refreshReviewSnapshot, shutdownReviewRuntime, submitPlanReviewResult, type ReviewState } from './api/review';
 import {
   type LocateTarget,
   ReviewActionsProvider,
@@ -63,6 +65,7 @@ export default function App() {
   const [refreshingSnapshot, setRefreshingSnapshot] = React.useState(false);
   const [applyingComparison, setApplyingComparison] = React.useState(false);
   const [shuttingDownRuntime, setShuttingDownRuntime] = React.useState(false);
+  const [submittingPlanResult, setSubmittingPlanResult] = React.useState(false);
   const sessionIdRef = React.useRef<string | null>(null);
   const focusedThreadIdRef = React.useRef<string | null>(null);
   const { clearPendingChanges, hasPendingChanges, lastChangedAt } = useFileWatch();
@@ -71,6 +74,7 @@ export default function App() {
   const selectedFile = files.find((file) => file.path === selectedPath) ?? displayFiles[0];
   const selectedFileIsImage = selectedFile ? isImageFilePath(selectedFile.path) : false;
   const canRefreshSnapshot = session ? isRefreshableReviewMode(session.mode) : false;
+  const isPlanReview = session?.reviewKind === 'plan';
   const currentSnapshotThreads = React.useMemo(
     () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
     [files, threads]
@@ -264,6 +268,22 @@ export default function App() {
     }
   }, [message]);
 
+  const handleSubmitPlanResult = React.useCallback(async (decision: 'approved' | 'changes-requested') => {
+    if (decision === 'changes-requested' && unresolvedThreadsCount === 0) {
+      message.warning('先添加至少一条未解决评论，再退回计划。');
+      return;
+    }
+    setSubmittingPlanResult(true);
+    try {
+      await submitPlanReviewResult(decision);
+      message.success(decision === 'approved' ? '计划已通过' : '评论已退回给 Agent');
+    } catch (error) {
+      const nextMessage = error instanceof Error ? error.message : '提交计划审查结果失败';
+      message.error(nextMessage);
+      setSubmittingPlanResult(false);
+    }
+  }, [message, unresolvedThreadsCount]);
+
   const setFocusedThreadIdWithRef = React.useCallback<React.Dispatch<React.SetStateAction<string | null>>>((value) => {
     setFocusedThreadId((current) => {
       const nextValue = typeof value === 'function' ? value(current) : value;
@@ -334,14 +354,16 @@ export default function App() {
               ) : null}
             </div>
 
-            <VersionCompareControl
-              session={session}
-              filesCount={files.length}
-              loading={applyingComparison}
-              onApply={(mode) => {
-                handleApplyComparison(mode).catch(() => undefined);
-              }}
-            />
+            {!isPlanReview ? (
+              <VersionCompareControl
+                session={session}
+                filesCount={files.length}
+                loading={applyingComparison}
+                onApply={(mode) => {
+                  handleApplyComparison(mode).catch(() => undefined);
+                }}
+              />
+            ) : null}
 
             <FileList
               files={displayFiles}
@@ -443,16 +465,40 @@ export default function App() {
           <aside className={styles.threadRail}>
             <div className={styles.threadRailHeader}>
               <Typography.Title className={styles.threadRailTitle} level={4}>评论 ({unresolvedThreadsCount})</Typography.Title>
-              <Button
-                disabled={unresolvedThreadsCount === 0}
-                icon={<CopyOutlined />}
-                type="primary"
-                onClick={() => {
-                  reviewActions.copyPrompt({ type: 'all-unresolved' }).catch(() => undefined);
-                }}
-              >
-                批量提交给 Agent
-              </Button>
+              {isPlanReview ? (
+                <Space.Compact>
+                  <Button
+                    icon={<CheckCircleOutlined />}
+                    loading={submittingPlanResult}
+                    type="primary"
+                    onClick={() => {
+                      handleSubmitPlanResult('approved').catch(() => undefined);
+                    }}
+                  >
+                    通过计划
+                  </Button>
+                  <Button
+                    disabled={unresolvedThreadsCount === 0 || submittingPlanResult}
+                    icon={<RollbackOutlined />}
+                    onClick={() => {
+                      handleSubmitPlanResult('changes-requested').catch(() => undefined);
+                    }}
+                  >
+                    退回评论
+                  </Button>
+                </Space.Compact>
+              ) : (
+                <Button
+                  disabled={unresolvedThreadsCount === 0}
+                  icon={<CopyOutlined />}
+                  type="primary"
+                  onClick={() => {
+                    reviewActions.copyPrompt({ type: 'all-unresolved' }).catch(() => undefined);
+                  }}
+                >
+                  批量提交给 Agent
+                </Button>
+              )}
             </div>
             <div className={styles.threadRailBody}>
               <ThreadList
