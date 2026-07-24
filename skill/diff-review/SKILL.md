@@ -26,6 +26,14 @@ npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest [arg
 
 Set the shell/tool `cwd` to `/absolute/path/to/target/workspace` before running the command. Use `@latest` and the explicit npmjs registry so npm does not reuse an older npx cache or resolve through a workspace/user `.npmrc` mirror. Do not pass `--repo` from this skill; older published CLI versions treat unknown args as revision args. Do not use the skill package directory or this skill's install directory as the review target unless that is the workspace the user asked to review.
 
+When you are helping install or set up this skill, also install the Codex plan-mode hook once:
+
+```bash
+npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest install-hooks
+```
+
+This command enables `[features] hooks = true` in the same Codex config directory and merges the Codex `Stop` hook into `$CODEX_HOME/hooks.json` or `~/.codex/hooks.json` without removing existing hooks. Tell the user to open `/hooks` and trust the new or changed hook before expecting plan-mode review to run. If the user asks for project-local hook config, run the same command with `--project` from the target workspace.
+
 When the user asks to `stop`, `关闭`, `结束`, or otherwise shut down Diff Review for the current project, execute `/diff-review stop` immediately. Do not only explain the command or leave the existing runtime running.
 After `/diff-review stop` completes, verify that the review URL previously in use is no longer reachable. If it is still serving Diff Review, read `/api/session` to identify its `repoRoot`, run `stop` for that repository, and verify the URL again before reporting success.
 
