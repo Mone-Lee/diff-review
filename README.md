@@ -58,7 +58,7 @@ plan mode hook 的完整流程见 [`docs/plan-mode-hooks.md`](docs/plan-mode-hoo
 - 一条评论线程下可以包含多条评论；同一锚点的新评论会追加到已有线程。
 - 支持通过内部 `--comment` 参数预置 agent 发现和回复。
 - 支持复制极简 AI prompt。
-- 支持作为 Codex / Copilot 的 plan mode hook，在 agent 执行前审查计划并通过评论退回。
+- 支持作为 Codex / Copilot / Qoder 的 plan mode hook，在 agent 执行前审查计划并通过评论退回。
 
 ## CLI 使用方式
 
@@ -73,7 +73,7 @@ local-diff-reviewer --repo /path/to/project
 
 ### Plan mode hook
 
-`local-diff-reviewer plan-hook` 可以作为 Codex plan mode 的 `Stop` hook 使用：当 agent 在 plan mode 停下时，工具会把本轮计划作为虚拟 Markdown 文件打开到本地审查台。你可以在计划预览上添加评论，然后点击“退回评论”让 agent 继续改计划；也可以点击“通过计划”让 agent 进入后续执行。
+`local-diff-reviewer plan-hook` 可以作为 Codex plan mode 的 `Stop` hook 使用；`local-diff-reviewer codex-pre-tool-plan` 可以作为 Codex `PreToolUse` hook，在计划通过后的第一个工具执行前补上强制审查。工具会把本轮计划作为虚拟 Markdown 文件打开到本地审查台。你可以在计划预览上添加评论，然后点击“退回评论”让 agent 继续改计划；也可以点击“通过计划”让 agent 进入后续执行。
 
 推荐用安装命令幂等创建或合并 Codex `hooks.json`：
 
@@ -87,14 +87,14 @@ npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest inst
 curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts/install-hooks.sh | bash
 ```
 
-默认写入 `$CODEX_HOME/hooks.json`，未设置 `CODEX_HOME` 时写入 `~/.codex/hooks.json`，并确保同目录 `config.toml` 中 `[features] hooks = true`。如果只想为当前项目安装，使用：
+默认写入 `$CODEX_HOME/hooks.json`，未设置 `CODEX_HOME` 时写入 `~/.codex/hooks.json`，并确保同目录 `config.toml` 中 `[features] hooks = true`。安装器会同时合并 Codex `Stop` 和 `PreToolUse` hooks。如果只想为当前项目安装，使用：
 
 ```bash
 npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest install-hooks --project
 curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts/install-hooks.sh | bash -s -- --project
 ```
 
-命令不会覆盖已有 hook，只会追加缺失的 Codex `Stop` hook。Codex 仍会要求先在 `/hooks` 中信任新增或变化的 hook。`Stop` hook 当前不支持 matcher，因此命令自身会判断 `permission_mode === "plan"`；非 plan turn 会直接放行。
+命令不会覆盖已有 hook，只会追加缺失的 Codex plan hooks。Codex 仍会要求先在 `/hooks` 中信任新增或变化的 hook。`Stop` hook 当前不支持 matcher，因此命令自身会判断 `permission_mode === "plan"`；`PreToolUse` hook 会在工具执行前兜底拦截，已通过的同一轮同一份计划会用临时 marker 跳过重复审查。
 
 手动配置时，Codex 示例 `~/.codex/hooks.json` 或项目 `.codex/hooks.json`：
 
@@ -109,6 +109,19 @@ curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts
             "command": "npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest plan-hook",
             "timeout": 600,
             "statusMessage": "正在审查计划"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest codex-pre-tool-plan",
+            "timeout": 600,
+            "statusMessage": "正在执行前审查计划"
           }
         ]
       }
@@ -137,6 +150,15 @@ Copilot 示例 `hooks.json`：
 ```
 
 `copilot-plan` 会从 hook 输入中读取 `plan` / `content` / `markdown` / `message` 字段里的计划文本，并复用同一套本地审查界面。
+
+Qoder 可显式安装 `create_plan` hook：
+
+```bash
+npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest install-hooks --qoder
+npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest install-hooks --qoder --project
+```
+
+全局安装写入 `~/.qoder/settings.json`；项目级安装写入 `.qoder/settings.local.json`。
 
 这三种模式分别表示：
 

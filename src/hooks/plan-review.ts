@@ -1,5 +1,5 @@
 /**
- * Plan review 工具：把 Codex/Copilot hook 输入里的计划文本整理为虚拟 Markdown diff，并生成 hook 返回值。
+ * Plan review 工具：把 Codex/Copilot/Qoder hook 输入里的计划文本整理为虚拟 Markdown diff，并生成 hook 返回值。
  */
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -14,6 +14,8 @@ export type CodexHookInput = {
   transcript_path?: unknown;
   session_id?: unknown;
   turn_id?: unknown;
+  tool_name?: unknown;
+  last_assistant_message?: unknown;
 };
 
 export type PlanReviewSnapshot = {
@@ -30,9 +32,20 @@ export type PlanHookOutput = {
   systemMessage?: string;
 };
 
+export type CodexPreToolUseOutput = {
+  systemMessage?: string;
+  hookSpecificOutput?: {
+    hookEventName: 'PreToolUse';
+    permissionDecision?: 'deny';
+    permissionDecisionReason?: string;
+  };
+};
+
 export type PlanReviewSnapshotOptions = {
   requireCodexPlanStop?: boolean;
+  requireCodexPreToolUse?: boolean;
   requireCopilotExitPlan?: boolean;
+  requireQoderCreatePlan?: boolean;
 };
 
 // 计划审查不会落真实仓库文件；这个前缀只用于在 Diff Review UI 中标识虚拟 Markdown 快照。
@@ -57,11 +70,14 @@ export async function buildPlanReviewSnapshot(
 ): Promise<PlanReviewSnapshot | null> {
   const requireCodexPlanStop = options.requireCodexPlanStop ?? true;
   if (requireCodexPlanStop && (input.permission_mode !== 'plan' || input.hook_event_name !== 'Stop')) return null;
+  if (options.requireCodexPreToolUse && !isCodexPreToolPlanReviewInput(input)) return null;
   if (options.requireCopilotExitPlan && !containsExitPlanMode(input)) return null;
+  if (options.requireQoderCreatePlan && !isQoderCreatePlanInput(input)) return null;
 
   const cwd = typeof input.cwd === 'string' && input.cwd.trim() ? resolve(input.cwd) : fallbackCwd;
   const planText = await extractPlanText(input);
   if (!planText) return null;
+  if (options.requireCodexPreToolUse && input.permission_mode !== 'plan' && !hasPlanReviewMarker(planText)) return null;
 
   const sessionId = typeof input.session_id === 'string' && input.session_id ? input.session_id : crypto.randomUUID();
   const turnId = typeof input.turn_id === 'string' && input.turn_id ? input.turn_id : crypto.randomUUID();
@@ -106,6 +122,35 @@ export function formatPlanHookOutput(result: PlanReviewResult, threads: ReviewTh
     stopReason: feedback || 'Plan changes requested in Diff Review.',
     systemMessage: 'Plan changes requested in Diff Review.'
   };
+}
+
+/**
+ * Codex PreToolUse 的阻断协议不同于 Stop：退回评论时必须 deny 当前工具调用。
+ */
+export function formatCodexPreToolUseOutput(result: PlanReviewResult, threads: ReviewThread[]): CodexPreToolUseOutput {
+  if (result.decision === 'approved') {
+    return {
+      systemMessage: 'Plan approved in Diff Review.'
+    };
+  }
+
+  const feedback = formatPlanChangesRequestedFeedback(result, threads);
+  return {
+    systemMessage: 'Plan changes requested in Diff Review.',
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'deny',
+      permissionDecisionReason: feedback || 'Plan changes requested in Diff Review.'
+    }
+  };
+}
+
+/**
+ * Qoder 使用可阻断 hook 的 exit code 反馈；这里复用同一份评论格式。
+ */
+export function formatPlanChangesRequestedFeedback(result: PlanReviewResult, threads: ReviewThread[]): string {
+  const threadFeedback = formatPrompt(threads.filter((thread) => thread.status !== 'resolved')).trim();
+  return [result.feedback?.trim(), threadFeedback].filter(Boolean).join('\n\n');
 }
 
 /**
@@ -165,7 +210,44 @@ function collectInlinePlanText(value: unknown, candidates: string[]) {
 
 function isPlanTextKey(key: string): boolean {
   const normalized = key.toLowerCase();
-  return normalized === 'plan' || normalized === 'content' || normalized === 'markdown' || normalized === 'message';
+  return (
+    normalized === 'plan' ||
+    normalized === 'content' ||
+    normalized === 'markdown' ||
+    normalized === 'message' ||
+    normalized === 'last_assistant_message'
+  );
+}
+
+/**
+ * Codex 执行计划前的最终闸门：只在本地工具即将执行，且当前输入或 transcript 看起来包含计划文本时介入。
+ */
+function isCodexPreToolPlanReviewInput(input: CodexHookInput): boolean {
+  if (input.hook_event_name !== 'PreToolUse' || typeof input.tool_name !== 'string' || !input.tool_name) return false;
+  if (input.permission_mode === 'plan') return true;
+  return hasPlanReviewMarker(input) || typeof input.transcript_path === 'string';
+}
+
+/**
+ * Qoder plan 创建通过 create_plan 工具表达；递归查找可兼容不同 payload 层级。
+ */
+function isQoderCreatePlanInput(input: CodexHookInput): boolean {
+  if (input.hook_event_name !== 'PreToolUse') return false;
+  return containsStringValue(input, 'create_plan');
+}
+
+function hasPlanReviewMarker(value: unknown): boolean {
+  if (typeof value === 'string') return value.includes('<proposed_plan>') || value.includes('</proposed_plan>');
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.some((item) => hasPlanReviewMarker(item));
+  return Object.values(value as Record<string, unknown>).some((child) => hasPlanReviewMarker(child));
+}
+
+function containsStringValue(value: unknown, expected: string): boolean {
+  if (typeof value === 'string') return value === expected;
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.some((item) => containsStringValue(item, expected));
+  return Object.values(value as Record<string, unknown>).some((child) => containsStringValue(child, expected));
 }
 
 /**

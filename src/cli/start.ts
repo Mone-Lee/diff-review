@@ -2,15 +2,24 @@
  * CLI 入口：负责解析命令行参数、采集当前仓库 diff、复用或启动 review 服务，并协调浏览器打开流程。
  */
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import { createServer as createNetServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
-import { installCodexPlanHook } from '../hooks/hooks-installer';
-import { buildPlanReviewSnapshot, formatPlanHookOutput, readHookInputFromStdin } from '../hooks/plan-review';
+import { installPlanHooks } from '../hooks/hooks-installer';
+import {
+  buildPlanReviewSnapshot,
+  formatCodexPreToolUseOutput,
+  formatPlanChangesRequestedFeedback,
+  formatPlanHookOutput,
+  readHookInputFromStdin
+} from '../hooks/plan-review';
 import { getLiveRuntimes, hasRuntimeRecord, recordRuntime, stopRecordedRuntimes, type RuntimeEntry } from './runtime-registry';
 import { startServer } from '../server';
 import { attachLegacyComments, readComments } from '../server/storage';
@@ -37,8 +46,16 @@ async function main() {
     await installHooksCommand(reviewArgs);
     return;
   }
-  if (command === 'plan-hook' || command === 'copilot-plan') {
-    await planHookCommand(dev, command === 'copilot-plan' ? 'copilot' : 'codex');
+  if (command === 'plan-hook' || command === 'copilot-plan' || command === 'codex-pre-tool-plan' || command === 'qoder-plan') {
+    const runtime =
+      command === 'copilot-plan'
+        ? 'copilot'
+        : command === 'codex-pre-tool-plan'
+          ? 'codex-pre-tool'
+          : command === 'qoder-plan'
+            ? 'qoder'
+            : 'codex-stop';
+    await planHookCommand(dev, runtime);
     return;
   }
   if (command === 'stop') {
@@ -107,14 +124,15 @@ async function main() {
 }
 
 function parseCliOptions(args: string[]): {
-  command: 'review' | 'stop' | 'install-hooks' | 'plan-hook' | 'copilot-plan' | 'help' | 'version';
+  command: 'review' | 'stop' | 'install-hooks' | 'plan-hook' | 'copilot-plan' | 'codex-pre-tool-plan' | 'qoder-plan' | 'help' | 'version';
   dev: boolean;
   newSession: boolean;
   repo: string | undefined;
   reviewArgs: string[];
   comments: string[];
 } {
-  let command: 'review' | 'stop' | 'install-hooks' | 'plan-hook' | 'copilot-plan' | 'help' | 'version' = 'review';
+  let command: 'review' | 'stop' | 'install-hooks' | 'plan-hook' | 'copilot-plan' | 'codex-pre-tool-plan' | 'qoder-plan' | 'help' | 'version' =
+    'review';
   const reviewArgs: string[] = [];
   const comments: string[] = [];
   let repo: string | undefined;
@@ -148,12 +166,20 @@ function parseCliOptions(args: string[]): {
       command = 'plan-hook';
       continue;
     }
+    if (arg === 'codex-pre-tool-plan' || arg === 'codex-pre-tool-plan-hook') {
+      command = 'codex-pre-tool-plan';
+      continue;
+    }
     if (arg === 'install-hooks' || arg === 'install-plan-hooks') {
       command = 'install-hooks';
       continue;
     }
     if (arg === 'copilot-plan' || arg === 'copilot-plan-hook') {
       command = 'copilot-plan';
+      continue;
+    }
+    if (arg === 'qoder-plan' || arg === 'qoder-plan-hook') {
+      command = 'qoder-plan';
       continue;
     }
     if (arg === '--repo') {
@@ -251,16 +277,21 @@ function printHelp() {
   console.log('       local-diff-reviewer stop [--repo <path>]');
   console.log('       local-diff-reviewer install-hooks [--project]');
   console.log('       local-diff-reviewer plan-hook');
+  console.log('       local-diff-reviewer codex-pre-tool-plan');
   console.log('       local-diff-reviewer copilot-plan');
+  console.log('       local-diff-reviewer qoder-plan');
   console.log('');
   console.log('Options:');
   console.log('  --new-session      Open a separate review session instead of refreshing an existing one.');
   console.log('  --repo <path>      Review a repository other than the current working directory.');
   console.log('  --comment <json>   Import an agent comment before opening the viewer.');
-  console.log('  install-hooks      Install the Codex plan-mode Stop hook into hooks.json.');
-  console.log('  --project          With install-hooks, write .codex/hooks.json in the current workspace.');
+  console.log('  install-hooks      Install Codex plan-mode hooks into hooks.json.');
+  console.log('  --qoder            With install-hooks, install Qoder create_plan hook instead of Codex hooks.');
+  console.log('  --project          With install-hooks, write project-local hook config.');
   console.log('  plan-hook          Run as a Codex Stop hook for plan-mode review.');
+  console.log('  codex-pre-tool-plan Run as a Codex PreToolUse hook for plan execution review.');
   console.log('  copilot-plan       Run as a Copilot plan-mode hook for exit_plan_mode review.');
+  console.log('  qoder-plan         Run as a Qoder PreToolUse hook for create_plan review.');
   console.log('  --version, -v      Print the CLI version.');
   console.log('  --help, -h         Print this help.');
 }
@@ -313,22 +344,33 @@ async function stopCommand(repo: string | undefined): Promise<void> {
 
 async function installHooksCommand(args: string[]): Promise<void> {
   const project = args.includes('--project');
-  const result = await installCodexPlanHook({ project, cwd: process.cwd() });
-  console.log(`${result.changed ? 'Installed' : 'Already installed'} Codex plan hook: ${result.path}`);
-  console.log('Open /hooks in Codex to review and trust this hook before it can run.');
+  const runtime = args.includes('--qoder') ? 'qoder' : 'codex';
+  const result = await installPlanHooks({ runtime, project, cwd: process.cwd() });
+  console.log(`${result.changed ? 'Installed' : 'Already installed'} ${runtime === 'qoder' ? 'Qoder' : 'Codex'} plan hook: ${result.path}`);
+  if (runtime === 'codex') {
+    console.log('Open /hooks in Codex to review and trust new or changed hooks before they can run.');
+  }
 }
 
 /**
- * plan-hook/copilot-plan 的阻塞入口：打开本地审查页后等待 UI 决策，再把 hook JSON 写回 stdout。
+ * plan hook 的阻塞入口：打开本地审查页后等待 UI 决策，再按触发 runtime 的协议回写 hook 结果。
  */
-async function planHookCommand(dev: boolean, runtime: 'codex' | 'copilot'): Promise<void> {
+async function planHookCommand(dev: boolean, runtime: 'codex-stop' | 'codex-pre-tool' | 'copilot' | 'qoder'): Promise<void> {
   const input = await readHookInputFromStdin();
   const snapshot = await buildPlanReviewSnapshot(input, process.cwd(), {
-    requireCodexPlanStop: runtime === 'codex',
-    requireCopilotExitPlan: runtime === 'copilot'
+    requireCodexPlanStop: runtime === 'codex-stop',
+    requireCodexPreToolUse: runtime === 'codex-pre-tool',
+    requireCopilotExitPlan: runtime === 'copilot',
+    requireQoderCreatePlan: runtime === 'qoder'
   });
   if (!snapshot) {
+    if (runtime === 'codex-pre-tool' || runtime === 'qoder') return;
     console.log(JSON.stringify({ continue: true, suppressOutput: true }));
+    return;
+  }
+
+  if (runtime === 'codex-pre-tool' && (await hasApprovedPlanMarker(input, snapshot.planText))) {
+    console.log(JSON.stringify({ systemMessage: 'Plan already approved in Diff Review.' }));
     return;
   }
 
@@ -361,12 +403,53 @@ async function planHookCommand(dev: boolean, runtime: 'codex' | 'copilot'): Prom
   const result = await waitForPlanReviewResult(apiUrl);
   const comments = await readComments(snapshot.session.repoRoot);
   const currentPlanThreads = comments.threads.filter((thread) => snapshot.diffFiles.some((file) => isThreadOnFileSnapshot(thread, file)));
-  const output = formatPlanHookOutput(result, currentPlanThreads);
-  console.log(JSON.stringify(output));
+  if (runtime === 'codex-pre-tool') {
+    if (result.decision === 'approved') {
+      await writeApprovedPlanMarker(input, snapshot.planText);
+    }
+    console.log(JSON.stringify(formatCodexPreToolUseOutput(result, currentPlanThreads)));
+  } else if (runtime === 'qoder') {
+    if (result.decision === 'changes-requested') {
+      if (typeof vitePid === 'number') {
+        process.kill(vitePid, 'SIGTERM');
+      }
+      console.error(formatPlanChangesRequestedFeedback(result, currentPlanThreads) || 'Plan changes requested in Diff Review.');
+      process.exit(2);
+    }
+  } else {
+    const output = formatPlanHookOutput(result, currentPlanThreads);
+    console.log(JSON.stringify(output));
+  }
   if (typeof vitePid === 'number') {
     process.kill(vitePid, 'SIGTERM');
   }
   process.exit(0);
+}
+
+/**
+ * Codex PreToolUse 会在后续每个工具前重复触发；同一 session/turn/plan 摘要通过后用临时 marker 跳过重复审查。
+ */
+async function hasApprovedPlanMarker(input: { session_id?: unknown; turn_id?: unknown }, planText: string): Promise<boolean> {
+  try {
+    await access(approvedPlanMarkerPath(input, planText));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function writeApprovedPlanMarker(input: { session_id?: unknown; turn_id?: unknown }, planText: string): Promise<void> {
+  const path = approvedPlanMarkerPath(input, planText);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, new Date().toISOString(), 'utf8');
+}
+
+function approvedPlanMarkerPath(input: { session_id?: unknown; turn_id?: unknown }, planText: string): string {
+  const sessionId = typeof input.session_id === 'string' && input.session_id ? input.session_id : 'unknown-session';
+  const turnId = typeof input.turn_id === 'string' && input.turn_id ? input.turn_id : 'unknown-turn';
+  const digest = createHash('sha256').update(planText).digest('hex').slice(0, 16);
+  const key = `${sessionId}-${turnId}-${digest}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return join(tmpdir(), 'local-diff-reviewer', 'approved-plans', `${key}.txt`);
 }
 
 /**

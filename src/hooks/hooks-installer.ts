@@ -1,5 +1,5 @@
 /**
- * Hook 安装器：负责幂等合并 Codex hooks.json，让 plan review hook 可由 CLI 或 skill 脚本启用。
+ * Hook 安装器：负责幂等合并 Codex/Qoder hook 配置，让 plan review hook 可由 CLI 或 skill 脚本启用。
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -24,15 +24,45 @@ type HooksFile = {
 
 // 安装写入 hooks.json 的实际命令；保持包名和 CLI 子命令稳定，避免已 trust 的配置指向源码路径。
 const codexPlanHookCommand = 'npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest plan-hook';
+const codexPreToolPlanHookCommand = 'npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest codex-pre-tool-plan';
+const qoderPlanHookCommand = 'npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest qoder-plan';
 const codexPlanHook: HookCommand = {
   type: 'command',
   command: codexPlanHookCommand,
   timeout: 600,
   statusMessage: 'Reviewing plan'
 };
+const codexPreToolPlanHook: HookCommand = {
+  type: 'command',
+  command: codexPreToolPlanHookCommand,
+  timeout: 600,
+  statusMessage: 'Reviewing plan before tool use'
+};
+const qoderPlanHook: HookCommand = {
+  type: 'command',
+  command: qoderPlanHookCommand,
+  timeout: 600,
+  statusMessage: 'Reviewing plan'
+};
+
+export type InstallPlanHooksOptions = {
+  runtime?: 'codex' | 'qoder';
+  project?: boolean;
+  cwd?: string;
+};
 
 /**
- * 安装或合并 Codex plan hook，并同时确保同一配置目录里的 `[features].hooks` 已开启。
+ * 按 runtime 安装 plan hook；默认保持既有 Codex 行为，Qoder 需要显式 --qoder。
+ */
+export async function installPlanHooks(options: InstallPlanHooksOptions = {}): Promise<{ path: string; changed: boolean }> {
+  if (options.runtime === 'qoder') {
+    return installQoderPlanHook(options);
+  }
+  return installCodexPlanHook(options);
+}
+
+/**
+ * 安装或合并 Codex plan hooks，并同时确保同一配置目录里的 `[features].hooks` 已开启。
  */
 export async function installCodexPlanHook(options: { project?: boolean; cwd?: string } = {}): Promise<{ path: string; changed: boolean }> {
   // 全局安装写入 CODEX_HOME/个人配置；项目安装只写当前工作区 .codex，交由 Codex trust 机制决定是否加载。
@@ -50,6 +80,24 @@ export async function installCodexPlanHook(options: { project?: boolean; cwd?: s
   }
 
   return { path: targetPath, changed: changed || configResult.changed };
+}
+
+/**
+ * 安装或合并 Qoder create_plan hook；项目级默认写 settings.local.json，避免误提交个人本地审查配置。
+ */
+export async function installQoderPlanHook(options: { project?: boolean; cwd?: string } = {}): Promise<{ path: string; changed: boolean }> {
+  const configDir = options.project ? join(resolve(options.cwd ?? process.cwd()), '.qoder') : join(homedir(), '.qoder');
+  const targetPath = join(configDir, options.project ? 'settings.local.json' : 'settings.json');
+  const current = await readHooksFile(targetPath);
+  const next = ensureQoderPlanHook(current);
+  const changed = JSON.stringify(current) !== JSON.stringify(next);
+
+  if (changed) {
+    await mkdir(dirname(targetPath), { recursive: true });
+    await writeFile(targetPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  }
+
+  return { path: targetPath, changed };
 }
 
 /**
@@ -84,15 +132,18 @@ function normalizeHooksFile(file: HooksFile): HooksFile {
 }
 
 /**
- * 在 Stop hook 列表中追加缺失的 Diff Review hook，保留已有描述、matcher 和其他生命周期配置。
+ * 追加缺失的 Diff Review Codex hooks，保留已有描述、matcher 和其他生命周期配置。
  */
 function ensureCodexPlanHook(file: HooksFile): HooksFile {
   const hooks = { ...(file.hooks ?? {}) };
   const stopGroups = [...(hooks.Stop ?? [])];
-  const hasHook = stopGroups.some((group) => group.hooks?.some((hook) => hook.command === codexPlanHookCommand));
+  const preToolGroups = [...(hooks.PreToolUse ?? [])];
 
-  if (!hasHook) {
+  if (!hasHookCommand(stopGroups, codexPlanHookCommand)) {
     stopGroups.push({ hooks: [codexPlanHook] });
+  }
+  if (!hasHookCommand(preToolGroups, codexPreToolPlanHookCommand)) {
+    preToolGroups.push({ matcher: '.*', hooks: [codexPreToolPlanHook] });
   }
 
   return {
@@ -100,9 +151,34 @@ function ensureCodexPlanHook(file: HooksFile): HooksFile {
     ...file,
     hooks: {
       ...hooks,
-      Stop: stopGroups
+      Stop: stopGroups,
+      PreToolUse: preToolGroups
     }
   };
+}
+
+/**
+ * 在 Qoder PreToolUse/create_plan 列表中追加缺失的 Diff Review hook。
+ */
+function ensureQoderPlanHook(file: HooksFile): HooksFile {
+  const hooks = { ...(file.hooks ?? {}) };
+  const preToolGroups = [...(hooks.PreToolUse ?? [])];
+
+  if (!hasHookCommand(preToolGroups, qoderPlanHookCommand)) {
+    preToolGroups.push({ matcher: 'create_plan', hooks: [qoderPlanHook] });
+  }
+
+  return {
+    ...file,
+    hooks: {
+      ...hooks,
+      PreToolUse: preToolGroups
+    }
+  };
+}
+
+function hasHookCommand(groups: HookGroup[], command: string): boolean {
+  return groups.some((group) => group.hooks?.some((hook) => hook.command === command));
 }
 
 /**

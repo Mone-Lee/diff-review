@@ -8,8 +8,9 @@ Diff Review 可以作为 agent plan mode 的人工审查关卡：agent 产出计
 
 ## 支持范围
 
-- Codex：使用 `Stop` hook，命令为 `local-diff-reviewer plan-hook`。
+- Codex：使用 `Stop` hook 提前预览计划，命令为 `local-diff-reviewer plan-hook`；同时使用 `PreToolUse` hook 在工具执行前兜底审查，命令为 `local-diff-reviewer codex-pre-tool-plan`。
 - Copilot：使用 `preToolUse` hook，命令为 `local-diff-reviewer copilot-plan`，只处理 `exit_plan_mode`。
+- Qoder：使用 `PreToolUse` hook，命令为 `local-diff-reviewer qoder-plan`，只处理 `create_plan`。
 - 审查内容：计划文本会被转换成虚拟 Markdown 文件，复用 Diff Review 的 Markdown preview、行级/选区评论和评论侧栏。
 - 返回方式：不查找 agent id，也不向外部服务发送消息；hook 子进程阻塞等待 UI 决策，然后把 JSON 结果写回 stdout。
 
@@ -30,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts
 默认安装到 `$CODEX_HOME`，未设置时使用 `~/.codex`：
 
 - `config.toml`：确保 `[features] hooks = true`
-- `hooks.json`：合并 Codex `Stop` hook
+- `hooks.json`：合并 Codex `Stop` 和 `PreToolUse` hooks
 
 如果只想为当前项目安装：
 
@@ -77,6 +78,30 @@ Codex 当前 `Stop` hook 不支持 matcher，因此所有 turn 停止时都会�
 {"continue":true,"suppressOutput":true}
 ```
 
+`PreToolUse` 作为执行前最终闸门，会在本地工具调用前触发。安装器会追加等价于下面的配置：
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest codex-pre-tool-plan",
+            "timeout": 600,
+            "statusMessage": "Reviewing plan before tool use"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`codex-pre-tool-plan` 会从 hook 输入或 `transcript_path` 提取最近计划。通过计划时放行当前工具；退回评论时返回 Codex `PreToolUse` 支持的 `permissionDecision: "deny"`，让 agent 先处理审查意见。为避免同一轮同一份计划在后续每个工具前重复弹窗，通过后会在系统临时目录记录一个 approval marker。
+
 ## Copilot Hook 配置
 
 Copilot 可使用独立 `hooks.json`：
@@ -100,6 +125,39 @@ Copilot 可使用独立 `hooks.json`：
 
 `copilot-plan` 会检查 hook 输入中是否包含 `exit_plan_mode`，只在该工具调用上继续处理。计划文本会从输入里的 `plan`、`content`、`markdown` 或 `message` 字段中提取。
 
+## Qoder Hook 配置
+
+Qoder 需要显式安装：
+
+```bash
+npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest install-hooks --qoder
+npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest install-hooks --qoder --project
+```
+
+默认写入 `~/.qoder/settings.json`；项目级安装写入 `.qoder/settings.local.json`。安装器会合并等价于下面的配置：
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "create_plan",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest qoder-plan",
+            "timeout": 600,
+            "statusMessage": "Reviewing plan"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`qoder-plan` 会检查 hook 输入中是否包含 `create_plan`，并从计划字段里提取 Markdown。退回评论时使用 exit code `2` 和 stderr 把反馈交回 Qoder。
+
 ## 流程图
 
 ```mermaid
@@ -107,15 +165,24 @@ flowchart TD
   Agent[Agent 产出 plan mode 计划] --> Entry{触发来源}
 
   Entry -->|Codex Stop hook| CodexHook[local-diff-reviewer plan-hook]
+  Entry -->|Codex PreToolUse hook| CodexPreToolHook[local-diff-reviewer codex-pre-tool-plan]
   Entry -->|Copilot preToolUse hook| CopilotHook[local-diff-reviewer copilot-plan]
+  Entry -->|Qoder PreToolUse hook| QoderHook[local-diff-reviewer qoder-plan]
 
   CodexHook --> CodexCheck{permission_mode 是否为 plan}
+  CodexPreToolHook --> CodexPreToolCheck{是否能提取待执行计划}
   CodexCheck -->|否| Pass[输出 continue true 并放行]
   CodexCheck -->|是| ReadInput[读取 hook stdin]
+  CodexPreToolCheck -->|否| Pass
+  CodexPreToolCheck -->|是| ReadInput
 
   CopilotHook --> CopilotCheck{是否调用 exit_plan_mode}
   CopilotCheck -->|否| Pass
   CopilotCheck -->|是| ReadInput
+
+  QoderHook --> QoderCheck{是否调用 create_plan}
+  QoderCheck -->|否| Pass
+  QoderCheck -->|是| ReadInput
 
   ReadInput --> Extract{能否提取计划文本}
   Extract -->|否| Pass
@@ -140,11 +207,12 @@ flowchart TD
 ## 响应流程
 
 1. Agent 进入 plan mode 并产出计划。
-2. Codex 在 turn 停止时调用 `local-diff-reviewer plan-hook`；Copilot 在调用 `exit_plan_mode` 前调用 `local-diff-reviewer copilot-plan`。
+2. Codex 在 turn 停止时调用 `local-diff-reviewer plan-hook`，并在工具执行前调用 `local-diff-reviewer codex-pre-tool-plan`；Copilot 在调用 `exit_plan_mode` 前调用 `local-diff-reviewer copilot-plan`；Qoder 在 `create_plan` hook 上调用 `local-diff-reviewer qoder-plan`。
 3. Hook 命令从 stdin 读取 hook 输入。
 4. 命令提取计划文本：
    - Codex：优先读取输入中的内联字段；否则从 `transcript_path` 中尽力提取最新 assistant 文本。
    - Copilot：从 hook 输入的计划字段提取。
+   - Qoder：从 hook 输入的计划字段提取。
 5. 命令创建一个虚拟 Markdown 文件，例如 `.diff-review-plan/<session>-<turn>.md`。
 6. 命令启动本地 Diff Review 服务并打开浏览器。
 7. Hook 子进程不退出，持续轮询本地服务的 `/api/plan-review-result`。
@@ -178,7 +246,7 @@ flowchart TD
 }
 ```
 
-Codex 的 `Stop` hook 支持 `continue: false` 和 `stopReason`。这会把当前 hook run 标记为 stopped，并把 `stopReason` 作为需要 agent 处理的反馈暴露回当前 loop。
+Codex 的 `Stop` hook 支持 `continue: false` 和 `stopReason`。这会把当前 hook run 标记为 stopped，并把 `stopReason` 作为需要 agent 处理的反馈暴露回当前 loop。Codex `PreToolUse` 则使用 `permissionDecision: "deny"` 和 `permissionDecisionReason` 阻断当前工具调用。
 
 ## 评论范围
 

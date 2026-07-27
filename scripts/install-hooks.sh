@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Installs the Codex plan-mode hook for local-diff-reviewer without requiring users to edit hooks.json by hand.
+# Installs plan-mode hooks for local-diff-reviewer without requiring users to edit hook config by hand.
 set -euo pipefail
 
 PACKAGE="${LOCAL_DIFF_REVIEWER_PACKAGE:-local-diff-reviewer@latest}"
 
 usage() {
   cat <<'USAGE'
-Usage: install-hooks.sh [--project] [--help]
+Usage: install-hooks.sh [--project] [--qoder] [--help]
 
 Options:
-  --project   Install into .codex/hooks.json for the current workspace.
+  --project   Install project-local hook config for the current workspace.
+  --qoder     Install the Qoder create_plan hook instead of Codex hooks.
   --help      Show this help.
 
 Environment:
@@ -22,6 +23,10 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --project)
       args+=("--project")
+      shift
+      ;;
+    --qoder)
+      args+=("--qoder")
       shift
       ;;
     -h|--help)
