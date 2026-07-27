@@ -70,7 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts
 Codex 当前 `Stop` hook 不支持 matcher，因此所有 turn 停止时都会触发命令。`plan-hook` 会读取 hook stdin，只有同时满足以下条件才打开审查页面：
 
 - `hook_event_name === "Stop"`
-- `permission_mode === "plan"`
+- transcript 中当前 `turn_id` 同时包含 `collaboration_mode_kind === "plan"` 和 Plan item
 
 其他情况会直接输出：
 
@@ -169,7 +169,7 @@ flowchart TD
   Entry -->|Copilot preToolUse hook| CopilotHook[local-diff-reviewer copilot-plan]
   Entry -->|Qoder PreToolUse hook| QoderHook[local-diff-reviewer qoder-plan]
 
-  CodexHook --> CodexCheck{permission_mode 是否为 plan}
+  CodexHook --> CodexCheck{当前 turn<br/>collaboration plan}
   CodexPreToolHook --> CodexPreToolCheck{是否能提取待执行计划}
   CodexCheck -->|否| Pass[输出 continue true 并放行]
   CodexCheck -->|是| ReadInput[读取 hook stdin]
@@ -210,7 +210,7 @@ flowchart TD
 2. Codex 在 turn 停止时调用 `local-diff-reviewer plan-hook`，并在工具执行前调用 `local-diff-reviewer codex-pre-tool-plan`；Copilot 在调用 `exit_plan_mode` 前调用 `local-diff-reviewer copilot-plan`；Qoder 在 `create_plan` hook 上调用 `local-diff-reviewer qoder-plan`。
 3. Hook 命令从 stdin 读取 hook 输入。
 4. 命令提取计划文本：
-   - Codex：优先读取输入中的内联字段；否则从 `transcript_path` 中尽力提取最新 assistant 文本。
+   - Codex：`Stop` hook 按当前 `turn_id` 提取 collaboration mode 的 Plan item；`PreToolUse` hook 优先读取输入中的内联字段，否则从 `transcript_path` 中尽力提取最新 assistant 文本。
    - Copilot：从 hook 输入的计划字段提取。
    - Qoder：从 hook 输入的计划字段提取。
 5. 命令创建一个虚拟 Markdown 文件，例如 `.diff-review-plan/<session>-<turn>.md`。

@@ -33,6 +33,7 @@
     "review": "tsx src/cli/start.ts",
     "review:dev": "tsx src/cli/start.ts --dev",
     "dev": "npm run review:dev",
+    "test": "tsx --test src/**/*.test.ts",
     "web:dev": "vite --host 127.0.0.1 --open",
     "build": "npm run typecheck && vite build && node scripts/build-cli.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",

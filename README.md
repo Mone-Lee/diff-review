@@ -94,7 +94,7 @@ npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest inst
 curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts/install-hooks.sh | bash -s -- --project
 ```
 
-命令不会覆盖已有 hook，只会追加缺失的 Codex plan hooks。Codex 仍会要求先在 `/hooks` 中信任新增或变化的 hook。`Stop` hook 当前不支持 matcher，因此命令自身会判断 `permission_mode === "plan"`；`PreToolUse` hook 会在工具执行前兜底拦截，已通过的同一轮同一份计划会用临时 marker 跳过重复审查。
+命令不会覆盖已有 hook，只会追加缺失的 Codex plan hooks。Codex 仍会要求先在 `/hooks` 中信任新增或变化的 hook。`Stop` hook 当前不支持 matcher，因此命令自身会从 transcript 中识别当前 turn 的 `collaboration_mode_kind === "plan"` 和 Plan item；`PreToolUse` hook 会在工具执行前兜底拦截，已通过的同一轮同一份计划会用临时 marker 跳过重复审查。
 
 手动配置时，Codex 示例 `~/.codex/hooks.json` 或项目 `.codex/hooks.json`：
 

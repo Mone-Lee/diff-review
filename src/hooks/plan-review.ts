@@ -10,7 +10,6 @@ import { formatPrompt } from '../core/prompt';
 export type CodexHookInput = {
   cwd?: unknown;
   hook_event_name?: unknown;
-  permission_mode?: unknown;
   transcript_path?: unknown;
   session_id?: unknown;
   turn_id?: unknown;
@@ -69,15 +68,18 @@ export async function buildPlanReviewSnapshot(
   options: PlanReviewSnapshotOptions = {}
 ): Promise<PlanReviewSnapshot | null> {
   const requireCodexPlanStop = options.requireCodexPlanStop ?? true;
-  if (requireCodexPlanStop && (input.permission_mode !== 'plan' || input.hook_event_name !== 'Stop')) return null;
+  const collaborationModePlan = requireCodexPlanStop ? await extractCollaborationModePlan(input) : '';
+  if (requireCodexPlanStop && (input.hook_event_name !== 'Stop' || !collaborationModePlan)) {
+    return null;
+  }
   if (options.requireCodexPreToolUse && !isCodexPreToolPlanReviewInput(input)) return null;
   if (options.requireCopilotExitPlan && !containsExitPlanMode(input)) return null;
   if (options.requireQoderCreatePlan && !isQoderCreatePlanInput(input)) return null;
 
   const cwd = typeof input.cwd === 'string' && input.cwd.trim() ? resolve(input.cwd) : fallbackCwd;
-  const planText = await extractPlanText(input);
+  const planText = collaborationModePlan || (await extractPlanText(input));
   if (!planText) return null;
-  if (options.requireCodexPreToolUse && input.permission_mode !== 'plan' && !hasPlanReviewMarker(planText)) return null;
+  if (options.requireCodexPreToolUse && !hasPlanReviewMarker(planText)) return null;
 
   const sessionId = typeof input.session_id === 'string' && input.session_id ? input.session_id : crypto.randomUUID();
   const turnId = typeof input.turn_id === 'string' && input.turn_id ? input.turn_id : crypto.randomUUID();
@@ -102,6 +104,53 @@ export async function buildPlanReviewSnapshot(
     planPath,
     planText
   };
+}
+
+/**
+ * 新版 Codex 将 Plan Mode 记录为当前 turn 的 collaboration mode；只接受同一 turn 的 Plan item，避免复用历史计划。
+ */
+async function extractCollaborationModePlan(input: CodexHookInput): Promise<string> {
+  const transcriptPath = typeof input.transcript_path === 'string' ? input.transcript_path : '';
+  const turnId = typeof input.turn_id === 'string' ? input.turn_id : '';
+  if (!transcriptPath || !turnId) return '';
+
+  const records = (await readFile(transcriptPath, 'utf8'))
+    .split('\n')
+    .map((line) => parseJsonLine(line))
+    .filter((record): record is Record<string, unknown> => Boolean(record));
+  const isCurrentPlanTurn = records.some((record) => {
+    const payload = asRecord(record.payload);
+    return (
+      record.type === 'event_msg' &&
+      payload?.type === 'task_started' &&
+      payload.turn_id === turnId &&
+      payload.collaboration_mode_kind === 'plan'
+    );
+  });
+  if (!isCurrentPlanTurn) return '';
+
+  return (
+    records
+      .map((record) => {
+        const payload = asRecord(record.payload);
+        const item = asRecord(payload?.item);
+        if (
+          record.type !== 'event_msg' ||
+          payload?.type !== 'item_completed' ||
+          payload.turn_id !== turnId ||
+          item?.type !== 'Plan'
+        ) {
+          return '';
+        }
+        return typeof item.text === 'string' ? item.text.trim() : '';
+      })
+      .filter(Boolean)
+      .at(-1) ?? ''
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 /**
@@ -224,7 +273,6 @@ function isPlanTextKey(key: string): boolean {
  */
 function isCodexPreToolPlanReviewInput(input: CodexHookInput): boolean {
   if (input.hook_event_name !== 'PreToolUse' || typeof input.tool_name !== 'string' || !input.tool_name) return false;
-  if (input.permission_mode === 'plan') return true;
   return hasPlanReviewMarker(input) || typeof input.transcript_path === 'string';
 }
 
