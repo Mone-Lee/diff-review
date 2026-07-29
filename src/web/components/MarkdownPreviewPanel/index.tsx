@@ -7,8 +7,7 @@
  * 4) 对 mermaid 代码块交由 MermaidDiagram 组件渲染。
  */
 import React from 'react';
-import { Alert, Button, Input, Spin } from 'antd';
-import { CloseOutlined } from '@ant-design/icons';
+import { Alert, Spin } from 'antd';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
@@ -21,7 +20,6 @@ import { fetchMarkdownPreview } from '../../api/content';
 import styles from './index.module.less';
 import { MarkdownCommentBlock } from '../MarkdownCommentBlock';
 import { MermaidDiagram } from '../MermaidDiagram';
-import { useReviewActions } from '../../contexts/ReviewActionsContext';
 import {
   extractText,
   findMarkdownAnchor,
@@ -48,11 +46,6 @@ type Props = {
   file: DiffFile;
   threads: ReviewThread[];
   locateTarget: { threadId: string; anchor: CommentAnchor } | null;
-};
-
-type MarkdownSelectionDraft = {
-  anchor: Extract<CommentAnchor, { type: 'markdown-selection' }>;
-  position: { left: number; top: number };
 };
 
 type MarkdownAstNode = {
@@ -131,81 +124,8 @@ type HighlightRegistry = {
   delete: (name: string) => void;
 };
 
-function getNodeElement(node: Node | null) {
-  if (!node) return null;
-  return node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
-}
-
-function closestCommentBlock(node: Node | null, markdownBody: HTMLElement) {
-  const element = getNodeElement(node);
-  const block = element?.closest<HTMLElement>('[data-review-line]');
-  return block && markdownBody.contains(block) ? block : null;
-}
-
-function isIgnoredSelectionNode(node: Node | null) {
-  return Boolean(getNodeElement(node)?.closest('[data-review-ignore-selection]'));
-}
-
 function getCommentBlockContent(block: HTMLElement) {
   return block.querySelector<HTMLElement>('[data-markdown-comment-content]');
-}
-
-function getTextOffset(root: HTMLElement, node: Node, offset: number) {
-  const range = document.createRange();
-  range.selectNodeContents(root);
-  range.setEnd(node, offset);
-  const textOffset = range.toString().length;
-  range.detach();
-  return textOffset;
-}
-
-function getSelectionPopoverPosition(range: Range, scrollContainer: HTMLElement) {
-  const rect = range.getBoundingClientRect();
-  const containerRect = scrollContainer.getBoundingClientRect();
-  const maxLeft = Math.max(8, scrollContainer.clientWidth - 454);
-
-  return {
-    left: Math.min(Math.max(rect.left - containerRect.left + scrollContainer.scrollLeft, 8), maxLeft),
-    top: Math.max(rect.top - containerRect.top + scrollContainer.scrollTop - 56, 8)
-  };
-}
-
-function buildSelectionDraft(selection: Selection, markdownBody: HTMLElement, scrollContainer: HTMLElement, filePath: string): MarkdownSelectionDraft | null {
-  if (selection.rangeCount === 0 || selection.isCollapsed) return null;
-  if (isIgnoredSelectionNode(selection.anchorNode) || isIgnoredSelectionNode(selection.focusNode)) return null;
-
-  const selectedText = selection.toString().trim();
-  if (!selectedText) return null;
-
-  const range = selection.getRangeAt(0);
-  if (!markdownBody.contains(range.commonAncestorContainer)) return null;
-
-  const startBlock = closestCommentBlock(range.startContainer, markdownBody);
-  const endBlock = closestCommentBlock(range.endContainer, markdownBody);
-  if (!startBlock || !endBlock) return null;
-
-  const startContent = getCommentBlockContent(startBlock);
-  const endContent = getCommentBlockContent(endBlock);
-  if (!startContent || !endContent) return null;
-  if (!startContent.contains(range.startContainer) || !endContent.contains(range.endContainer)) return null;
-
-  const startLine = Number(startBlock.dataset.reviewLine);
-  const endLine = Number(endBlock.dataset.reviewLine);
-  if (!Number.isInteger(startLine) || !Number.isInteger(endLine)) return null;
-
-  return {
-    anchor: {
-      type: 'markdown-selection',
-      filePath,
-      startLine,
-      endLine,
-      startOffset: getTextOffset(startContent, range.startContainer, range.startOffset),
-      endOffset: getTextOffset(endContent, range.endContainer, range.endOffset),
-      selectedText,
-      blockId: `line-${startLine}`
-    },
-    position: getSelectionPopoverPosition(range, scrollContainer)
-  };
 }
 
 function getHighlightApi() {
@@ -270,19 +190,13 @@ export function MarkdownPreviewPanel({
   threads,
   locateTarget
 }: Props) {
-  const { createThread } = useReviewActions();
   const [preview, setPreview] = React.useState<MarkdownPreview | null>(null);
-  const [selectionDraft, setSelectionDraft] = React.useState<MarkdownSelectionDraft | null>(null);
-  const [selectionBody, setSelectionBody] = React.useState('');
-  const [isSubmittingSelection, setIsSubmittingSelection] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const markdownBodyRef = React.useRef<HTMLDivElement | null>(null);
   const autoScrollKeyRef = React.useRef('');
 
   React.useEffect(() => {
     setPreview(null);
-    setSelectionDraft(null);
-    setSelectionBody('');
     fetchMarkdownPreview(file.path)
       .then((data) => setPreview(data))
       .catch(() => setPreview(null));
@@ -352,39 +266,6 @@ export function MarkdownPreviewPanel({
       selectionThreadsByLine: nextSelectionThreadsByLine
     };
   }, [file.path, preview, threads]);
-
-  React.useEffect(() => {
-    if (!preview) return undefined;
-
-    const updateSelectionDraft = () => {
-      const selection = window.getSelection();
-      const markdownBody = markdownBodyRef.current;
-      const scrollContainer = scrollRef.current;
-      if (!selection || !markdownBody || !scrollContainer) return;
-
-      const nextDraft = buildSelectionDraft(selection, markdownBody, scrollContainer, file.path);
-      if (nextDraft) {
-        setSelectionDraft(nextDraft);
-        return;
-      }
-
-      if (!isIgnoredSelectionNode(selection.anchorNode) && !isIgnoredSelectionNode(selection.focusNode)) {
-        setSelectionDraft(null);
-      }
-    };
-
-    const scheduleSelectionUpdate = () => {
-      window.setTimeout(updateSelectionDraft, 0);
-    };
-
-    document.addEventListener('mouseup', scheduleSelectionUpdate);
-    document.addEventListener('keyup', scheduleSelectionUpdate);
-
-    return () => {
-      document.removeEventListener('mouseup', scheduleSelectionUpdate);
-      document.removeEventListener('keyup', scheduleSelectionUpdate);
-    };
-  }, [file.path, preview]);
 
   React.useEffect(() => {
     const markdownBody = markdownBodyRef.current;
@@ -621,47 +502,6 @@ export function MarkdownPreviewPanel({
           </ReactMarkdown>
         </div>
       </article>
-      {selectionDraft ? (
-        <form
-          className={styles.selectionComposer}
-          data-review-ignore-selection
-          style={{ left: selectionDraft.position.left, top: selectionDraft.position.top }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!selectionBody.trim() || isSubmittingSelection) return;
-            setIsSubmittingSelection(true);
-            createThread(selectionDraft.anchor, selectionBody.trim())
-              .then(() => {
-                setSelectionBody('');
-                setSelectionDraft(null);
-                window.getSelection()?.removeAllRanges();
-              })
-              .finally(() => setIsSubmittingSelection(false));
-          }}
-        >
-          <Input
-            autoFocus
-            className={styles.selectionComposerInput}
-            placeholder="Add a comment..."
-            value={selectionBody}
-            onChange={(event) => setSelectionBody(event.target.value)}
-          />
-          <Button htmlType="submit" loading={isSubmittingSelection} type="primary">
-            保存
-          </Button>
-          <Button
-            aria-label="关闭"
-            className={styles.selectionComposerClose}
-            icon={<CloseOutlined />}
-            type="text"
-            onClick={() => {
-              setSelectionBody('');
-              setSelectionDraft(null);
-              window.getSelection()?.removeAllRanges();
-            }}
-          />
-        </form>
-      ) : null}
     </div>
   );
 }
