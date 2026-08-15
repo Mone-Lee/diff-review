@@ -71,9 +71,25 @@ local-diff-reviewer stop
 local-diff-reviewer --repo /path/to/project
 ```
 
+### 本地源码与 npm 包切换
+
+开发本仓库时，可以让本机其他项目继续调用同一个 `local-diff-reviewer` 命令，并在本地构建产物和 npm 发布包之间切换：
+
+```bash
+npm run diff-review:use-local
+npm run diff-review:use-npm
+npm run diff-review:status
+```
+
+`diff-review:use-local` 会先构建当前仓库，再用 `npm link` 把全局 `local-diff-reviewer` 命令指向本地源码，并把 Codex plan hook 临时改为调用这个全局命令。`diff-review:use-npm` 默认切回 `local-diff-reviewer@latest`，同时把 hook 改回 `npx ... @latest`，也可以指定版本：
+
+```bash
+npm run diff-review:use-npm -- 4.1.4
+```
+
 ### Plan mode hook
 
-`local-diff-reviewer plan-hook` 可以作为 Codex plan mode 的 `Stop` hook 使用；`local-diff-reviewer codex-pre-tool-plan` 可以作为 Codex `PreToolUse` hook，在计划通过后的第一个工具执行前补上强制审查。工具会把本轮计划作为虚拟 Markdown 文件打开到本地审查台。你可以在计划预览上添加评论，然后点击“退回评论”让 agent 继续改计划；也可以点击“通过计划”让 agent 进入后续执行。
+`local-diff-reviewer plan-hook` 可以作为 Codex plan mode 的 `Stop` hook 使用。工具会把本轮计划作为虚拟 Markdown 文件打开到本地审查台。你可以在计划预览上添加评论，然后点击“退回评论”让 agent 继续改计划；也可以点击“通过计划”允许当前 plan turn 结束。受 Codex 当前公开 hook 能力限制，通过后仍需要回到 Codex 点击原生 “Yes, implement this plan” 才会进入实施。
 
 推荐用安装命令幂等创建或合并 Codex `hooks.json`：
 
@@ -87,14 +103,14 @@ npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest inst
 curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts/install-hooks.sh | bash
 ```
 
-默认写入 `$CODEX_HOME/hooks.json`，未设置 `CODEX_HOME` 时写入 `~/.codex/hooks.json`，并确保同目录 `config.toml` 中 `[features] hooks = true`。安装器会同时合并 Codex `Stop` 和 `PreToolUse` hooks。如果只想为当前项目安装，使用：
+默认写入 `$CODEX_HOME/hooks.json`，未设置 `CODEX_HOME` 时写入 `~/.codex/hooks.json`，并确保同目录 `config.toml` 中 `[features] hooks = true`。安装器会合并 Codex `Stop` hook，并清理本工具旧版 `PreToolUse` 和误用的 `PermissionRequest` hook，避免重复弹窗。如果只想为当前项目安装，使用：
 
 ```bash
 npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest install-hooks --project
 curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts/install-hooks.sh | bash -s -- --project
 ```
 
-命令不会覆盖已有 hook，只会追加缺失的 Codex plan hooks。Codex 仍会要求先在 `/hooks` 中信任新增或变化的 hook。`Stop` hook 当前不支持 matcher，因此命令自身会从 transcript 中识别当前 turn 的 `collaboration_mode_kind === "plan"` 和 Plan item；`PreToolUse` hook 会在工具执行前兜底拦截，已通过的同一轮同一份计划会用临时 marker 跳过重复审查。
+命令不会覆盖已有 hook，只会追加缺失的 Codex plan hook，并移除本工具历史版本写入的 `codex-pre-tool-plan` 和 `codex-permission-plan`。Codex 仍会要求先在 `/hooks` 中信任新增或变化的 hook。`Stop` hook 当前不支持 matcher，因此命令自身会从 transcript 中识别当前 turn 的 `collaboration_mode_kind === "plan"` 和 Plan item。
 
 手动配置时，Codex 示例 `~/.codex/hooks.json` 或项目 `.codex/hooks.json`：
 
@@ -109,19 +125,6 @@ curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts
             "command": "npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest plan-hook",
             "timeout": 600,
             "statusMessage": "正在审查计划"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest codex-pre-tool-plan",
-            "timeout": 600,
-            "statusMessage": "正在执行前审查计划"
           }
         ]
       }
