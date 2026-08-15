@@ -6,7 +6,12 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { buildPlanReviewSnapshot, formatCodexStopHookOutput, formatPlanHookOutput, type CodexHookInput } from './plan-review';
+import {
+  buildPlanReviewSnapshot,
+  formatCodexStopHookOutput,
+  formatPlanHookOutput,
+  type CodexHookInput
+} from './plan-review';
 
 async function withTranscript(records: unknown[], run: (path: string) => Promise<void>) {
   const directory = await mkdtemp(join(tmpdir(), 'diff-review-plan-test-'));
@@ -52,9 +57,10 @@ test('识别当前 turn 的 collaboration mode 计划', async () => {
       transcript_path: transcriptPath
     };
 
-    const snapshot = await buildPlanReviewSnapshot(input, process.cwd());
+    const snapshot = await buildPlanReviewSnapshot(input, process.cwd(), { source: 'codex' });
 
     assert.equal(snapshot?.planText, '# 新版计划');
+    assert.equal(snapshot?.session.planReviewSource, 'codex');
   });
 });
 

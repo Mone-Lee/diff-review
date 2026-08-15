@@ -125,15 +125,32 @@ async function main() {
 }
 
 function parseCliOptions(args: string[]): {
-  command: 'review' | 'stop' | 'install-hooks' | 'plan-hook' | 'copilot-plan' | 'codex-pre-tool-plan' | 'qoder-plan' | 'help' | 'version';
+  command:
+    | 'review'
+    | 'stop'
+    | 'install-hooks'
+    | 'plan-hook'
+    | 'copilot-plan'
+    | 'codex-pre-tool-plan'
+    | 'qoder-plan'
+    | 'help'
+    | 'version';
   dev: boolean;
   newSession: boolean;
   repo: string | undefined;
   reviewArgs: string[];
   comments: string[];
 } {
-  let command: 'review' | 'stop' | 'install-hooks' | 'plan-hook' | 'copilot-plan' | 'codex-pre-tool-plan' | 'qoder-plan' | 'help' | 'version' =
-    'review';
+  let command:
+    | 'review'
+    | 'stop'
+    | 'install-hooks'
+    | 'plan-hook'
+    | 'copilot-plan'
+    | 'codex-pre-tool-plan'
+    | 'qoder-plan'
+    | 'help'
+    | 'version' = 'review';
   const reviewArgs: string[] = [];
   const comments: string[] = [];
   let repo: string | undefined;
@@ -356,13 +373,17 @@ async function installHooksCommand(args: string[]): Promise<void> {
 /**
  * plan hook 的阻塞入口：打开本地审查页后等待 UI 决策，再按触发 runtime 的协议回写 hook 结果。
  */
-async function planHookCommand(dev: boolean, runtime: 'codex-stop' | 'codex-pre-tool' | 'copilot' | 'qoder'): Promise<void> {
+async function planHookCommand(
+  dev: boolean,
+  runtime: 'codex-stop' | 'codex-pre-tool' | 'copilot' | 'qoder'
+): Promise<void> {
   const input = await readHookInputFromStdin();
   const snapshot = await buildPlanReviewSnapshot(input, process.cwd(), {
     requireCodexPlanStop: runtime === 'codex-stop',
     requireCodexPreToolUse: runtime === 'codex-pre-tool',
     requireCopilotExitPlan: runtime === 'copilot',
-    requireQoderCreatePlan: runtime === 'qoder'
+    requireQoderCreatePlan: runtime === 'qoder',
+    source: planReviewSource(runtime)
   });
   if (!snapshot) {
     if (runtime === 'codex-pre-tool' || runtime === 'qoder') return;
@@ -428,6 +449,12 @@ async function planHookCommand(dev: boolean, runtime: 'codex-stop' | 'codex-pre-
     process.kill(vitePid, 'SIGTERM');
   }
   process.exit(0);
+}
+
+function planReviewSource(runtime: 'codex-stop' | 'codex-pre-tool' | 'copilot' | 'qoder'): ReviewSession['planReviewSource'] {
+  if (runtime === 'copilot') return 'copilot';
+  if (runtime === 'qoder') return 'qoder';
+  return 'codex';
 }
 
 /**

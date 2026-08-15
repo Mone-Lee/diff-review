@@ -49,6 +49,16 @@ type DiffViewMode = 'inline' | 'split';
 type MarkdownViewMode = 'preview' | 'diff';
 type ExpandAllRequest = { filePath: string; requestId: number };
 
+function planReviewResultMessage(decision: 'approved' | 'changes-requested', isCodexPlanReview: boolean): string {
+  if (decision === 'changes-requested') {
+    return '评论已退回给 Agent，当前审查链接即将失效。';
+  }
+  if (isCodexPlanReview) {
+    return '计划已通过；受 Codex 当前公开 hook 能力限制，请回到 Codex 点击 “Yes, implement this plan”。当前审查链接即将失效。';
+  }
+  return '计划已通过，当前审查链接即将失效。';
+}
+
 export default function App() {
   const { message } = AntApp.useApp();
   const [session, setSession] = React.useState<ReviewSession | null>(null);
@@ -66,6 +76,7 @@ export default function App() {
   const [applyingComparison, setApplyingComparison] = React.useState(false);
   const [shuttingDownRuntime, setShuttingDownRuntime] = React.useState(false);
   const [submittingPlanResult, setSubmittingPlanResult] = React.useState(false);
+  const [planResultSubmitted, setPlanResultSubmitted] = React.useState(false);
   const sessionIdRef = React.useRef<string | null>(null);
   const focusedThreadIdRef = React.useRef<string | null>(null);
   const { clearPendingChanges, hasPendingChanges, lastChangedAt } = useFileWatch();
@@ -75,6 +86,7 @@ export default function App() {
   const selectedFileIsImage = selectedFile ? isImageFilePath(selectedFile.path) : false;
   const canRefreshSnapshot = session ? isRefreshableReviewMode(session.mode) : false;
   const isPlanReview = session?.reviewKind === 'plan';
+  const isCodexPlanReview = session?.planReviewSource === 'codex';
   const currentSnapshotThreads = React.useMemo(
     () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
     [files, threads]
@@ -125,6 +137,10 @@ export default function App() {
   React.useEffect(() => {
     refreshReviewState(true).catch(() => undefined);
   }, [refreshReviewState]);
+
+  React.useEffect(() => {
+    setPlanResultSubmitted(false);
+  }, [session?.id]);
 
   React.useEffect(() => {
     if (!currentViewedStorageKey) {
@@ -276,10 +292,9 @@ export default function App() {
     setSubmittingPlanResult(true);
     try {
       await submitPlanReviewResult(decision);
+      setPlanResultSubmitted(true);
       message.success(
-        decision === 'approved'
-          ? '计划已通过，当前审查链接即将失效。'
-          : '评论已退回给 Agent，当前审查链接即将失效。'
+        planReviewResultMessage(decision, isCodexPlanReview)
       );
     } catch (error) {
       const nextMessage = error instanceof Error ? error.message : '提交计划审查结果失败';
@@ -287,7 +302,7 @@ export default function App() {
     } finally {
       setSubmittingPlanResult(false);
     }
-  }, [message, unresolvedThreadsCount]);
+  }, [isCodexPlanReview, message, unresolvedThreadsCount]);
 
   const setFocusedThreadIdWithRef = React.useCallback<React.Dispatch<React.SetStateAction<string | null>>>((value) => {
     setFocusedThreadId((current) => {
@@ -473,6 +488,7 @@ export default function App() {
               {isPlanReview ? (
                 <Space.Compact>
                   <Button
+                    disabled={planResultSubmitted}
                     icon={<CheckCircleOutlined />}
                     loading={submittingPlanResult}
                     type="primary"
@@ -483,7 +499,7 @@ export default function App() {
                     通过计划
                   </Button>
                   <Button
-                    disabled={unresolvedThreadsCount === 0 || submittingPlanResult}
+                    disabled={unresolvedThreadsCount === 0 || submittingPlanResult || planResultSubmitted}
                     icon={<RollbackOutlined />}
                     onClick={() => {
                       handleSubmitPlanResult('changes-requested').catch(() => undefined);

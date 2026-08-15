@@ -23,20 +23,27 @@ type HooksFile = {
 };
 
 // 安装写入 hooks.json 的实际命令；保持包名和 CLI 子命令稳定，避免已 trust 的配置指向源码路径。
-const codexPlanHookCommand = 'npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest plan-hook';
-const codexPreToolPlanHookCommand = 'npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest codex-pre-tool-plan';
-const qoderPlanHookCommand = 'npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest qoder-plan';
+const defaultHookCommandPrefix = 'npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest';
+const localHookCommandPrefix = 'local-diff-reviewer';
+const hookCommandPrefix = process.env.LOCAL_DIFF_REVIEWER_HOOK_COMMAND?.trim() || defaultHookCommandPrefix;
+const codexPlanHookCommand = `${hookCommandPrefix} plan-hook`;
+const obsoleteCodexPlanHookCommands = [`${defaultHookCommandPrefix} plan-hook`, `${localHookCommandPrefix} plan-hook`].filter(
+  (command) => command !== codexPlanHookCommand
+);
+const obsoleteCodexPreToolPlanHookCommands = [
+  `${defaultHookCommandPrefix} codex-pre-tool-plan`,
+  `${localHookCommandPrefix} codex-pre-tool-plan`
+];
+const obsoleteCodexPermissionPlanHookCommands = [
+  `${defaultHookCommandPrefix} codex-permission-plan`,
+  `${localHookCommandPrefix} codex-permission-plan`
+];
+const qoderPlanHookCommand = `${hookCommandPrefix} qoder-plan`;
 const codexPlanHook: HookCommand = {
   type: 'command',
   command: codexPlanHookCommand,
   timeout: 600,
   statusMessage: 'Reviewing plan'
-};
-const codexPreToolPlanHook: HookCommand = {
-  type: 'command',
-  command: codexPreToolPlanHookCommand,
-  timeout: 600,
-  statusMessage: 'Reviewing plan before tool use'
 };
 const qoderPlanHook: HookCommand = {
   type: 'command',
@@ -68,7 +75,7 @@ export async function installCodexPlanHook(options: { project?: boolean; cwd?: s
   // 全局安装写入 CODEX_HOME/个人配置；项目安装只写当前工作区 .codex，交由 Codex trust 机制决定是否加载。
   const configDir = options.project ? join(resolve(options.cwd ?? process.cwd()), '.codex') : codexHome();
   const configResult = await ensureCodexHooksFeature(join(configDir, 'config.toml'));
-  // hooks.json 是 Codex Stop hook 的唯一持久化入口；这里必须合并，不能覆盖用户已有 hooks。
+  // hooks.json 必须合并写入，避免覆盖用户已有的生命周期配置。
   const targetPath = join(configDir, 'hooks.json');
   const current = await readHooksFile(targetPath);
   const next = ensureCodexPlanHook(current);
@@ -132,28 +139,47 @@ function normalizeHooksFile(file: HooksFile): HooksFile {
 }
 
 /**
- * 追加缺失的 Diff Review Codex hooks，保留已有描述、matcher 和其他生命周期配置。
+ * 追加缺失的 Codex Stop 计划审查 hook，并清理本工具旧版执行前/确认请求 hook，避免重复弹窗。
  */
 function ensureCodexPlanHook(file: HooksFile): HooksFile {
   const hooks = { ...(file.hooks ?? {}) };
-  const stopGroups = [...(hooks.Stop ?? [])];
-  const preToolGroups = [...(hooks.PreToolUse ?? [])];
+  let stopGroups = [...(hooks.Stop ?? [])];
+  let preToolGroups = [...(hooks.PreToolUse ?? [])];
+  let permissionGroups = [...(hooks.PermissionRequest ?? [])];
+
+  for (const command of obsoleteCodexPlanHookCommands) {
+    stopGroups = removeHookCommand(stopGroups, command);
+  }
+  for (const command of obsoleteCodexPreToolPlanHookCommands) {
+    preToolGroups = removeHookCommand(preToolGroups, command);
+  }
+  for (const command of obsoleteCodexPermissionPlanHookCommands) {
+    permissionGroups = removeHookCommand(permissionGroups, command);
+  }
 
   if (!hasHookCommand(stopGroups, codexPlanHookCommand)) {
     stopGroups.push({ hooks: [codexPlanHook] });
   }
-  if (!hasHookCommand(preToolGroups, codexPreToolPlanHookCommand)) {
-    preToolGroups.push({ matcher: '.*', hooks: [codexPreToolPlanHook] });
+
+  const nextHooks: Record<string, HookGroup[]> = {
+    ...hooks,
+    Stop: stopGroups
+  };
+  if (preToolGroups.length > 0) {
+    nextHooks.PreToolUse = preToolGroups;
+  } else {
+    delete nextHooks.PreToolUse;
+  }
+  if (permissionGroups.length > 0) {
+    nextHooks.PermissionRequest = permissionGroups;
+  } else {
+    delete nextHooks.PermissionRequest;
   }
 
   return {
     description: file.description ?? 'Local lifecycle hooks managed by local-diff-reviewer.',
     ...file,
-    hooks: {
-      ...hooks,
-      Stop: stopGroups,
-      PreToolUse: preToolGroups
-    }
+    hooks: nextHooks
   };
 }
 
@@ -179,6 +205,15 @@ function ensureQoderPlanHook(file: HooksFile): HooksFile {
 
 function hasHookCommand(groups: HookGroup[], command: string): boolean {
   return groups.some((group) => group.hooks?.some((hook) => hook.command === command));
+}
+
+function removeHookCommand(groups: HookGroup[], command: string): HookGroup[] {
+  return groups
+    .map((group) => ({
+      ...group,
+      hooks: group.hooks.filter((hook) => hook.command !== command)
+    }))
+    .filter((group) => group.hooks.length > 0);
 }
 
 /**

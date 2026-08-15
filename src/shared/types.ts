@@ -107,6 +107,8 @@ export type ReviewSession = {
   createdAt: string;
   /** `diff` 复用现有代码审查；`plan` 表示由 agent plan-mode hook 创建的虚拟 Markdown 审查。 */
   reviewKind?: 'diff' | 'plan';
+  /** plan review 的触发来源，用于区分不同 agent runtime 的交互边界。 */
+  planReviewSource?: 'codex' | 'copilot' | 'qoder';
 };
 
 export type PlanReviewDecision = 'approved' | 'changes-requested';

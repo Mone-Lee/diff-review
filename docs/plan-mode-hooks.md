@@ -8,7 +8,7 @@ Diff Review 可以作为 agent plan mode 的人工审查关卡：agent 产出计
 
 ## 支持范围
 
-- Codex：使用 `Stop` hook 提前预览计划，命令为 `local-diff-reviewer plan-hook`；同时使用 `PreToolUse` hook 在工具执行前兜底审查，命令为 `local-diff-reviewer codex-pre-tool-plan`。
+- Codex：使用 `Stop` hook 在计划输出后打开审查页，命令为 `local-diff-reviewer plan-hook`。
 - Copilot：使用 `preToolUse` hook，命令为 `local-diff-reviewer copilot-plan`，只处理 `exit_plan_mode`。
 - Qoder：使用 `PreToolUse` hook，命令为 `local-diff-reviewer qoder-plan`，只处理 `create_plan`。
 - 审查内容：计划文本会被转换成虚拟 Markdown 文件，复用 Diff Review 的 Markdown preview、行级/选区评论和评论侧栏。
@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts
 默认安装到 `$CODEX_HOME`，未设置时使用 `~/.codex`：
 
 - `config.toml`：确保 `[features] hooks = true`
-- `hooks.json`：合并 Codex `Stop` 和 `PreToolUse` hooks
+- `hooks.json`：合并 Codex `Stop` hook，并清理本工具旧版 `PreToolUse` 和误用的 `PermissionRequest` hook
 
 如果只想为当前项目安装：
 
@@ -67,40 +67,9 @@ curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts
 }
 ```
 
-Codex 当前 `Stop` hook 不支持 matcher，因此所有 turn 停止时都会触发命令。`plan-hook` 会读取 hook stdin，只有同时满足以下条件才打开审查页面：
+`plan-hook` 会从 `transcript_path` 提取当前 turn 的计划。通过计划时返回 `{ "continue": true }`，允许 plan turn 正常结束；退回评论时返回 Codex `Stop` hook 支持的 `decision: "block"` 和评论内容，让 agent 继续修改计划。
 
-- `hook_event_name === "Stop"`
-- transcript 中当前 `turn_id` 同时包含 `collaboration_mode_kind === "plan"` 和 Plan item
-
-其他情况会直接输出：
-
-```json
-{"continue":true,"suppressOutput":true}
-```
-
-`PreToolUse` 作为执行前最终闸门，会在本地工具调用前触发。安装器会追加等价于下面的配置：
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest codex-pre-tool-plan",
-            "timeout": 600,
-            "statusMessage": "Reviewing plan before tool use"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-`codex-pre-tool-plan` 会从 hook 输入或 `transcript_path` 提取最近计划。通过计划时放行当前工具；退回评论时返回 Codex `PreToolUse` 支持的 `permissionDecision: "deny"`，让 agent 先处理审查意见。为避免同一轮同一份计划在后续每个工具前重复弹窗，通过后会在系统临时目录记录一个 approval marker。
+受 Codex 当前公开 hook 能力限制，Diff Review 不能替代原生 “Implement this plan?” 确认框；用户点击“通过计划”后，还需要回到 Codex 点击 “Yes, implement this plan”。安装器会移除本工具历史版本写入的 `local-diff-reviewer codex-pre-tool-plan` `PreToolUse` hook 和 `local-diff-reviewer codex-permission-plan` `PermissionRequest` hook，避免重复弹窗或误导。
 
 ## Copilot Hook 配置
 
@@ -165,16 +134,12 @@ flowchart TD
   Agent[Agent 产出 plan mode 计划] --> Entry{触发来源}
 
   Entry -->|Codex Stop hook| CodexHook[local-diff-reviewer plan-hook]
-  Entry -->|Codex PreToolUse hook| CodexPreToolHook[local-diff-reviewer codex-pre-tool-plan]
   Entry -->|Copilot preToolUse hook| CopilotHook[local-diff-reviewer copilot-plan]
   Entry -->|Qoder PreToolUse hook| QoderHook[local-diff-reviewer qoder-plan]
 
   CodexHook --> CodexCheck{当前 turn<br/>collaboration plan}
-  CodexPreToolHook --> CodexPreToolCheck{是否能提取待执行计划}
   CodexCheck -->|否| Pass[输出 continue true 并放行]
   CodexCheck -->|是| ReadInput[读取 hook stdin]
-  CodexPreToolCheck -->|否| Pass
-  CodexPreToolCheck -->|是| ReadInput
 
   CopilotHook --> CopilotCheck{是否调用 exit_plan_mode}
   CopilotCheck -->|否| Pass
@@ -196,28 +161,29 @@ flowchart TD
   Review -->|通过计划| Approve[POST approve 到 /api/plan-review-result]
   Review -->|退回评论| RequestChanges[POST requestChanges 到 /api/plan-review-result]
 
-  Approve --> Continue[stdout 输出 continue true，允许 Plan turn 结束]
+  Approve --> Continue[stdout 输出 continue true]
   RequestChanges --> CollectComments[读取当前计划未解决评论]
-  CollectComments --> Stop[stdout 输出 decision block 和 reason]
+  CollectComments --> Stop[stdout 输出 decision block 和原因]
 
-  Continue --> AgentContinue[用户返回 Codex 后进入实施流程]
+  Continue --> NativeConfirm[Codex 弹出原生确认框]
+  NativeConfirm --> AgentContinue[用户点击 Yes 后实施计划]
   Stop --> AgentRevise[Agent 收到反馈并修改计划]
 ```
 
 ## 响应流程
 
 1. Agent 进入 plan mode 并产出计划。
-2. Codex 在 turn 停止时调用 `local-diff-reviewer plan-hook`，并在工具执行前调用 `local-diff-reviewer codex-pre-tool-plan`；Copilot 在调用 `exit_plan_mode` 前调用 `local-diff-reviewer copilot-plan`；Qoder 在 `create_plan` hook 上调用 `local-diff-reviewer qoder-plan`。
+2. Codex 在 plan turn 停止时调用 `local-diff-reviewer plan-hook`；Copilot 在调用 `exit_plan_mode` 前调用 `local-diff-reviewer copilot-plan`；Qoder 在 `create_plan` hook 上调用 `local-diff-reviewer qoder-plan`。
 3. Hook 命令从 stdin 读取 hook 输入。
 4. 命令提取计划文本：
-   - Codex：`Stop` hook 按当前 `turn_id` 提取 collaboration mode 的 Plan item；`PreToolUse` hook 优先读取输入中的内联字段，否则从 `transcript_path` 中尽力提取最新 assistant 文本。
+   - Codex：`Stop` hook 按当前 `turn_id` 提取 collaboration mode 的 Plan item。
    - Copilot：从 hook 输入的计划字段提取。
    - Qoder：从 hook 输入的计划字段提取。
 5. 命令创建一个虚拟 Markdown 文件，例如 `.diff-review-plan/<session>-<turn>.md`。
 6. 命令启动本地 Diff Review 服务并打开浏览器。
 7. Hook 子进程不退出，持续轮询本地服务的 `/api/plan-review-result`。
 8. 用户在 UI 中审查计划：
-   - 点击“通过计划”：允许当前 Plan turn 正常结束；Codex 不会由 Stop hook 自动切换到执行模式。
+   - 点击“通过计划”：允许 Codex 当前 plan turn 正常结束；受 Codex 当前公开 hook 能力限制，用户还需要在原生确认框点击 “Yes, implement this plan”。
    - 添加评论后点击“退回评论”：把未解决评论返回给 agent。
 9. 前端 POST 到 `/api/plan-review-result`。
 10. 阻塞中的 hook 子进程读到结果，向 stdout 输出 hook JSON。
@@ -246,7 +212,7 @@ flowchart TD
 }
 ```
 
-Codex 的 `Stop` hook 使用 `decision: "block"` 和非空 `reason`，把 `reason` 作为 continuation prompt 送回当前 agent loop。`continue: false` 和 `stopReason` 不会提供 Codex 所需的 continuation prompt。Codex `PreToolUse` 则使用 `permissionDecision: "deny"` 和 `permissionDecisionReason` 阻断当前工具调用。
+Codex `Stop` hook 使用 `decision: "block"` 和非空 `reason`，把 `reason` 作为 continuation prompt 送回当前 agent loop。`continue: false` 和 `stopReason` 不会提供 Codex 所需的 continuation prompt。通过计划时只能允许当前 turn 结束，不能代表用户点击 Codex 的 “Yes, implement this plan” 确认框。
 
 ## 评论范围
 
@@ -261,7 +227,7 @@ Codex 的 `Stop` hook 使用 `decision: "block"` 和非空 `reason`，把 `reaso
 - 如果不是 plan turn，hook 直接放行。
 - 如果无法提取计划文本，hook 直接放行。
 - 如果已有 `hooks.json` 是损坏 JSON，`install-hooks` 会报错，不会静默覆盖。
-- `install-hooks` 只追加缺失的 Diff Review hook，不删除或重写其他 hook。
+- `install-hooks` 会追加缺失的 Diff Review `Stop` hook，并删除本工具历史版本写入的 `codex-pre-tool-plan` `PreToolUse` hook 和 `codex-permission-plan` `PermissionRequest` hook；不会删除或重写其他 hook。
 - 用户仍需在 `/hooks` 中 trust hook；这是 Codex 的安全边界。
 
 ## 与 Skill 安装的关系

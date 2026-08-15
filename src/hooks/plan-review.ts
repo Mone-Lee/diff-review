@@ -52,6 +52,7 @@ export type PlanReviewSnapshotOptions = {
   requireCodexPreToolUse?: boolean;
   requireCopilotExitPlan?: boolean;
   requireQoderCreatePlan?: boolean;
+  source?: ReviewSession['planReviewSource'];
 };
 
 // 计划审查不会落真实仓库文件；这个前缀只用于在 Diff Review UI 中标识虚拟 Markdown 快照。
@@ -101,7 +102,8 @@ export async function buildPlanReviewSnapshot(
     mode: { kind: 'revision', base: 'agent', target: 'plan', targetLabel: 'Agent Plan' },
     diffHash: diffDigest,
     createdAt: new Date().toISOString(),
-    reviewKind: 'plan'
+    reviewKind: 'plan',
+    planReviewSource: options.source
   };
 
   return {
