@@ -196,11 +196,11 @@ flowchart TD
   Review -->|通过计划| Approve[POST approve 到 /api/plan-review-result]
   Review -->|退回评论| RequestChanges[POST requestChanges 到 /api/plan-review-result]
 
-  Approve --> Continue[stdout 输出 continue true]
+  Approve --> Continue[stdout 输出 continue true，允许 Plan turn 结束]
   RequestChanges --> CollectComments[读取当前计划未解决评论]
-  CollectComments --> Stop[stdout 输出 continue false 和 stopReason]
+  CollectComments --> Stop[stdout 输出 decision block 和 reason]
 
-  Continue --> AgentContinue[Agent 继续执行]
+  Continue --> AgentContinue[用户返回 Codex 后进入实施流程]
   Stop --> AgentRevise[Agent 收到反馈并修改计划]
 ```
 
@@ -217,7 +217,7 @@ flowchart TD
 6. 命令启动本地 Diff Review 服务并打开浏览器。
 7. Hook 子进程不退出，持续轮询本地服务的 `/api/plan-review-result`。
 8. 用户在 UI 中审查计划：
-   - 点击“通过计划”：允许 agent 继续。
+   - 点击“通过计划”：允许当前 Plan turn 正常结束；Codex 不会由 Stop hook 自动切换到执行模式。
    - 添加评论后点击“退回评论”：把未解决评论返回给 agent。
 9. 前端 POST 到 `/api/plan-review-result`。
 10. 阻塞中的 hook 子进程读到结果，向 stdout 输出 hook JSON。
@@ -240,13 +240,13 @@ flowchart TD
 
 ```json
 {
-  "continue": false,
-  "stopReason": "[thread:<id>]\n.diff-review-plan/<session>-<turn>.md:12\n这里需要补充回滚方案。",
+  "decision": "block",
+  "reason": "[thread:<id>]\n.diff-review-plan/<session>-<turn>.md:12\n这里需要补充回滚方案。",
   "systemMessage": "Plan changes requested in Diff Review."
 }
 ```
 
-Codex 的 `Stop` hook 支持 `continue: false` 和 `stopReason`。这会把当前 hook run 标记为 stopped，并把 `stopReason` 作为需要 agent 处理的反馈暴露回当前 loop。Codex `PreToolUse` 则使用 `permissionDecision: "deny"` 和 `permissionDecisionReason` 阻断当前工具调用。
+Codex 的 `Stop` hook 使用 `decision: "block"` 和非空 `reason`，把 `reason` 作为 continuation prompt 送回当前 agent loop。`continue: false` 和 `stopReason` 不会提供 Codex 所需的 continuation prompt。Codex `PreToolUse` 则使用 `permissionDecision: "deny"` 和 `permissionDecisionReason` 阻断当前工具调用。
 
 ## 评论范围
 

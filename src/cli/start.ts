@@ -16,6 +16,7 @@ import { installPlanHooks } from '../hooks/hooks-installer';
 import {
   buildPlanReviewSnapshot,
   formatCodexPreToolUseOutput,
+  formatCodexStopHookOutput,
   formatPlanChangesRequestedFeedback,
   formatPlanHookOutput,
   readHookInputFromStdin
@@ -407,23 +408,42 @@ async function planHookCommand(dev: boolean, runtime: 'codex-stop' | 'codex-pre-
     if (result.decision === 'approved') {
       await writeApprovedPlanMarker(input, snapshot.planText);
     }
-    console.log(JSON.stringify(formatCodexPreToolUseOutput(result, currentPlanThreads)));
+    await writeHookResult(JSON.stringify(formatCodexPreToolUseOutput(result, currentPlanThreads)), 'stdout');
   } else if (runtime === 'qoder') {
     if (result.decision === 'changes-requested') {
       if (typeof vitePid === 'number') {
         process.kill(vitePid, 'SIGTERM');
       }
-      console.error(formatPlanChangesRequestedFeedback(result, currentPlanThreads) || 'Plan changes requested in Diff Review.');
+      await writeHookResult(formatPlanChangesRequestedFeedback(result, currentPlanThreads) || 'Plan changes requested in Diff Review.', 'stderr');
       process.exit(2);
     }
   } else {
-    const output = formatPlanHookOutput(result, currentPlanThreads);
-    console.log(JSON.stringify(output));
+    const output =
+      runtime === 'codex-stop'
+        ? formatCodexStopHookOutput(result, currentPlanThreads)
+        : formatPlanHookOutput(result, currentPlanThreads);
+    await writeHookResult(JSON.stringify(output), 'stdout');
   }
   if (typeof vitePid === 'number') {
     process.kill(vitePid, 'SIGTERM');
   }
   process.exit(0);
+}
+
+/**
+ * Hook 结果必须在退出进程前完成管道写入，否则宿主可能读到空输出或不完整 JSON。
+ */
+async function writeHookResult(text: string, target: 'stdout' | 'stderr'): Promise<void> {
+  const stream = target === 'stdout' ? process.stdout : process.stderr;
+  await new Promise<void>((resolve, reject) => {
+    stream.write(`${text}\n`, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 /**

@@ -130,13 +130,17 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         res.status(400).json({ error: 'Unsupported plan review decision' });
         return;
       }
-      state.planResult = {
+      const planResult: PlanReviewResult = {
         decision: req.body.decision,
         feedback: typeof req.body.feedback === 'string' ? req.body.feedback.trim() : undefined,
         decidedAt: new Date().toISOString()
       };
       const comments = await readComments(state.session.repoRoot);
-      res.json({ result: state.planResult, threads: selectPromptThreads(comments.threads, { type: 'all-unresolved' }, state.diffFiles) });
+      // 只有浏览器完整收到确认后才唤醒 hook，避免 hook 退出进程时截断当前 POST 响应。
+      res.once('finish', () => {
+        state.planResult = planResult;
+      });
+      res.json({ result: planResult, threads: selectPromptThreads(comments.threads, { type: 'all-unresolved' }, state.diffFiles) });
     } catch (error) {
       next(error);
     }

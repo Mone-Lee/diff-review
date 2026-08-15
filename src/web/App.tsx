@@ -276,10 +276,15 @@ export default function App() {
     setSubmittingPlanResult(true);
     try {
       await submitPlanReviewResult(decision);
-      message.success(decision === 'approved' ? '计划已通过' : '评论已退回给 Agent');
+      message.success(
+        decision === 'approved'
+          ? '计划已通过，当前审查链接即将失效。'
+          : '评论已退回给 Agent，当前审查链接即将失效。'
+      );
     } catch (error) {
       const nextMessage = error instanceof Error ? error.message : '提交计划审查结果失败';
-      message.error(nextMessage);
+      message.error(`${nextMessage}；结果尚未提交，若页面仍可访问可重试。`);
+    } finally {
       setSubmittingPlanResult(false);
     }
   }, [message, unresolvedThreadsCount]);

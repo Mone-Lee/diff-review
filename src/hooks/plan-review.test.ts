@@ -6,7 +6,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { buildPlanReviewSnapshot, type CodexHookInput } from './plan-review';
+import { buildPlanReviewSnapshot, formatCodexStopHookOutput, formatPlanHookOutput, type CodexHookInput } from './plan-review';
 
 async function withTranscript(records: unknown[], run: (path: string) => Promise<void>) {
   const directory = await mkdtemp(join(tmpdir(), 'diff-review-plan-test-'));
@@ -70,5 +70,54 @@ test('不使用其他 turn 的 collaboration mode 计划', async () => {
     const snapshot = await buildPlanReviewSnapshot(input, process.cwd());
 
     assert.equal(snapshot, null);
+  });
+});
+
+test('Codex Stop hook 使用 block reason 退回评论', () => {
+  const output = formatCodexStopHookOutput(
+    {
+      decision: 'changes-requested',
+      feedback: '补充回滚方案',
+      decidedAt: '2026-08-15T00:00:00.000Z'
+    },
+    []
+  );
+
+  assert.deepEqual(output, {
+    decision: 'block',
+    reason: '补充回滚方案',
+    systemMessage: 'Plan changes requested in Diff Review.'
+  });
+});
+
+test('Codex Stop hook 通过计划时允许当前 turn 结束', () => {
+  const output = formatCodexStopHookOutput(
+    {
+      decision: 'approved',
+      decidedAt: '2026-08-15T00:00:00.000Z'
+    },
+    []
+  );
+
+  assert.deepEqual(output, {
+    continue: true,
+    systemMessage: 'Plan approved in Diff Review.'
+  });
+});
+
+test('Copilot 继续使用 continue stopReason 退回评论', () => {
+  const output = formatPlanHookOutput(
+    {
+      decision: 'changes-requested',
+      feedback: '补充回滚方案',
+      decidedAt: '2026-08-15T00:00:00.000Z'
+    },
+    []
+  );
+
+  assert.deepEqual(output, {
+    continue: false,
+    stopReason: '补充回滚方案',
+    systemMessage: 'Plan changes requested in Diff Review.'
   });
 });

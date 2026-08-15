@@ -31,6 +31,13 @@ export type PlanHookOutput = {
   systemMessage?: string;
 };
 
+export type CodexStopHookOutput = {
+  continue?: true;
+  decision?: 'block';
+  reason?: string;
+  systemMessage?: string;
+};
+
 export type CodexPreToolUseOutput = {
   systemMessage?: string;
   hookSpecificOutput?: {
@@ -169,6 +176,25 @@ export function formatPlanHookOutput(result: PlanReviewResult, threads: ReviewTh
   return {
     continue: false,
     stopReason: feedback || 'Plan changes requested in Diff Review.',
+    systemMessage: 'Plan changes requested in Diff Review.'
+  };
+}
+
+/**
+ * Codex Stop 使用 decision:block 和 reason 作为 continuation prompt；continue:false 不会把 stopReason 送回当前 agent loop。
+ */
+export function formatCodexStopHookOutput(result: PlanReviewResult, threads: ReviewThread[]): CodexStopHookOutput {
+  if (result.decision === 'approved') {
+    return {
+      continue: true,
+      systemMessage: 'Plan approved in Diff Review.'
+    };
+  }
+
+  const feedback = formatPlanChangesRequestedFeedback(result, threads);
+  return {
+    decision: 'block',
+    reason: feedback || 'Plan changes requested in Diff Review.',
     systemMessage: 'Plan changes requested in Diff Review.'
   };
 }
