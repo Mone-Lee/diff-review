@@ -49,6 +49,7 @@ plan mode hook 的完整流程见 [`docs/plan-mode-hooks.md`](docs/plan-mode-hoo
 - 代码文件使用 GitHub 风格的 unified diff。
 - 图片文件支持 diff 查看。
 - Markdown 文件支持 `Preview / Code diff` 切换；`Code diff` 当前只支持并排视图，不支持行内视图。
+- 支持把仓库内 Markdown 快照分享为静态链接，并异步导入多位审阅者的署名评论。
 - 支持文件级评论、代码行级评论、Markdown 源码行评论。
 - Markdown 评论在两种视图间会按视图能力降级展示：
   - `Preview` 中的新评论按块级锚定；`Code diff` 中可精确到行。
@@ -69,7 +70,24 @@ local-diff-reviewer HEAD~1 HEAD
 local-diff-reviewer --new-session
 local-diff-reviewer stop
 local-diff-reviewer --repo /path/to/project
+local-diff-reviewer share docs/spec.md --share-url https://reviews.example.com/share.html
 ```
+
+### 分享 Markdown 预览
+
+独立 Markdown 分享使用 URL Fragment 携带压缩后的文档和评论，静态门户不会收到 Fragment 中的内容。链接不加密，任何拿到完整链接的人都可以读取文档；首版链接上限为 32 KiB，不提供大文件上传服务。
+
+先把 `dist/share` 部署到任意静态站点，再通过参数或环境变量配置门户页面地址：
+
+```bash
+npm run build:share
+export DIFF_REVIEW_SHARE_URL=https://reviews.example.com/share.html
+local-diff-reviewer share docs/spec.md
+```
+
+本地审查台中的“复制分享链接”会生成当前 Markdown 快照及已有评论的链接。审阅者打开链接、填写昵称并添加评论后，点击“复制反馈链接”；发起者将每位审阅者返回的链接粘贴到“导入反馈链接”即可幂等汇总。导入评论保留署名且只读，发起者仍可回复或解决对应线程。
+
+共享页面只加载 `http(s)` 远程图片。Markdown 中的相对路径图片不会被写入链接，会显示为本地资源不可用提示。
 
 ### 本地源码与 npm 包切换
 

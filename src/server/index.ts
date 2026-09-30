@@ -6,12 +6,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
 import { parseUnifiedDiff } from '../core/diff-parser';
+import { importShareFeedback } from '../core/share-import';
 import { diffHash, getDefaultWorkingBase, getDiff, getRecentCommits, readDiffFileContents, readDiffImageContent, readFileForPreview } from '../core/git';
 import { REVIEW_REFRESH_PROTOCOL, isRefreshableReviewMode, type DiffFile, type MarkdownPreview, type PlanReviewResult, type PromptScope, type ReviewComment, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
+import { validateSharePayload } from '../shared/share';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
 import { readComments, updateComments } from './storage';
-import { getOpenThreadStatus, getThreadStatus, isThreadOnFileSnapshot, sameAnchor } from '../shared/thread-utils';
+import { getOpenThreadStatus, getThreadStatus, isThreadOnFileSnapshot, sameAnchor, selectThreadsForDiffFiles } from '../shared/thread-utils';
 import { FileWatcherService } from './file-watcher-service';
 
 export type ReviewServerState = {
@@ -46,7 +48,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.get('/api/review-state', async (_req, res, next) => {
     try {
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: state.session, files: state.diffFiles, threads: comments.threads });
+      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -114,7 +116,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: state.session, files: state.diffFiles, threads: comments.threads });
+      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -154,7 +156,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: state.session, files: state.diffFiles, threads: comments.threads });
+      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -255,8 +257,37 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
 
   app.get('/api/threads', async (_req, res, next) => {
     try {
-      res.json(await readComments(state.session.repoRoot));
+      const comments = await readComments(state.session.repoRoot);
+      res.json({ threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/share/import', async (req, res, next) => {
+    try {
+      const payload = validateSharePayload(req.body?.payload);
+      const file = state.diffFiles.find((candidate) => candidate.path === payload.filePath && candidate.isMarkdown);
+      const currentContent = file ? markdownPreviews.get(file.path)?.content : undefined;
+      if (!file || typeof currentContent !== 'string' || payload.contentHash !== file.snapshotHash || payload.markdown !== currentContent) {
+        res.status(409).json({ error: '反馈链接对应的 Markdown 快照与当前文件不一致' });
+        return;
+      }
+
+      const result = await updateComments(state.session.repoRoot, (store) => {
+        const imported = importShareFeedback(store, payload, file, currentContent, file.snapshotHash, state.session.diffHash);
+        return { changed: imported.imported > 0, result: imported };
+      });
+      res.json(result);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'SHARE_SNAPSHOT_MISMATCH') {
+        res.status(409).json({ error: '反馈链接对应的 Markdown 快照与当前文件不一致' });
+        return;
+      }
+      if (error instanceof Error && /(分享|标题|文件路径|Markdown|内容摘要|线程|评论|锚点|审阅者)/.test(error.message)) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
       next(error);
     }
   });
@@ -378,6 +409,10 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.delete('/api/threads/:id', async (req, res, next) => {
     try {
       await updateComments(state.session.repoRoot, (store) => {
+        const currentThread = store.threads.find((item) => item.id === req.params.id);
+        if (currentThread?.comments.some((comment) => comment.author === 'reviewer')) {
+          throw new Error('REVIEWER_COMMENT_READ_ONLY');
+        }
         const nextThreads = store.threads.filter((item) => item.id !== req.params.id);
         const changed = nextThreads.length !== store.threads.length;
         store.threads = nextThreads;
@@ -385,6 +420,10 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       });
       res.status(204).end();
     } catch (error) {
+      if (error instanceof Error && error.message === 'REVIEWER_COMMENT_READ_ONLY') {
+        res.status(400).json({ error: 'Imported reviewer comments are read-only' });
+        return;
+      }
       next(error);
     }
   });
@@ -409,8 +448,8 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         if (!currentComment) {
           throw new Error('COMMENT_NOT_FOUND');
         }
-        if (currentComment.author === 'agent') {
-          throw new Error('AGENT_COMMENT_READ_ONLY');
+        if (currentComment.author === 'agent' || currentComment.author === 'reviewer') {
+          throw new Error('COMMENT_READ_ONLY');
         }
         currentComment.body = nextBody;
         currentComment.updatedAt = now;
@@ -431,8 +470,8 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         res.status(404).json({ error: 'Comment not found' });
         return;
       }
-      if (error instanceof Error && error.message === 'AGENT_COMMENT_READ_ONLY') {
-        res.status(400).json({ error: 'Agent comments are read-only' });
+      if (error instanceof Error && error.message === 'COMMENT_READ_ONLY') {
+        res.status(400).json({ error: 'Agent and imported reviewer comments are read-only' });
         return;
       }
       next(error);
@@ -454,8 +493,8 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         if (!comment) {
           throw new Error('COMMENT_NOT_FOUND');
         }
-        if (comment.author === 'agent') {
-          throw new Error('AGENT_COMMENT_READ_ONLY');
+        if (comment.author === 'agent' || comment.author === 'reviewer') {
+          throw new Error('COMMENT_READ_ONLY');
         }
         thread.comments = thread.comments.filter((item) => item.id !== req.params.commentId);
         thread.updatedAt = now;
@@ -476,8 +515,8 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         res.status(404).json({ error: 'Comment not found' });
         return;
       }
-      if (error instanceof Error && error.message === 'AGENT_COMMENT_READ_ONLY') {
-        res.status(400).json({ error: 'Agent comments are read-only' });
+      if (error instanceof Error && error.message === 'COMMENT_READ_ONLY') {
+        res.status(400).json({ error: 'Agent and imported reviewer comments are read-only' });
         return;
       }
       next(error);
