@@ -46,8 +46,6 @@ type Props = {
   file: DiffFile;
   threads: ReviewThread[];
   locateTarget: { threadId: string; anchor: CommentAnchor } | null;
-  previewData?: MarkdownPreview;
-  remoteAssetsOnly?: boolean;
 };
 
 type MarkdownAstNode = {
@@ -190,25 +188,19 @@ function getAnchorPreviewLine(anchor: CommentAnchor) {
 export function MarkdownPreviewPanel({
   file,
   threads,
-  locateTarget,
-  previewData,
-  remoteAssetsOnly = false
+  locateTarget
 }: Props) {
-  const [preview, setPreview] = React.useState<MarkdownPreview | null>(previewData ?? null);
+  const [preview, setPreview] = React.useState<MarkdownPreview | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const markdownBodyRef = React.useRef<HTMLDivElement | null>(null);
   const autoScrollKeyRef = React.useRef('');
 
   React.useEffect(() => {
-    if (previewData) {
-      setPreview(previewData);
-      return;
-    }
     setPreview(null);
     fetchMarkdownPreview(file.path)
       .then((data) => setPreview(data))
       .catch(() => setPreview(null));
-  }, [file.path, previewData]);
+  }, [file.path]);
 
   React.useEffect(() => {
     const scrollContainer = scrollRef.current;
@@ -479,16 +471,12 @@ export function MarkdownPreviewPanel({
         return null;
       }
 
-      if (remoteAssetsOnly && !/^https?:/i.test(safeSrc)) {
-        return <span title={safeSrc}>[本地图片未包含在分享链接中：{alt || safeSrc}]</span>;
-      }
-
-      const resolvedSrc = remoteAssetsOnly ? safeSrc : resolveAssetPath(file.path, safeSrc);
+      const resolvedSrc = resolveAssetPath(file.path, safeSrc);
       return (
         <img src={resolvedSrc} alt={alt ?? ''} loading="lazy" {...props} />
       );
     }
-  }), [file.path, preview, remoteAssetsOnly, renderCommentableBlock, renderCommentableHeading]);
+  }), [file.path, preview, renderCommentableBlock, renderCommentableHeading]);
 
   // preview 为 null 时，当前 UI 统一展示 loading 态；加载失败也沿用这一视觉占位。
   if (!preview) {

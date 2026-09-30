@@ -68,11 +68,7 @@ export type CommentAnchor =
 export type ReviewComment = {
   id: string;
   body: string;
-  author?: 'user' | 'agent' | 'reviewer';
-  /** 导入评论的展示昵称；本地用户与 Agent 继续使用既有固定标签。 */
-  authorName?: string;
-  /** 静态分享反馈的稳定来源，用于重复导入时幂等去重。 */
-  shareOrigin?: { shareId: string; commentId: string; reviewerId: string };
+  author?: 'user' | 'agent';
   createdAt: string;
   updatedAt: string;
 };
@@ -109,14 +105,10 @@ export type ReviewSession = {
   diffHash: string;
   /** 本次审查快照创建时间，使用 ISO 时间字符串。 */
   createdAt: string;
-  /** `diff` 复用代码审查；`plan` 为 agent 计划；`markdown-share` 为独立 Markdown 分享。 */
-  reviewKind?: 'diff' | 'plan' | 'markdown-share';
+  /** `diff` 复用现有代码审查；`plan` 表示由 agent plan-mode hook 创建的虚拟 Markdown 审查。 */
+  reviewKind?: 'diff' | 'plan';
   /** plan review 的触发来源，用于区分不同 agent runtime 的交互边界。 */
   planReviewSource?: 'codex' | 'copilot' | 'qoder';
-  /** 独立 Markdown 分享会话使用的静态门户地址；未配置时仅允许本地预览。 */
-  shareBaseUrl?: string;
-  /** 当前分享会话的稳定标识。 */
-  shareId?: string;
 };
 
 export type PlanReviewDecision = 'approved' | 'changes-requested';

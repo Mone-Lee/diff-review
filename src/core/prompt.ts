@@ -10,24 +10,14 @@ export function formatPrompt(threads: ReviewThread[]): string {
       const [firstComment, ...replies] = thread.comments;
       const replyText = replies
         .map((comment, index) => {
-          const author = comment.author === 'agent'
-            ? 'Agent'
-            : comment.author === 'reviewer'
-              ? `Reviewer: ${comment.authorName || 'Unknown'}`
-              : 'User';
+          const author = comment.author === 'agent' ? 'Agent' : 'User';
           return `Reply ${index + 1} (${author})\n${comment.body.trim()}`;
         })
         .join('\n');
 
-      return [`[thread:${thread.id}]`, location, getSelectedTextLine(thread), formatFirstComment(firstComment), replyText].filter(Boolean).join('\n');
+      return [`[thread:${thread.id}]`, location, getSelectedTextLine(thread), firstComment?.body.trim(), replyText].filter(Boolean).join('\n');
     })
     .join('\n\n');
-}
-
-function formatFirstComment(comment: ReviewThread['comments'][number] | undefined) {
-  if (!comment) return '';
-  const author = comment.author === 'reviewer' ? `[Reviewer: ${comment.authorName || 'Unknown'}]\n` : '';
-  return `${author}${comment.body.trim()}`;
 }
 
 function getThreadLocation(thread: ReviewThread) {

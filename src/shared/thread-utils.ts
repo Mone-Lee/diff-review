@@ -34,12 +34,6 @@ export function isThreadOnFileSnapshot(thread: ReviewThread, file: DiffFile): bo
   return thread.filePath === file.path && thread.fileSnapshotHash === file.snapshotHash;
 }
 
-// 仅加载当前 diff 文件的评论，同时保留这些文件的历史快照供评论面板查看。
-export function selectThreadsForDiffFiles(threads: ReviewThread[], files: DiffFile[]): ReviewThread[] {
-  const filePaths = new Set(files.map((file) => file.path));
-  return threads.filter((thread) => filePaths.has(thread.filePath));
-}
-
 export function getThreadStatus(thread: ReviewThread): ReviewThread['status'] {
   if (thread.status === 'resolved') return 'resolved';
   return getOpenThreadStatus(thread);
