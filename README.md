@@ -81,6 +81,14 @@ npm run diff-review:use-npm
 npm run diff-review:status
 ```
 
+修改根目录的 `SKILL.md` 后，可用一条命令同步到当前电脑的 Agent Skill 目录：
+
+```bash
+npm run skill:update
+```
+
+该命令把根目录 `SKILL.md` 作为唯一来源，更新 `~/.agents/skills/diff-review/SKILL.md`，并清理旧版遗留的嵌套 `skill/diff-review` 副本。需要安装到其他位置时，可通过 `DIFF_REVIEW_SKILL_DIR` 指定目标目录。
+
 `diff-review:use-local` 会先构建当前仓库，再用 `npm link` 把全局 `local-diff-reviewer` 命令指向本地源码，并把 Codex plan hook 临时改为调用这个全局命令。`diff-review:use-npm` 默认切回 `local-diff-reviewer@latest`，同时把 hook 改回 `npx ... @latest`，也可以指定版本：
 
 ```bash
