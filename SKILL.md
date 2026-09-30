@@ -1,13 +1,13 @@
 ---
 name: diff-review
-description: Use when the user types /diff-review or asks to review the current workspace diff in a local GitHub-style viewer with comments, Markdown preview comments, and minimal AI prompt copying.
+description: Use when the user types /diff-review, asks to review the current workspace diff in a local GitHub-style viewer, or provides copied review comments containing [thread:ID] to address and reply to.
 metadata:
   short-description: Open a local diff review viewer
 ---
 
 # Diff Review
 
-Use this skill when the user asks for `/diff-review`, wants to inspect current workspace changes, staged changes, or a revision pair in a local review UI.
+Use this skill when the user asks for `/diff-review`, wants to inspect current workspace changes, staged changes, or a revision pair in a local review UI, or provides copied comments containing `[thread:<id>]` for handling and reply write-back.
 
 ## Commands
 
@@ -47,7 +47,11 @@ npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest [arg
 
 After a newly started script prints a local URL, open it in the Codex browser when available. If the script reports `Diff Review refreshed`, do not open another page: the already open review page updates automatically. If browser automation is not available, report the URL.
 
-When the user gives you copied prompt text containing `[thread:<id>]`, treat it as an existing review thread. After you answer or make code/doc changes for that thread, append a concise agent reply to the same thread with `--comment '{"type":"reply","threadId":"<id>","body":"..."}'` the next time you launch or refresh the viewer. If the viewer is already running and you can reach the API, post the same reply to `/api/threads/<id>/comments` with `author: "agent"`. Do this for every handled thread unless the user explicitly asks you not to write back. Prefer conclusion-first, minimal replies such as `已处理`, `已处理：xxx`, or `未处理：原因...`; do not repeat the full diff or long implementation details unless the user explicitly wants that detail.
+When the user gives you copied prompt text containing `[thread:<id>]` to handle, collect the distinct thread IDs as the reply checklist for this task. Before your final response, write a concise result to each original thread unless the user explicitly asks you not to write back. Do not postpone replies until a later viewer launch. Report the actual result: `已处理：xxx`, `部分处理：xxx；剩余原因...`, or `未处理：原因...`. A chat response or a new finding does not replace a reply to the original thread.
+
+Use the package command above with one `--comment '{"type":"reply","threadId":"<id>","body":"..."}'` argument per thread. If the viewer is already running at a known URL, verify `/api/session` identifies the target repository, then POST `{ "author": "agent", "body": "..." }` to `/api/threads/<id>/comments`. Always use the original ID even when edits changed the diff or line numbers; do not substitute a new `type: "thread"` finding.
+
+Confirm write-back for every checklist ID: inspect the API response for the saved agent comment, or check CLI import counts and skipped warnings. A zero exit code alone does not prove every reply was imported. If a request times out or reports a duplicate, inspect the stored thread before retrying; an old reply about earlier work does not prove the current result was saved. Report any remaining failed thread IDs and reasons in your final response rather than claiming write-back succeeded or retrying indefinitely. Successful agent replies move open threads to `replied`; leave `resolved` to the user's explicit decision. Keep replies concise and do not repeat the full diff or long implementation details unless requested.
 
 ## Review Scope
 
