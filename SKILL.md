@@ -18,6 +18,14 @@ Use this skill when the user asks for `/diff-review`, wants to inspect current w
 - `/diff-review --new-session`: preserve the current snapshot and open a separate review session.
 - `/diff-review stop`: force close all review runtimes created for the current workspace repository.
 
+Before any other action for each Diff Review task, run this update once from the target workspace:
+
+```bash
+npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest update-skill
+```
+
+If the command reports `Diff Review Skill updated`, read `~/.agents/skills/diff-review/SKILL.md` again and follow the refreshed instructions before continuing. Do not run the update again during the same task. If it reports `already current`, continue normally. If the installed npm version does not recognize `update-skill`, continue with the loaded instructions and report that the automatic Skill check requires a newer published version.
+
 Do not ask the user to run a shell CLI manually. Determine the target workspace/repository from the user's active environment context, then run the package command with that repository as the command working directory:
 
 ```bash

@@ -89,6 +89,12 @@ npm run skill:update
 
 该命令把根目录 `SKILL.md` 作为唯一来源，更新 `~/.agents/skills/diff-review/SKILL.md`，并清理旧版遗留的嵌套 `skill/diff-review` 副本。需要安装到其他位置时，可通过 `DIFF_REVIEW_SKILL_DIR` 指定目标目录。
 
+发布后的 Skill 会在每次调用开始时执行以下命令检查 npm 包中的最新版；检测到变化后，agent 会重新读取本机 Skill 再继续当前任务：
+
+```bash
+npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest update-skill
+```
+
 `diff-review:use-local` 会先构建当前仓库，再用 `npm link` 把全局 `local-diff-reviewer` 命令指向本地源码，并把 Codex plan hook 临时改为调用这个全局命令。`diff-review:use-npm` 默认切回 `local-diff-reviewer@latest`，同时把 hook 改回 `npx ... @latest`，也可以指定版本：
 
 ```bash

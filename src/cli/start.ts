@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
+import { updateInstalledSkill } from '../core/skill-update';
 import { installPlanHooks } from '../hooks/hooks-installer';
 import {
   buildPlanReviewSnapshot,
@@ -45,6 +46,11 @@ async function main() {
   }
   if (command === 'install-hooks') {
     await installHooksCommand(reviewArgs);
+    return;
+  }
+  if (command === 'update-skill') {
+    const result = await updateInstalledSkill(join(packageRoot, 'SKILL.md'), process.env.DIFF_REVIEW_SKILL_DIR);
+    console.log(`${result.changed ? 'Diff Review Skill updated' : 'Diff Review Skill already current'}: ${result.targetPath}`);
     return;
   }
   if (command === 'plan-hook' || command === 'copilot-plan' || command === 'codex-pre-tool-plan' || command === 'qoder-plan') {
@@ -129,6 +135,7 @@ function parseCliOptions(args: string[]): {
     | 'review'
     | 'stop'
     | 'install-hooks'
+    | 'update-skill'
     | 'plan-hook'
     | 'copilot-plan'
     | 'codex-pre-tool-plan'
@@ -145,6 +152,7 @@ function parseCliOptions(args: string[]): {
     | 'review'
     | 'stop'
     | 'install-hooks'
+    | 'update-skill'
     | 'plan-hook'
     | 'copilot-plan'
     | 'codex-pre-tool-plan'
@@ -190,6 +198,10 @@ function parseCliOptions(args: string[]): {
     }
     if (arg === 'install-hooks' || arg === 'install-plan-hooks') {
       command = 'install-hooks';
+      continue;
+    }
+    if (arg === 'update-skill') {
+      command = 'update-skill';
       continue;
     }
     if (arg === 'copilot-plan' || arg === 'copilot-plan-hook') {
@@ -294,6 +306,7 @@ function printHelp() {
   console.log('Usage: local-diff-reviewer [working|staged|<base> <target>] [--new-session] [--repo <path>]');
   console.log('       local-diff-reviewer stop [--repo <path>]');
   console.log('       local-diff-reviewer install-hooks [--project]');
+  console.log('       local-diff-reviewer update-skill');
   console.log('       local-diff-reviewer plan-hook');
   console.log('       local-diff-reviewer codex-pre-tool-plan');
   console.log('       local-diff-reviewer copilot-plan');
@@ -304,6 +317,7 @@ function printHelp() {
   console.log('  --repo <path>      Review a repository other than the current working directory.');
   console.log('  --comment <json>   Import an agent comment before opening the viewer.');
   console.log('  install-hooks      Install Codex plan-mode hooks into hooks.json.');
+  console.log('  update-skill       Install the Skill bundled with this package into the local Agent Skill directory.');
   console.log('  --qoder            With install-hooks, install Qoder create_plan hook instead of Codex hooks.');
   console.log('  --project          With install-hooks, write project-local hook config.');
   console.log('  plan-hook          Run as a Codex Stop hook for plan-mode review.');
