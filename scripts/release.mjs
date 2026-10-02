@@ -35,25 +35,13 @@ function getReleaseType() {
   return releaseType;
 }
 
-function hasStagedOrWorkingChanges() {
-  try {
-    execSync('git diff --quiet && git diff --cached --quiet', { stdio: 'ignore' });
-    return false;
-  } catch {
-    return true;
+// 发布只基于已提交内容，避免把本地工作区改动混入版本提交。
+function ensureCleanWorkingTree() {
+  if (runCapture('git status --porcelain')) {
+    console.error('\nRelease aborted: the working tree contains uncommitted changes.');
+    console.error('Commit or stash them before running npm run release.');
+    process.exit(1);
   }
-}
-
-function commitReleaseChangesIfNeeded() {
-  if (!hasStagedOrWorkingChanges()) {
-    console.log('\nNo local changes to commit before release.');
-    return;
-  }
-
-  const message = 'chore: prepare release';
-
-  run('git add -A');
-  run(`git commit -m "${message}"`);
 }
 
 function ensureNpmPublishPreflight() {
@@ -93,10 +81,10 @@ function ensureNpmPublishPreflight() {
 
 const releaseType = getReleaseType();
 
+ensureCleanWorkingTree();
 ensureNpmPublishPreflight();
 
 run('npm run release:check');
-commitReleaseChangesIfNeeded();
 run(`npm version ${releaseType} --no-git-tag-version`);
 
 const version = readVersion();

@@ -124,6 +124,7 @@ npm run release major
 
 该命令会按顺序执行：
 
+- 检查 Git 工作区是否干净；存在未提交改动（包括未跟踪文件）时立即退出
 - 发布前检查 npmjs 认证与连通性（`npm whoami --registry=https://registry.npmjs.org/` + `npm ping --registry=https://registry.npmjs.org/`）
 - `npm run release:check`
 - `npm version <patch|minor|major>`（默认 `patch`）
@@ -139,6 +140,7 @@ npm whoami --registry=https://registry.npmjs.org/
 ```
 
 只有在 `npm publish` 成功后，才会自动推送提交和标签到 GitHub。
+发版脚本不会提交已有的本地改动，只会提交它生成的版本号变更。
 
 ### CI 标签校验说明
 
