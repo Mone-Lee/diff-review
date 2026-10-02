@@ -60,6 +60,14 @@ npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest upda
 skill 会以目标工作区作为命令工作目录运行 `npx --yes local-diff-reviewer@latest [args...]`，因此 `/diff-review` 会审查当前项目，而不是 skill 安装目录，并尽量避免 npm 复用旧的 npx 缓存。用户要求停止、关闭或结束当前项目的 Diff Review 时，skill 应直接执行 `/diff-review stop`，而不是只提示这条命令。
 如果 `/diff-review stop` 后本次审查实际使用的端口仍可访问，说明该端口上的页面很可能属于其他仓库，或当前工作区的审查还没有停干净。
 
+## Skill 选择审查文件
+
+调用 Skill 时，用户显式加入 agent 上下文的文件作为本次审查范围；未附加文件时仍审查全部变更。自动提供的活动文件、编辑器选区和打开的标签页不作为选中范围。
+
+Skill 使用单次命令的 `DIFF_REVIEW_SKILL_FILES` 环境变量传递 JSON 文件路径数组，优先使用绝对路径。该机制不提供公开 CLI 参数或页面选文件入口；普通 CLI 调用、plan hook 和 Markdown 分享维持各自原有行为。
+
+服务端把范围保存在会话中，刷新及切换对比版本时继续按精确文件路径筛选，重命名文件可匹配旧路径或新路径。复用页面时，以本次 Skill 调用的范围替换旧范围；未指定范围的新调用恢复全部变更。所选文件没有 diff 时，仍打开空审查页面，显示“未发现变更，当前工作区很安静。”。
+
 ## 预置 agent 评论
 
 命令行支持重复传入 `--comment <json>`，用于在打开界面前把 agent 审查结果写入评论存储。

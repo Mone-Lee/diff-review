@@ -6,6 +6,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import { join, normalize, relative } from 'node:path';
+import { filterDiffBySelectedFiles } from './review-scope';
 import type { DiffFile, GitCommitSummary, ReviewMode } from '../shared/types';
 
 const execFileAsync = promisify(execFile);
@@ -15,22 +16,27 @@ export async function getRepoRoot(cwd: string): Promise<string> {
   return stdout.trim();
 }
 
-export async function getDiff(mode: ReviewMode, repoRoot: string): Promise<string> {
+// 文件范围由 Skill 会话传入；先保留完整 diff 的重命名关系，再按精确文件路径筛选。
+export async function getDiff(mode: ReviewMode, repoRoot: string, selectedFiles?: string[]): Promise<string> {
+  return filterDiffBySelectedFiles(await getRepositoryDiff(mode, repoRoot), selectedFiles);
+}
+
+async function getRepositoryDiff(mode: ReviewMode, repoRoot: string): Promise<string> {
   if (mode.kind === 'staged') {
-    return execGitStdout(['diff', '--cached', '--no-ext-diff', '--no-color'], repoRoot);
+    return execGitStdout(['-c', 'core.quotepath=false', 'diff', '--cached', '--no-ext-diff', '--no-color'], repoRoot);
   }
 
   if (mode.kind === 'revision') {
-    return execGitStdout(['diff', '--no-ext-diff', '--no-color', mode.base, mode.target], repoRoot);
+    return execGitStdout(['-c', 'core.quotepath=false', 'diff', '--no-ext-diff', '--no-color', mode.base, mode.target], repoRoot);
   }
 
   if (mode.base) {
-    const trackedDiff = await execGitStdout(['diff', '--no-ext-diff', '--no-color', mode.base], repoRoot);
+    const trackedDiff = await execGitStdout(['-c', 'core.quotepath=false', 'diff', '--no-ext-diff', '--no-color', mode.base], repoRoot);
     const untrackedDiff = await getUntrackedDiff(repoRoot);
     return [trackedDiff, untrackedDiff].filter(Boolean).join('\n');
   }
 
-  const trackedDiff = await execGitStdout(['diff', '--no-ext-diff', '--no-color'], repoRoot);
+  const trackedDiff = await execGitStdout(['-c', 'core.quotepath=false', 'diff', '--no-ext-diff', '--no-color'], repoRoot);
   // working 模式除了 tracked 变更，还要把未跟踪文件拼成伪 diff。
   const untrackedDiff = await getUntrackedDiff(repoRoot);
   return [trackedDiff, untrackedDiff].filter(Boolean).join('\n');
@@ -237,10 +243,9 @@ async function execGit(args: string[], cwd: string): Promise<{ stdout: string; s
 }
 
 async function getUntrackedDiff(repoRoot: string): Promise<string> {
-  const stdout = await execGitStdout(['ls-files', '--others', '--exclude-standard'], repoRoot);
+  const stdout = await execGitStdout(['ls-files', '-z', '--others', '--exclude-standard'], repoRoot);
   const paths = stdout
-    .split('\n')
-    .map((line) => line.trim())
+    .split('\0')
     .filter(Boolean);
 
   const diffs = await Promise.all(

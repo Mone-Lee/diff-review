@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
+import { readSkillSelectedFiles } from '../core/review-scope';
 import { updateInstalledSkill } from '../core/skill-update';
 import { installPlanHooks } from '../hooks/hooks-installer';
 import {
@@ -76,9 +77,11 @@ async function main() {
   const repoRoot = await getRepoRoot(repo ?? process.cwd());
   const mode = resolveInitialReviewMode(reviewArgs);
   logStartup(repoRoot, mode);
-  const diff = await getDiff(mode, repoRoot);
+  const selectedFiles = readSkillSelectedFiles(process.env.DIFF_REVIEW_SKILL_FILES, repoRoot, process.cwd());
+  const diff = await getDiff(mode, repoRoot, selectedFiles);
   const diffFiles = parseUnifiedDiff(diff);
   const session: ReviewSession = {
+    selectedFiles,
     id: crypto.randomUUID(),
     repoName: basename(repoRoot),
     repoRoot,

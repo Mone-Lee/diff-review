@@ -61,6 +61,21 @@ Use the package command above with one `--comment '{"type":"reply","threadId":"<
 
 Confirm write-back for every checklist ID: inspect the API response for the saved agent comment, or check CLI import counts and skipped warnings. A zero exit code alone does not prove every reply was imported. If a request times out or reports a duplicate, inspect the stored thread before retrying; an old reply about earlier work does not prove the current result was saved. Report any remaining failed thread IDs and reasons in your final response rather than claiming write-back succeeded or retrying indefinitely. Successful agent replies move open threads to `replied`; leave `resolved` to the user's explicit decision. Keep replies concise and do not repeat the full diff or long implementation details unless requested.
 
+## Context File Selection (Skill Only)
+
+When invoking this skill, use files the user explicitly added to the agent context for this review as the selected review scope. Extract their file paths from file attachments or explicit file references. Do not treat the automatically reported active editor file, selection, open tabs, files read by tools, or paths mentioned in copied review comments as a selection. If no files were explicitly added, review all changes as usual.
+
+Pass selected files only through the command-scoped `DIFF_REVIEW_SKILL_FILES` environment variable, encoded as a JSON array. Prefer absolute paths so nested workspace directories are unambiguous. Use the tool's structured environment argument when available; otherwise safely shell-quote the JSON. Never export this variable globally or carry a previous invocation's selection into a later one. This is an internal Skill channel, not a public CLI flag or a viewer file picker.
+
+```bash
+DIFF_REVIEW_SKILL_FILES='["/absolute/path/to/target/workspace/src/foo.ts","/absolute/path/to/target/workspace/src/bar.ts"]' \
+  npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest [args...]
+```
+
+Apply selection only to diff review launches (`working`, `staged`, revision pairs, including `--new-session` and preloaded comments), not update/install/stop commands or plan/Markdown share workflows. Select exact files, not directories or globs. Selected paths must belong to the target repository. Renamed files match either their old or new path. The session preserves selection when refreshed or when its comparison mode changes; a later unscoped Skill invocation restores all files.
+
+If some selected files have no diff, omit them. If none have diff, still launch or refresh the viewer with an empty diff so it displays the existing “未发现变更，当前工作区很安静。” fallback. Never fall back to unrelated changes or show unchanged files as synthetic diffs.
+
 ## Review Scope
 
 - Code files render as GitHub-style unified diffs.

@@ -76,7 +76,7 @@ export type ReviewComment = {
 export type ReviewThreadStatus = 'submit' | 'replied' | 'resolved';
 
 // review 页面刷新协议版本；CLI 与服务端通过它判断是否可以安全复用运行中的页面。
-export const REVIEW_REFRESH_PROTOCOL = 3;
+export const REVIEW_REFRESH_PROTOCOL = 4;
 
 export type ReviewThread = {
   id: string;
@@ -101,6 +101,8 @@ export type ReviewSession = {
   repoRoot: string;
   /** 当前审查范围，例如工作区变更、暂存区变更或两个 revision 之间的差异。 */
   mode: ReviewMode;
+  /** Skill 上下文选中的仓库相对文件路径；未设置时审查全部变更。 */
+  selectedFiles?: string[];
   /** 启动时 diff 内容的摘要，用于标识本次审查对应的代码快照。 */
   diffHash: string;
   /** 本次审查快照创建时间，使用 ISO 时间字符串。 */

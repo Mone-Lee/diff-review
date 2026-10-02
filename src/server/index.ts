@@ -563,9 +563,10 @@ function applyReviewState(currentState: ReviewServerState, nextState: Pick<Revie
  */
 async function rebuildReviewState(state: ReviewServerState, overrideMode?: ReviewMode): Promise<ReviewServerState> {
   const mode = overrideMode ?? state.session.mode;
-  const diff = await getDiff(mode, state.session.repoRoot);
+  const diff = await getDiff(mode, state.session.repoRoot, state.session.selectedFiles);
   const diffFiles = parseUnifiedDiff(diff);
   const session: ReviewSession = {
+    selectedFiles: state.session.selectedFiles,
     id: crypto.randomUUID(),
     repoName: state.session.repoName,
     repoRoot: state.session.repoRoot,
