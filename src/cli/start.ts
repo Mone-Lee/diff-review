@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
+import { buildMarkdownShareSnapshot } from '../core/markdown-share';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
 import { readSkillSelectedFiles } from '../core/review-scope';
@@ -27,6 +28,7 @@ import { getLiveRuntimes, hasRuntimeRecord, recordRuntime, stopRecordedRuntimes,
 import { startServer } from '../server';
 import { attachLegacyComments, readComments } from '../server/storage';
 import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type PlanReviewResult, type ReviewSession } from '../shared/types';
+import { normalizeShareBaseUrl } from '../shared/share';
 import { isThreadOnFileSnapshot } from '../shared/thread-utils';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -36,7 +38,7 @@ const packageVersion = readPackageVersion();
 
 async function main() {
   // CLI 参数只负责确定审查模式，真正的数据都来自当前仓库状态。
-  const { command, dev, newSession, repo, reviewArgs, comments } = parseCliOptions(process.argv.slice(2));
+  const { command, dev, newSession, repo, reviewArgs, comments, shareUrl } = parseCliOptions(process.argv.slice(2));
   if (command === 'help') {
     printHelp();
     return;
@@ -74,20 +76,27 @@ async function main() {
     await stopCommand(repo);
     return;
   }
+  if (command === 'share') {
+    await markdownShareCommand(dev, repo, reviewArgs, shareUrl);
+    return;
+  }
   const repoRoot = await getRepoRoot(repo ?? process.cwd());
   const mode = resolveInitialReviewMode(reviewArgs);
   logStartup(repoRoot, mode);
   const selectedFiles = readSkillSelectedFiles(process.env.DIFF_REVIEW_SKILL_FILES, repoRoot, process.cwd());
   const diff = await getDiff(mode, repoRoot, selectedFiles);
   const diffFiles = parseUnifiedDiff(diff);
+  const configuredShareUrl = shareUrl ?? process.env.DIFF_REVIEW_SHARE_URL;
   const session: ReviewSession = {
-    selectedFiles,
     id: crypto.randomUUID(),
     repoName: basename(repoRoot),
     repoRoot,
     mode,
+    selectedFiles,
     diffHash: diffHash(diff),
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    shareBaseUrl: configuredShareUrl ? normalizeShareBaseUrl(configuredShareUrl) : undefined,
+    shareId: crypto.randomUUID()
   };
 
   await attachLegacyComments(repoRoot, session.diffHash, diffFiles);
@@ -147,6 +156,7 @@ function parseCliOptions(args: string[]): {
     | 'copilot-plan'
     | 'codex-pre-tool-plan'
     | 'qoder-plan'
+    | 'share'
     | 'help'
     | 'version';
   dev: boolean;
@@ -154,6 +164,7 @@ function parseCliOptions(args: string[]): {
   repo: string | undefined;
   reviewArgs: string[];
   comments: string[];
+  shareUrl: string | undefined;
 } {
   let command:
     | 'review'
@@ -164,6 +175,7 @@ function parseCliOptions(args: string[]): {
     | 'copilot-plan'
     | 'codex-pre-tool-plan'
     | 'qoder-plan'
+    | 'share'
     | 'help'
     | 'version' = 'review';
   const reviewArgs: string[] = [];
@@ -171,6 +183,7 @@ function parseCliOptions(args: string[]): {
   let repo: string | undefined;
   let dev = false;
   let newSession = false;
+  let shareUrl: string | undefined;
 
   // CLI 自身消费 --dev/--comment，其余参数才交给 parseReviewMode 判断审查范围。
   for (let index = 0; index < args.length; index += 1) {
@@ -193,6 +206,10 @@ function parseCliOptions(args: string[]): {
     }
     if (arg === 'stop') {
       command = 'stop';
+      continue;
+    }
+    if (arg === 'share') {
+      command = 'share';
       continue;
     }
     if (arg === 'plan-hook' || arg === 'codex-plan-hook') {
@@ -232,6 +249,19 @@ function parseCliOptions(args: string[]): {
       repo = resolve(value);
       continue;
     }
+    if (arg === '--share-url') {
+      const value = args[index + 1];
+      if (!value) throw new Error('--share-url requires a URL value');
+      shareUrl = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--share-url=')) {
+      const value = arg.slice('--share-url='.length);
+      if (!value) throw new Error('--share-url requires a URL value');
+      shareUrl = value;
+      continue;
+    }
     if (arg === '--comment') {
       const comment = args[index + 1];
       if (!comment) throw new Error('--comment requires a JSON value');
@@ -248,7 +278,7 @@ function parseCliOptions(args: string[]): {
     reviewArgs.push(arg);
   }
 
-  return { command, dev, newSession, repo, reviewArgs, comments };
+  return { command, dev, newSession, repo, reviewArgs, comments, shareUrl };
 }
 
 async function refreshRunningReview(session: ReviewSession, diffFiles: DiffFile[]): Promise<string | undefined> {
@@ -312,6 +342,7 @@ function printHelp() {
   console.log('');
   console.log('Usage: local-diff-reviewer [working|staged|<base> <target>] [--new-session] [--repo <path>]');
   console.log('       local-diff-reviewer stop [--repo <path>]');
+  console.log('       local-diff-reviewer share <file.md> [--share-url <url>] [--repo <path>]');
   console.log('       local-diff-reviewer install-hooks [--project]');
   console.log('       local-diff-reviewer update-skill');
   console.log('       local-diff-reviewer plan-hook');
@@ -322,6 +353,7 @@ function printHelp() {
   console.log('Options:');
   console.log('  --new-session      Open a separate review session instead of refreshing an existing one.');
   console.log('  --repo <path>      Review a repository other than the current working directory.');
+  console.log('  --share-url <url>  Static portal URL used to share Markdown files.');
   console.log('  --comment <json>   Import an agent comment before opening the viewer.');
   console.log('  install-hooks      Install Codex plan-mode hooks into hooks.json.');
   console.log('  update-skill       Install the Skill bundled with this package into the local Agent Skill directory.');
@@ -333,6 +365,52 @@ function printHelp() {
   console.log('  qoder-plan         Run as a Qoder PreToolUse hook for create_plan review.');
   console.log('  --version, -v      Print the CLI version.');
   console.log('  --help, -h         Print this help.');
+}
+
+/**
+ * 独立 Markdown 分享入口：启动本地审查台，门户链接由页面按当前评论快照即时生成。
+ */
+async function markdownShareCommand(
+  dev: boolean,
+  repo: string | undefined,
+  args: string[],
+  shareUrl: string | undefined
+): Promise<void> {
+  if (args.length !== 1) throw new Error('Usage: local-diff-reviewer share <file.md> [--share-url <url>]');
+  const repoRoot = await getRepoRoot(repo ?? process.cwd());
+  const snapshot = await buildMarkdownShareSnapshot(
+    repoRoot,
+    args[0],
+    shareUrl ?? process.env.DIFF_REVIEW_SHARE_URL
+  );
+  await attachLegacyComments(repoRoot, snapshot.session.diffHash, snapshot.diffFiles);
+  const hasBuiltWeb = existsSync(join(builtWebDist, 'index.html'));
+  const apiUrl = await startServer({
+    session: snapshot.session,
+    diffFiles: snapshot.diffFiles,
+    virtualFiles: snapshot.virtualFiles,
+    webDist: hasBuiltWeb ? builtWebDist : undefined
+  });
+  const useVite = dev || !hasBuiltWeb;
+  const vitePort = useVite ? await findAvailablePort(5173) : undefined;
+  const uiUrl = useVite ? `http://127.0.0.1:${vitePort}` : apiUrl;
+  const vitePid = useVite && vitePort ? startVite(apiUrl, vitePort) : undefined;
+  await recordRuntime({
+    pid: process.pid,
+    vitePid,
+    vitePort,
+    repoRoot,
+    repoName: snapshot.session.repoName,
+    startedAt: snapshot.session.createdAt,
+    apiPort: parsePort(apiUrl),
+    usesVite: useVite
+  });
+  openBrowser(uiUrl);
+  console.log(`Markdown Share is running: ${uiUrl}`);
+  console.log(`File: ${snapshot.diffFiles[0].path}`);
+  if (!snapshot.session.shareBaseUrl) {
+    console.log('Share portal is not configured; set DIFF_REVIEW_SHARE_URL or pass --share-url.');
+  }
 }
 
 function readPackageVersion(): string {

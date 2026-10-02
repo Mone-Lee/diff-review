@@ -140,7 +140,8 @@ function fileSnapshotHash(file: DiffFile): string {
 
 function normalizeDiffPath(path: string): string {
   if (path === '/dev/null') return path;
-  return path.replace(/^[ab]\//, '');
+  // Git 为包含空格的未引号路径追加制表符分隔符，分隔符不属于文件名。
+  return path.split('\t')[0].replace(/^[ab]\//, '');
 }
 
 function isMarkdownPath(path: string): boolean {
