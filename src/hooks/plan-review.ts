@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import type { DiffFile, PlanReviewResult, ReviewSession, ReviewThread } from '../shared/types';
 import { formatPrompt } from '../core/prompt';
+import { createVirtualMarkdownDiffFile } from '../core/virtual-markdown';
 
 export type CodexHookInput = {
   cwd?: unknown;
@@ -93,7 +94,7 @@ export async function buildPlanReviewSnapshot(
   const turnId = typeof input.turn_id === 'string' && input.turn_id ? input.turn_id : crypto.randomUUID();
   // planPath 是评论绑定的关键路径：同一轮计划的评论只回流给这个虚拟文件快照。
   const planPath = `${PLAN_FILE_PREFIX}/${sessionId}-${turnId}.md`;
-  const diffFiles = [createPlanDiffFile(planPath, planText)];
+  const diffFiles = [createVirtualMarkdownDiffFile(planPath, planText)];
   const diffDigest = createHash('sha256').update(planText).digest('hex').slice(0, 16);
   const session: ReviewSession = {
     id: crypto.randomUUID(),
@@ -324,36 +325,6 @@ function containsStringValue(value: unknown, expected: string): boolean {
   if (!value || typeof value !== 'object') return false;
   if (Array.isArray(value)) return value.some((item) => containsStringValue(item, expected));
   return Object.values(value as Record<string, unknown>).some((child) => containsStringValue(child, expected));
-}
-
-/**
- * 将计划 Markdown 包装成“新增文件”的 diff 结构，从而复用现有行级评论、Markdown preview 和评论侧栏。
- */
-function createPlanDiffFile(path: string, content: string): DiffFile {
-  const lines = content.replace(/\r\n/g, '\n').split('\n');
-  if (lines.at(-1) === '') lines.pop();
-  const snapshotHash = createHash('sha256').update(JSON.stringify({ path, content })).digest('hex').slice(0, 16);
-
-  return {
-    oldPath: '/dev/null',
-    newPath: path,
-    path,
-    snapshotHash,
-    status: 'added',
-    additions: lines.length,
-    deletions: 0,
-    isMarkdown: true,
-    hunks: [
-      {
-        header: `@@ -0,0 +1,${Math.max(lines.length, 1)} @@`,
-        oldStart: 0,
-        oldLines: 0,
-        newStart: 1,
-        newLines: lines.length,
-        lines: lines.map((line, index) => ({ type: 'add', content: line, newLineNumber: index + 1 }))
-      }
-    ]
-  };
 }
 
 function collectAssistantText(value: unknown): string {

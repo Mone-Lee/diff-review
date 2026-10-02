@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { importAgentComments } from '../core/comment-import';
+import { buildMarkdownShareSnapshot } from '../core/markdown-share';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
 import { readSkillSelectedFiles } from '../core/review-scope';
@@ -27,6 +28,7 @@ import { getLiveRuntimes, hasRuntimeRecord, recordRuntime, stopRecordedRuntimes,
 import { startServer } from '../server';
 import { attachLegacyComments, readComments } from '../server/storage';
 import { REVIEW_REFRESH_PROTOCOL, type DiffFile, type PlanReviewResult, type ReviewSession } from '../shared/types';
+import { DEFAULT_SHARE_BASE_URL } from '../shared/share';
 import { isThreadOnFileSnapshot } from '../shared/thread-utils';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -74,6 +76,10 @@ async function main() {
     await stopCommand(repo);
     return;
   }
+  if (command === 'share') {
+    await markdownShareCommand(dev, repo, reviewArgs);
+    return;
+  }
   const repoRoot = await getRepoRoot(repo ?? process.cwd());
   const mode = resolveInitialReviewMode(reviewArgs);
   logStartup(repoRoot, mode);
@@ -81,13 +87,15 @@ async function main() {
   const diff = await getDiff(mode, repoRoot, selectedFiles);
   const diffFiles = parseUnifiedDiff(diff);
   const session: ReviewSession = {
-    selectedFiles,
     id: crypto.randomUUID(),
     repoName: basename(repoRoot),
     repoRoot,
     mode,
+    selectedFiles,
     diffHash: diffHash(diff),
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    shareBaseUrl: DEFAULT_SHARE_BASE_URL,
+    shareId: crypto.randomUUID()
   };
 
   await attachLegacyComments(repoRoot, session.diffHash, diffFiles);
@@ -147,6 +155,7 @@ function parseCliOptions(args: string[]): {
     | 'copilot-plan'
     | 'codex-pre-tool-plan'
     | 'qoder-plan'
+    | 'share'
     | 'help'
     | 'version';
   dev: boolean;
@@ -164,6 +173,7 @@ function parseCliOptions(args: string[]): {
     | 'copilot-plan'
     | 'codex-pre-tool-plan'
     | 'qoder-plan'
+    | 'share'
     | 'help'
     | 'version' = 'review';
   const reviewArgs: string[] = [];
@@ -193,6 +203,10 @@ function parseCliOptions(args: string[]): {
     }
     if (arg === 'stop') {
       command = 'stop';
+      continue;
+    }
+    if (arg === 'share') {
+      command = 'share';
       continue;
     }
     if (arg === 'plan-hook' || arg === 'codex-plan-hook') {
@@ -312,6 +326,7 @@ function printHelp() {
   console.log('');
   console.log('Usage: local-diff-reviewer [working|staged|<base> <target>] [--new-session] [--repo <path>]');
   console.log('       local-diff-reviewer stop [--repo <path>]');
+  console.log('       local-diff-reviewer share <file.md> [--repo <path>]');
   console.log('       local-diff-reviewer install-hooks [--project]');
   console.log('       local-diff-reviewer update-skill');
   console.log('       local-diff-reviewer plan-hook');
@@ -333,6 +348,45 @@ function printHelp() {
   console.log('  qoder-plan         Run as a Qoder PreToolUse hook for create_plan review.');
   console.log('  --version, -v      Print the CLI version.');
   console.log('  --help, -h         Print this help.');
+}
+
+/**
+ * 独立 Markdown 分享入口：启动本地审查台，门户链接由页面按当前评论快照即时生成。
+ */
+async function markdownShareCommand(
+  dev: boolean,
+  repo: string | undefined,
+  args: string[]
+): Promise<void> {
+  if (args.length !== 1) throw new Error('Usage: local-diff-reviewer share <file.md>');
+  const repoRoot = await getRepoRoot(repo ?? process.cwd());
+  const snapshot = await buildMarkdownShareSnapshot(repoRoot, args[0]);
+  await attachLegacyComments(repoRoot, snapshot.session.diffHash, snapshot.diffFiles);
+  const hasBuiltWeb = existsSync(join(builtWebDist, 'index.html'));
+  const apiUrl = await startServer({
+    session: snapshot.session,
+    diffFiles: snapshot.diffFiles,
+    virtualFiles: snapshot.virtualFiles,
+    webDist: hasBuiltWeb ? builtWebDist : undefined
+  });
+  const useVite = dev || !hasBuiltWeb;
+  const vitePort = useVite ? await findAvailablePort(5173) : undefined;
+  const uiUrl = useVite ? `http://127.0.0.1:${vitePort}` : apiUrl;
+  const vitePid = useVite && vitePort ? startVite(apiUrl, vitePort) : undefined;
+  await recordRuntime({
+    pid: process.pid,
+    vitePid,
+    vitePort,
+    repoRoot,
+    repoName: snapshot.session.repoName,
+    startedAt: snapshot.session.createdAt,
+    apiPort: parsePort(apiUrl),
+    usesVite: useVite
+  });
+  openBrowser(uiUrl);
+  console.log(`Markdown Share is running: ${uiUrl}`);
+  console.log(`File: ${snapshot.diffFiles[0].path}`);
+
 }
 
 function readPackageVersion(): string {

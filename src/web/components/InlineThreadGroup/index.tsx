@@ -39,7 +39,7 @@ function getActionThread(threads: ReviewThread[]): ReviewThread | undefined {
   return threads.find((thread) => getThreadStatus(thread) === 'replied') ?? threads.find((thread) => getThreadStatus(thread) === 'submit') ?? threads[0];
 }
 
-function canCopyThread(status: ReviewThread['status'], lastAuthor?: 'user' | 'agent'): boolean {
+function canCopyThread(status: ReviewThread['status'], lastAuthor?: 'user' | 'agent' | 'reviewer'): boolean {
   if (status === 'submit') return true;
   return status === 'replied' && lastAuthor === 'user';
 }
@@ -73,6 +73,7 @@ export function InlineThreadGroup({
   const actionThreadResolved = actionThreadStatus === 'resolved';
   const actionThreadLastComment = actionThread?.comments.at(-1);
   const canCopy = canCopyThread(actionThreadStatus, actionThreadLastComment?.author);
+  const containsReviewerComment = threads.some((thread) => thread.comments.some((comment) => comment.author === 'reviewer'));
   if (!firstThread) return null;
 
   const variantClassName =
@@ -106,7 +107,8 @@ export function InlineThreadGroup({
           >
             {thread.comments.map((comment) => {
               const isAgentComment = comment.author === 'agent';
-              const canEditComment = groupStatus === 'submit' && threadStatus === 'submit' && !isAgentComment;
+              const isReviewerComment = comment.author === 'reviewer';
+              const canEditComment = groupStatus === 'submit' && threadStatus === 'submit' && comment.author !== 'agent' && comment.author !== 'reviewer';
               return (
                 <div className={`${styles.inlineThreadCommentItem} ${isAgentComment ? styles.inlineThreadCommentItemAgent : ''}`} key={comment.id}>
                   <div className={styles.commentRow}>
@@ -114,6 +116,10 @@ export function InlineThreadGroup({
                       {isAgentComment ? (
                         <Typography.Text className={styles.inlineThreadAgentLabel} strong>
                           Agent
+                        </Typography.Text>
+                      ) : isReviewerComment ? (
+                        <Typography.Text className={styles.inlineThreadAgentLabel} strong>
+                          {comment.authorName || '审阅者'}
                         </Typography.Text>
                       ) : null}
                       {editingCommentId === comment.id ? (
@@ -218,7 +224,7 @@ export function InlineThreadGroup({
               要求再改
             </Button>
           ) : null}
-          {actionThreadStatus !== 'replied' ? (
+          {actionThreadStatus !== 'replied' && !containsReviewerComment ? (
             <Popconfirm
               title={threads.length > 1 ? '删除这组评论？' : '删除这条评论线程？'}
               okText="删除"
