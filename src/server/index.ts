@@ -11,7 +11,7 @@ import { REVIEW_REFRESH_PROTOCOL, isRefreshableReviewMode, type DiffFile, type M
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { formatPrompt } from '../core/prompt';
 import { readComments, updateComments } from './storage';
-import { getOpenThreadStatus, getThreadStatus, isThreadOnFileSnapshot, sameAnchor } from '../shared/thread-utils';
+import { getOpenThreadStatus, getThreadStatus, isThreadOnFileSnapshot, sameAnchor, selectThreadsForDiffFiles } from '../shared/thread-utils';
 import { FileWatcherService } from './file-watcher-service';
 
 export type ReviewServerState = {
@@ -46,7 +46,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.get('/api/review-state', async (_req, res, next) => {
     try {
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: state.session, files: state.diffFiles, threads: comments.threads });
+      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -114,7 +114,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: state.session, files: state.diffFiles, threads: comments.threads });
+      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -154,7 +154,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: state.session, files: state.diffFiles, threads: comments.threads });
+      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -255,7 +255,8 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
 
   app.get('/api/threads', async (_req, res, next) => {
     try {
-      res.json(await readComments(state.session.repoRoot));
+      const comments = await readComments(state.session.repoRoot);
+      res.json({ threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
