@@ -11,6 +11,8 @@ export type SkillUpdateResult = {
 };
 
 const npmCommandPrefix = 'npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest';
+const npmInvocationGuidance = 'Use `@latest` and the explicit npmjs registry so npm does not reuse an older npx cache or resolve through a workspace/user `.npmrc` mirror.';
+const localInvocationGuidance = 'Use `local-diff-reviewer` exactly as shown; do not invoke it through `npx` or append a version suffix.';
 
 export async function updateInstalledSkill(
   sourcePath: string,
@@ -55,7 +57,9 @@ export function renderSkillSource(source: string, commandPrefix = npmCommandPref
   const withoutUpdateCheck = startIndex >= 0 && endIndex > startIndex
     ? `${source.slice(0, startIndex)}${source.slice(endIndex)}`
     : source;
-  return withoutUpdateCheck.replaceAll(npmCommandPrefix, commandPrefix);
+  return withoutUpdateCheck
+    .replaceAll(npmCommandPrefix, commandPrefix)
+    .replaceAll(npmInvocationGuidance, localInvocationGuidance);
 }
 
 async function readOptionalFile(path: string): Promise<Buffer | undefined> {
