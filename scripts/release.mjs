@@ -35,13 +35,19 @@ function getReleaseType() {
   return releaseType;
 }
 
-// 发布只基于已提交内容，避免把本地工作区改动混入版本提交。
-function ensureCleanWorkingTree() {
-  if (runCapture('git status --porcelain')) {
-    console.error('\nRelease aborted: the working tree contains uncommitted changes.');
-    console.error('Commit or stash them before running npm run release.');
-    process.exit(1);
+// 发布期间临时收起本地草稿，确保检查、构建和版本提交只使用 HEAD 中的已提交内容。
+function stashWorkingTree() {
+  if (!runCapture('git status --porcelain')) {
+    return false;
   }
+
+  run('git stash push --include-untracked --message "release: preserve local changes"');
+  return true;
+}
+
+// 无论发布成功与否，都把发布前的本地草稿恢复到当前分支。
+function restoreWorkingTree() {
+  run('git stash pop --index');
 }
 
 function ensureNpmPublishPreflight() {
@@ -81,20 +87,27 @@ function ensureNpmPublishPreflight() {
 
 const releaseType = getReleaseType();
 
-ensureCleanWorkingTree();
 ensureNpmPublishPreflight();
 
-run('npm run release:check');
-run(`npm version ${releaseType} --no-git-tag-version`);
+const hasStashedChanges = stashWorkingTree();
 
-const version = readVersion();
-run('git add package.json package-lock.json 2>/dev/null || git add package.json');
-run(`git commit -m "release: v${version}"`);
-run(`git tag v${version}`);
-run(`npm publish --registry=${NPMJS_REGISTRY}`);
+try {
+  run('npm run release:check');
+  run(`npm version ${releaseType} --no-git-tag-version`);
 
-console.log('\nnpm publish succeeded, pushing commits and tags to GitHub...');
-run('git push');
-run('git push --tags');
+  const version = readVersion();
+  run('git add package.json package-lock.json 2>/dev/null || git add package.json');
+  run(`git commit -m "release: v${version}"`);
+  run(`git tag v${version}`);
+  run(`npm publish --registry=${NPMJS_REGISTRY}`);
 
-console.log('\nRelease finished: npm published and GitHub updated.');
+  console.log('\nnpm publish succeeded, pushing commits and tags to GitHub...');
+  run('git push');
+  run('git push --tags');
+
+  console.log('\nRelease finished: npm published and GitHub updated.');
+} finally {
+  if (hasStashedChanges) {
+    restoreWorkingTree();
+  }
+}
