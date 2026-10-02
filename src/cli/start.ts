@@ -49,7 +49,11 @@ async function main() {
     return;
   }
   if (command === 'update-skill') {
-    const result = await updateInstalledSkill(join(packageRoot, 'SKILL.md'), process.env.DIFF_REVIEW_SKILL_DIR);
+    const result = await updateInstalledSkill(
+      join(packageRoot, 'SKILL.md'),
+      process.env.DIFF_REVIEW_SKILL_DIR,
+      process.env.LOCAL_DIFF_REVIEWER_SKILL_COMMAND
+    );
     console.log(`${result.changed ? 'Diff Review Skill updated' : 'Diff Review Skill already current'}: ${result.targetPath}`);
     return;
   }

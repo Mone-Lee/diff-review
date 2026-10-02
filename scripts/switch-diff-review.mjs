@@ -17,11 +17,17 @@ const commandName = 'local-diff-reviewer';
 if (mode === 'local') {
   runNpm(['run', 'build'], repositoryRoot);
   runNpm(['link'], repositoryRoot);
-  installCodexHooks({ LOCAL_DIFF_REVIEWER_HOOK_COMMAND: commandName });
+  runLocalCli('update-skill', {
+    LOCAL_DIFF_REVIEWER_SKILL_COMMAND: commandName
+  });
+  runLocalCli('install-hooks', {
+    LOCAL_DIFF_REVIEWER_HOOK_COMMAND: commandName
+  });
   printStatus();
 } else if (mode === 'npm') {
   runNpm(['install', '--global', `${packageName}@${npmVersion}`], repositoryRoot);
-  installCodexHooks();
+  runSelectedCommand(['update-skill']);
+  runSelectedCommand(['install-hooks']);
   printStatus();
 } else if (mode === 'status') {
   printStatus();
@@ -35,21 +41,30 @@ function runNpm(args, cwd) {
   execFileSync(npmCommand, args, { cwd, stdio: 'inherit' });
 }
 
-/** 使用当前仓库构建产物刷新 Codex hook 配置，使 hook 来源和命令来源保持一致。 */
-function installCodexHooks(extraEnv = {}) {
-  execFileSync(process.execPath, [join(repositoryRoot, 'dist/cli/start.js'), 'install-hooks'], {
+/** 使用当前仓库构建产物更新本地调试配置，避免安装过程重新解析 npm 包。 */
+function runLocalCli(command, extraEnv = {}) {
+  execFileSync(process.execPath, [join(repositoryRoot, 'dist/cli/start.js'), command], {
     cwd: repositoryRoot,
     env: { ...process.env, ...extraEnv },
     stdio: 'inherit'
   });
 }
 
-/** 输出当前 shell 实际使用的 local-diff-reviewer 版本、命令路径和软链来源。 */
-function printStatus() {
+/** npm 模式下调用刚安装的全局命令，确保 Skill 与 hook 都来自选定版本。 */
+function runSelectedCommand(args) {
+  execFileSync(resolveGlobalCommandPath(), args, { cwd: repositoryRoot, stdio: 'inherit' });
+}
+
+function resolveGlobalCommandPath() {
   const globalPrefix = execFileSync(npmCommand, ['prefix', '--global'], { encoding: 'utf8' }).trim();
-  const commandPath = process.platform === 'win32'
+  return process.platform === 'win32'
     ? join(globalPrefix, `${commandName}.cmd`)
     : join(globalPrefix, `bin/${commandName}`);
+}
+
+/** 输出当前 shell 实际使用的 local-diff-reviewer 版本、命令路径和软链来源。 */
+function printStatus() {
+  const commandPath = resolveGlobalCommandPath();
 
   if (!existsSync(commandPath)) {
     console.log('模式：未安装');

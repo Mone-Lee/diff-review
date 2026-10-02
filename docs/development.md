@@ -35,7 +35,7 @@ npm run diff-review:use-npm
 npm run diff-review:status
 ```
 
-`diff-review:use-local` 会先构建当前仓库，再用 `npm link` 把全局 `local-diff-reviewer` 命令指向本地源码，并把 Codex plan hook 临时改为调用这个全局命令。`diff-review:use-npm` 默认切回 `local-diff-reviewer@latest`，同时把 hook 改回 `npx ... @latest`，也可以指定版本：
+`diff-review:use-local` 会先构建当前仓库，再用 `npm link` 把全局 `local-diff-reviewer` 命令指向本地源码，并把已安装的 Diff Review Skill 和 Codex plan hook 临时改为调用这个全局命令。此时 Skill 会跳过 npm 自更新检查，避免再次切回发布版。`diff-review:use-npm` 默认切回 `local-diff-reviewer@latest`，同时恢复发布版 Skill 与 `npx ... @latest` hook，也可以指定版本：
 
 ```bash
 npm run diff-review:use-npm -- 4.1.4
