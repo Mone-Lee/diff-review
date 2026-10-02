@@ -2,7 +2,6 @@
  * Review API 封装：负责前端与 review 会话、评论线程、评论编辑和 prompt 生成接口之间的通信。
  */
 import type { CommentAnchor, DiffFile, GitCommitSummary, PlanReviewResult, ReviewMode, ReviewSession, ReviewThread, ReviewWatchEvent } from '../../shared/types';
-import type { MarkdownSharePayload } from '../../shared/share';
 
 export type PromptScope = { type: 'thread'; threadId: string } | { type: 'file-unresolved'; filePath: string } | { type: 'all-unresolved' };
 
@@ -49,19 +48,6 @@ function parseErrorDetail(text: string): string {
 export async function fetchReviewState() {
   const res = await fetch('/api/review-state');
   return (await res.json()) as ReviewState;
-}
-
-/**
- * 将静态反馈载荷导入当前 Markdown 分享快照。
- */
-export async function importMarkdownShareFeedback(payload: MarkdownSharePayload) {
-  const res = await fetch('/api/share/import', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ payload })
-  });
-  if (!res.ok) throw new Error(await getErrorMessage(res, '导入反馈失败'));
-  return (await res.json()) as { imported: number; skipped: number };
 }
 
 /**

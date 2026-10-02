@@ -2,22 +2,18 @@
  * Web 主界面容器：负责加载会话数据、调度子组件和处理核心交互动作。
  */
 import React from 'react';
-import { App as AntApp, Button, Card, Input, Layout, Modal, Popconfirm, Segmented, Space, Typography } from 'antd';
+import { App as AntApp, Button, Card, Layout, Popconfirm, Segmented, Space, Typography } from 'antd';
 import {
   CheckCircleOutlined,
   CopyOutlined,
   EyeOutlined,
-  ImportOutlined,
-  LinkOutlined,
   PartitionOutlined,
   PoweroffOutlined,
   ReloadOutlined,
   RollbackOutlined
 } from '@ant-design/icons';
 import { isRefreshableReviewMode, type DiffFile, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
-import { buildShareUrl, parseShareUrl, reviewThreadsToShareThreads, type MarkdownSharePayload } from '../shared/share';
-import { applyReviewComparison, fetchReviewState, importMarkdownShareFeedback, refreshReviewSnapshot, shutdownReviewRuntime, submitPlanReviewResult, type ReviewState } from './api/review';
-import { fetchMarkdownPreview } from './api/content';
+import { applyReviewComparison, fetchReviewState, refreshReviewSnapshot, shutdownReviewRuntime, submitPlanReviewResult, type ReviewState } from './api/review';
 import {
   type LocateTarget,
   ReviewActionsProvider,
@@ -81,12 +77,6 @@ export default function App() {
   const [shuttingDownRuntime, setShuttingDownRuntime] = React.useState(false);
   const [submittingPlanResult, setSubmittingPlanResult] = React.useState(false);
   const [planResultSubmitted, setPlanResultSubmitted] = React.useState(false);
-  const [shareDialogOpen, setShareDialogOpen] = React.useState(false);
-  const [shareLink, setShareLink] = React.useState('');
-  const [buildingShareLink, setBuildingShareLink] = React.useState(false);
-  const [importDialogOpen, setImportDialogOpen] = React.useState(false);
-  const [importLink, setImportLink] = React.useState('');
-  const [importingFeedback, setImportingFeedback] = React.useState(false);
   const sessionIdRef = React.useRef<string | null>(null);
   const focusedThreadIdRef = React.useRef<string | null>(null);
   const { clearPendingChanges, hasPendingChanges, lastChangedAt } = useFileWatch();
@@ -97,7 +87,6 @@ export default function App() {
   const canRefreshSnapshot = session ? isRefreshableReviewMode(session.mode) : false;
   const isPlanReview = session?.reviewKind === 'plan';
   const isCodexPlanReview = session?.planReviewSource === 'codex';
-  const canShareSelectedMarkdown = selectedFile?.isMarkdown;
   const currentSnapshotThreads = React.useMemo(
     () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
     [files, threads]
@@ -315,59 +304,6 @@ export default function App() {
     }
   }, [isCodexPlanReview, message, unresolvedThreadsCount]);
 
-  const handleBuildShareLink = React.useCallback(async () => {
-    if (!session?.shareBaseUrl || !session.shareId || !selectedFile) {
-      setShareDialogOpen(true);
-      setShareLink('');
-      return;
-    }
-    setBuildingShareLink(true);
-    try {
-      const preview = await fetchMarkdownPreview(selectedFile.path);
-      const payload: MarkdownSharePayload = {
-        version: 1,
-        shareId: session.shareId,
-        title: selectedFile.path.split('/').at(-1) ?? selectedFile.path,
-        filePath: selectedFile.path,
-        markdown: preview.content,
-        contentHash: selectedFile.snapshotHash,
-        threads: reviewThreadsToShareThreads(selectedFileThreads)
-      };
-      setShareLink(await buildShareUrl(session.shareBaseUrl, payload));
-      setShareDialogOpen(true);
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '生成分享链接失败');
-    } finally {
-      setBuildingShareLink(false);
-    }
-  }, [message, selectedFile, selectedFileThreads, session]);
-
-  const handleCopyShareLink = React.useCallback(async () => {
-    if (!shareLink) return;
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      message.success('分享链接已复制');
-    } catch {
-      message.error('复制失败，请手动复制');
-    }
-  }, [message, shareLink]);
-
-  const handleImportFeedback = React.useCallback(async () => {
-    setImportingFeedback(true);
-    try {
-      const payload = await parseShareUrl(importLink.trim());
-      const result = await importMarkdownShareFeedback(payload);
-      await refreshReviewState();
-      setImportDialogOpen(false);
-      setImportLink('');
-      message.success(result.imported > 0 ? `已导入 ${result.imported} 条评论` : '没有新的评论需要导入');
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '导入反馈失败');
-    } finally {
-      setImportingFeedback(false);
-    }
-  }, [importLink, message, refreshReviewState]);
-
   const setFocusedThreadIdWithRef = React.useCallback<React.Dispatch<React.SetStateAction<string | null>>>((value) => {
     setFocusedThreadId((current) => {
       const nextValue = typeof value === 'function' ? value(current) : value;
@@ -473,21 +409,6 @@ export default function App() {
                       value={markdownViewMode}
                       onChange={(value) => setMarkdownViewMode(value as MarkdownViewMode)}
                     />
-                    {canShareSelectedMarkdown ? (
-                      <Space>
-                        <Button icon={<ImportOutlined />} onClick={() => setImportDialogOpen(true)}>
-                          导入反馈链接
-                        </Button>
-                        <Button
-                          icon={<LinkOutlined />}
-                          loading={buildingShareLink}
-                          type="primary"
-                          onClick={() => { handleBuildShareLink().catch(() => undefined); }}
-                        >
-                          分享
-                        </Button>
-                      </Space>
-                    ) : null}
                   </div>
                 ) : selectedFileIsImage ? (
                   <div className={styles.topToolbar} />
@@ -609,54 +530,6 @@ export default function App() {
               />
             </div>
           </aside>
-          <Modal
-            className={styles.shareModal}
-            open={shareDialogOpen}
-            title="分享审查链接"
-            footer={(
-              <Button onClick={() => setShareDialogOpen(false)}>关闭</Button>
-            )}
-            onCancel={() => setShareDialogOpen(false)}
-          >
-            {shareLink ? (
-              <>
-                <Typography.Paragraph className={styles.shareDialogIntro} type="secondary">
-                  将完整审查内容与当前评论一并打包。拿到链接的人可以查看并继续添加反馈。
-                </Typography.Paragraph>
-                <Typography.Text strong>可分享链接</Typography.Text>
-                <div className={styles.shareLinkField}>
-                  <Input.TextArea autoSize={{ minRows: 4, maxRows: 8 }} readOnly value={shareLink} />
-                  <Button icon={<CopyOutlined />} type="primary" onClick={() => { handleCopyShareLink().catch(() => undefined); }}>
-                    复制
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <Typography.Paragraph type="secondary">
-                尚未配置分享门户。请使用 --share-url，或设置 DIFF_REVIEW_SHARE_URL 后重新启动。
-              </Typography.Paragraph>
-            )}
-          </Modal>
-          <Modal
-            open={importDialogOpen}
-            title="导入审阅者反馈"
-            okText="导入"
-            cancelText="取消"
-            confirmLoading={importingFeedback}
-            okButtonProps={{ disabled: !importLink.trim() }}
-            onCancel={() => setImportDialogOpen(false)}
-            onOk={() => { handleImportFeedback().catch(() => undefined); }}
-          >
-            <Typography.Paragraph type="secondary">
-              粘贴审阅者返回的完整反馈链接。只有与当前 Markdown 快照一致的新评论会被导入。
-            </Typography.Paragraph>
-            <Input.TextArea
-              autoSize={{ minRows: 4, maxRows: 8 }}
-              placeholder="https://…/#share=…"
-              value={importLink}
-              onChange={(event) => setImportLink(event.target.value)}
-            />
-          </Modal>
         </Layout>
       </ReviewNavigationActionsProvider>
     </ReviewActionsProvider>
