@@ -57,7 +57,9 @@ plan mode hook 的完整流程见 [`docs/plan-mode-hooks.md`](docs/plan-mode-hoo
 - 支持分享 diff-review 链接给其他人，并同步其他人的评论。
   - 仅支持 diff 为单个 Markdown 文件的情况，例如 agent 上下文中只有一个文件，或 plan mode 产生的 Markdown 内容。
 
-  <video src="docs/images/share.mov" controls width="100%"></video>
+  [![分享功能演示](docs/images/share-demo.gif)](docs/images/share.mp4?raw=1)
+
+  动图可直接预览；点击可播放高清版本。
 
 - 代码文件使用 GitHub 风格的 unified diff。
 - 图片文件支持 diff 查看。
