@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import type { DiffFile, PlanReviewResult, ReviewSession, ReviewThread } from '../shared/types';
+import { DEFAULT_SHARE_BASE_URL } from '../shared/share';
 import { formatPrompt } from '../core/prompt';
 import { createVirtualMarkdownDiffFile } from '../core/virtual-markdown';
 
@@ -104,7 +105,9 @@ export async function buildPlanReviewSnapshot(
     diffHash: diffDigest,
     createdAt: new Date().toISOString(),
     reviewKind: 'plan',
-    planReviewSource: options.source
+    planReviewSource: options.source,
+    shareBaseUrl: DEFAULT_SHARE_BASE_URL,
+    shareId: crypto.randomUUID()
   };
 
   return {

@@ -1,7 +1,7 @@
 /**
  * Markdown 分享协议：定义可移植载荷、URL Fragment 编解码与跨运行时输入校验。
  */
-import type { CommentAnchor, ReviewThread } from './types';
+import type { CommentAnchor, DiffFile, ReviewSession, ReviewThread } from './types';
 
 export const DEFAULT_SHARE_BASE_URL = 'https://mone-lee.github.io/diff-review/share.html';
 export const SHARE_PAYLOAD_VERSION = 1;
@@ -41,6 +41,14 @@ export type MarkdownSharePayload = {
   contentHash: string;
   threads: ShareThread[];
 };
+
+/**
+ * 分享入口只面向单一 Markdown 快照；这同时覆盖 plan、Skill 自选单文件和本身只有一个文件的 diff。
+ */
+export function getShareableMarkdownFile(session: ReviewSession | null, files: DiffFile[]): DiffFile | null {
+  if (!session || files.length !== 1 || !files[0].isMarkdown) return null;
+  return files[0];
+}
 
 export function isShareableAnchor(anchor: CommentAnchor): anchor is ShareAnchor {
   return anchor.type === 'file' || anchor.type === 'markdown-line';

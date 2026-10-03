@@ -30,10 +30,20 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   let markdownPreviews = await buildMarkdownPreviewCache(state);
   const fileWatcher = new FileWatcherService(state.session.repoRoot);
   const app = express();
+  const packageRoot = resolve(import.meta.dirname, '../..');
+  const usesLocalSource = existsSync(join(packageRoot, 'src/share/main.tsx'));
+
+  // npm 发布包不包含源码；本地软链和源码启动使用当前页面同源门户，兼容 Vite 的实际端口。
+  function clientSession(): ReviewSession {
+    return usesLocalSource && state.session.shareBaseUrl
+      ? { ...state.session, shareBaseUrl: '/share.html' }
+      : state.session;
+  }
+
   app.use(express.json({ limit: '2mb' }));
 
   app.get('/api/session', (_req, res) => {
-    res.json(state.session);
+    res.json(clientSession());
   });
 
   app.get('/api/diff', (_req, res) => {
@@ -48,7 +58,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.get('/api/review-state', async (_req, res, next) => {
     try {
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
+      res.json({ session: clientSession(), files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -89,7 +99,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       markdownPreviews = await buildMarkdownPreviewCache(nextReviewState);
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
-      res.json({ session: state.session, files: state.diffFiles });
+      res.json({ session: clientSession(), files: state.diffFiles });
     } catch (error) {
       next(error);
     }
@@ -116,7 +126,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
+      res.json({ session: clientSession(), files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -156,7 +166,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
+      res.json({ session: clientSession(), files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -486,18 +496,18 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         if (!thread) {
           throw new Error('THREAD_NOT_FOUND');
         }
-        if (getThreadStatus(thread) !== 'submit') {
-          throw new Error('THREAD_NOT_EDITABLE');
-        }
         const comment = thread.comments.find((item) => item.id === req.params.commentId);
         if (!comment) {
           throw new Error('COMMENT_NOT_FOUND');
         }
-        if (comment.author === 'agent' || comment.author === 'reviewer') {
+        if (comment.author === 'agent') {
           throw new Error('COMMENT_READ_ONLY');
         }
         thread.comments = thread.comments.filter((item) => item.id !== req.params.commentId);
         thread.updatedAt = now;
+        if (thread.status !== 'resolved') {
+          thread.status = getOpenThreadStatus(thread);
+        }
         store.threads = store.threads.filter((item) => item.id !== thread.id || thread.comments.length > 0);
         return { changed: true, result: undefined };
       });
@@ -507,16 +517,12 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         res.status(404).json({ error: 'Thread not found' });
         return;
       }
-      if (error instanceof Error && error.message === 'THREAD_NOT_EDITABLE') {
-        res.status(400).json({ error: 'Only submitted comments can be deleted' });
-        return;
-      }
       if (error instanceof Error && error.message === 'COMMENT_NOT_FOUND') {
         res.status(404).json({ error: 'Comment not found' });
         return;
       }
       if (error instanceof Error && error.message === 'COMMENT_READ_ONLY') {
-        res.status(400).json({ error: 'Agent and imported reviewer comments are read-only' });
+        res.status(400).json({ error: 'Agent comments are read-only' });
         return;
       }
       next(error);
@@ -544,6 +550,16 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   });
 
   const webDist = state.webDist ?? join(process.cwd(), 'dist', 'web');
+  const shareDist = resolve(webDist, '../share');
+  // 分享页及其相对 assets 路径必须先于主站 SPA 回退处理，防止返回错误的入口 HTML。
+  app.get('/share.html', (_req, res) => {
+    if (!existsSync(join(shareDist, 'share.html'))) {
+      res.status(404).send('分享页尚未构建，请运行 npm run build:share');
+      return;
+    }
+    res.sendFile(join(shareDist, 'share.html'), { headers: { 'Cache-Control': 'no-cache' } });
+  });
+  app.use('/assets', express.static(join(shareDist, 'assets')));
   if (existsSync(webDist)) {
     // 生产模式使用静态资源托管并回退到 SPA 入口。
     app.use(express.static(webDist));

@@ -17,6 +17,8 @@ type Props = {
   currentFiles: DiffFile[];
   currentFilePath: string;
   focusedThreadId: string | null;
+  simple?: boolean;
+  interactionMode?: 'default' | 'shared-reviewer';
 };
 
 type ThreadFilter = 'all' | 'pending' | 'resolved';
@@ -41,7 +43,7 @@ function statusCardClass(status: ReviewThread['status']): string {
   return styles.resolved;
 }
 
-export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId }: Props) {
+export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId, simple = false, interactionMode = 'default' }: Props) {
   const { deleteThread } = useReviewActions();
   const { locateThread } = useReviewNavigationActions();
   const [filter, setFilter] = React.useState<ThreadFilter>('all');
@@ -133,7 +135,7 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
 
   return (
     <div>
-      <div className={styles.threadScopeBar}>
+      {!simple ? <div className={styles.threadScopeBar}>
         <Typography.Text className={styles.threadScopeLabel}>查看范围</Typography.Text>
         <div className={!currentFilePath ? `${styles.threadScopeSwitchRow} ${styles.threadScopeSwitchRowDisabled}` : styles.threadScopeSwitchRow}>
           <button
@@ -160,9 +162,9 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
             全部评论 ({threads.length})
           </button>
         </div>
-      </div>
+      </div> : null}
 
-      <div className={styles.threadListToolbar}>
+      {!simple ? <div className={styles.threadListToolbar}>
         <div className={styles.threadFilterWrap}>
           <Segmented<ThreadFilter>
             value={filter}
@@ -195,10 +197,13 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
             批量操作 <DownOutlined />
           </Button>
         </Dropdown>
-      </div>
+      </div> : null}
 
       {visibleGroups.length === 0 ? (
-        <Empty className={styles.threadEmpty} description="暂无评论，悬停到行右侧或添加文件级评论即可开始。" />
+        <Empty
+          className={styles.threadEmpty}
+          description={simple ? '暂无评论，可在文档内容旁添加评论。' : '暂无评论，悬停到行右侧或添加文件级评论即可开始。'}
+        />
       ) : (
         <div className={styles.threads}>
           {visibleGroups.map((group) => {
@@ -238,7 +243,12 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                   </Space>
                 </button>
                 <div>
-                  <InlineThreadGroup threads={[thread]} variant="borderless" showStatusTag={false} />
+                  <InlineThreadGroup
+                    threads={[thread]}
+                    variant="borderless"
+                    showStatusTag={false}
+                    interactionMode={interactionMode}
+                  />
                 </div>
               </Card>
             );

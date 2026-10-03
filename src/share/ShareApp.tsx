@@ -3,12 +3,14 @@
  */
 import React from 'react';
 import { Alert, App as AntApp, Button, Input, Modal, Space, Typography } from 'antd';
-import { CopyOutlined, MessageOutlined, UserOutlined } from '@ant-design/icons';
+import { CopyOutlined, UserOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../shared/types';
 import { buildShareUrl, parseShareUrl, type MarkdownSharePayload, type ShareComment, type ShareThread } from '../shared/share';
 import { sameAnchor } from '../shared/thread-utils';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
+import { FileHeader } from '../web/components/FileHeader';
 import { MarkdownPreviewPanel } from '../web/components/MarkdownPreviewPanel';
+import { MarkdownReviewWorkspace } from '../web/components/MarkdownReviewWorkspace';
 import { ThreadList } from '../web/components/ThreadList';
 import {
   ReviewActionsProvider,
@@ -27,8 +29,6 @@ export default function ShareApp() {
   const [reviewerId] = React.useState(readReviewerId);
   const [reviewerName, setReviewerName] = React.useState(() => readStorage(NAME_KEY));
   const [nameDraft, setNameDraft] = React.useState(() => readStorage(NAME_KEY));
-  const [globalCommentOpen, setGlobalCommentOpen] = React.useState(false);
-  const [globalComment, setGlobalComment] = React.useState('');
   const [copying, setCopying] = React.useState(false);
   const [copyError, setCopyError] = React.useState('');
 
@@ -76,6 +76,15 @@ export default function ShareApp() {
       updateThreads((current) => current.filter((thread) => (
         thread.id !== id || !thread.comments.every((comment) => comment.reviewerId === reviewerId)
       )));
+    },
+    deleteComment: async (threadId, commentId) => {
+      updateThreads((current) => current.flatMap((thread) => {
+        if (thread.id !== threadId) return [thread];
+        const comments = thread.comments.filter((comment) => (
+          comment.id !== commentId || comment.reviewerId !== reviewerId
+        ));
+        return comments.length > 0 ? [{ ...thread, comments }] : [];
+      }));
     },
     replyThread: async (id, body) => {
       const comment = createReviewerComment(body, reviewerName, reviewerId, payload?.shareId ?? '');
@@ -128,42 +137,46 @@ export default function ShareApp() {
   return (
     <ReviewActionsProvider value={actions}>
       <ReviewNavigationActionsProvider value={{ locateThread: () => undefined }}>
-        <div className={styles.page}>
-          <header className={styles.header}>
-            <div>
-              <Typography.Text className={styles.eyebrow}>SHARED MARKDOWN REVIEW</Typography.Text>
-              <Typography.Title level={2} className={styles.title}>{payload.title}</Typography.Title>
-              <Typography.Text className={styles.path}>{payload.filePath}</Typography.Text>
-            </div>
-            <Space wrap>
-              <Button icon={<UserOutlined />} onClick={() => { setNameDraft(reviewerName); setReviewerName(''); }}>
-                {reviewerName || '设置昵称'}
-              </Button>
-              <Button icon={<MessageOutlined />} onClick={() => setGlobalCommentOpen(true)}>整体评论</Button>
-              <Button type="primary" icon={<CopyOutlined />} loading={copying} onClick={() => { copyFeedbackLink().catch(() => undefined); }}>
-                复制反馈链接
-              </Button>
-            </Space>
-          </header>
-          {copyError ? <Alert className={styles.notice} message={copyError} type="warning" showIcon /> : null}
-          <div className={styles.contentGrid}>
-            <section className={styles.documentPane}>
-              <MarkdownPreviewPanel
-                file={file}
+        <>
+          <MarkdownReviewWorkspace
+            title={payload.title}
+            subtitle={`Shared Markdown · ${payload.filePath}`}
+            commentCount={threads.length}
+            fullWidthHeader
+            actions={(
+              <Space wrap>
+                <Button icon={<UserOutlined />} onClick={() => { setNameDraft(reviewerName); setReviewerName(''); }}>
+                  {reviewerName || '设置昵称'}
+                </Button>
+                <Button type="primary" icon={<CopyOutlined />} loading={copying} onClick={() => { copyFeedbackLink().catch(() => undefined); }}>
+                  导出反馈链接
+                </Button>
+              </Space>
+            )}
+            document={(
+              <>
+                {copyError ? <Alert className={styles.notice} message={copyError} type="warning" showIcon /> : null}
+                <FileHeader file={file} threads={threads} simple />
+                <MarkdownPreviewPanel
+                  file={file}
+                  threads={threads}
+                  locateTarget={null}
+                  previewData={preview}
+                  remoteAssetsOnly
+                />
+              </>
+            )}
+            comments={(
+              <ThreadList
                 threads={threads}
-                locateTarget={null}
-                previewData={preview}
-                remoteAssetsOnly
+                currentFiles={[file]}
+                currentFilePath={file.path}
+                focusedThreadId={null}
+                simple
+                interactionMode="shared-reviewer"
               />
-            </section>
-            <aside className={styles.commentRail}>
-              <div className={styles.commentRailHeader}>
-                <Typography.Title level={4}>评论线索</Typography.Title>
-                <Typography.Text type="secondary">{threads.length} 个位置</Typography.Text>
-              </div>
-              <ThreadList threads={threads} currentFiles={[file]} currentFilePath={file.path} focusedThreadId={null} />
-            </aside>
-          </div>
+            )}
+          />
           <Modal
             open={!reviewerName}
             title="留下你的署名"
@@ -182,21 +195,7 @@ export default function ShareApp() {
             <Typography.Paragraph type="secondary">昵称会随评论写入反馈链接，无需注册账号。</Typography.Paragraph>
             <Input autoFocus maxLength={100} placeholder="例如：小李" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} />
           </Modal>
-          <Modal
-            open={globalCommentOpen}
-            title="添加整体评论"
-            okText="添加评论"
-            cancelText="取消"
-            okButtonProps={{ disabled: !globalComment.trim() }}
-            onCancel={() => setGlobalCommentOpen(false)}
-            onOk={() => {
-              addComment({ type: 'file', filePath: payload.filePath }, globalComment.trim())
-                .then(() => { setGlobalComment(''); setGlobalCommentOpen(false); });
-            }}
-          >
-            <Input.TextArea autoSize={{ minRows: 4, maxRows: 10 }} value={globalComment} onChange={(event) => setGlobalComment(event.target.value)} />
-          </Modal>
-        </div>
+        </>
       </ReviewNavigationActionsProvider>
     </ReviewActionsProvider>
   );

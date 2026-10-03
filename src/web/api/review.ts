@@ -195,6 +195,17 @@ export async function patchReviewComment(threadId: string, commentId: string, bo
 }
 
 /**
+ * 删除指定线程中的单条评论，并在失败时抛出统一错误。
+ */
+export async function deleteReviewComment(threadId: string, commentId: string) {
+  const res = await fetch(`/api/threads/${threadId}/comments/${commentId}`, { method: 'DELETE' });
+
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, '删除评论失败'));
+  }
+}
+
+/**
  * 根据指定范围生成批量 prompt。
  */
 export async function requestReviewPrompt(scope: PromptScope) {

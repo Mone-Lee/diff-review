@@ -61,6 +61,8 @@ test('识别当前 turn 的 collaboration mode 计划', async () => {
 
     assert.equal(snapshot?.planText, '# 新版计划');
     assert.equal(snapshot?.session.planReviewSource, 'codex');
+    assert.equal(snapshot?.session.shareBaseUrl, 'https://mone-lee.github.io/diff-review/share.html');
+    assert.ok(snapshot?.session.shareId);
   });
 });
 

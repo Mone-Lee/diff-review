@@ -15,7 +15,7 @@ import {
   RollbackOutlined
 } from '@ant-design/icons';
 import { isRefreshableReviewMode, type DiffFile, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
-import { buildShareUrl, parseShareUrl, reviewThreadsToShareThreads, type MarkdownSharePayload } from '../shared/share';
+import { buildShareUrl, getShareableMarkdownFile, parseShareUrl, reviewThreadsToShareThreads, type MarkdownSharePayload } from '../shared/share';
 import { applyReviewComparison, fetchReviewState, importMarkdownShareFeedback, refreshReviewSnapshot, shutdownReviewRuntime, submitPlanReviewResult, type ReviewState } from './api/review';
 import { fetchMarkdownPreview } from './api/content';
 import {
@@ -30,6 +30,7 @@ import { FileList } from './components/FileList';
 import { FileHeader } from './components/FileHeader';
 import { ImageDiffViewer } from './components/ImageDiffViewer';
 import { MarkdownPreviewPanel } from './components/MarkdownPreviewPanel';
+import { MarkdownReviewWorkspace } from './components/MarkdownReviewWorkspace';
 import { RefreshButton } from './components/RefreshButton';
 import { ThreadList } from './components/ThreadList';
 import { VersionCompareControl } from './components/VersionCompareControl';
@@ -97,7 +98,6 @@ export default function App() {
   const canRefreshSnapshot = session ? isRefreshableReviewMode(session.mode) : false;
   const isPlanReview = session?.reviewKind === 'plan';
   const isCodexPlanReview = session?.planReviewSource === 'codex';
-  const canShareSelectedMarkdown = selectedFile?.isMarkdown;
   const currentSnapshotThreads = React.useMemo(
     () => threads.filter((thread) => files.some((file) => isThreadOnFileSnapshot(thread, file))),
     [files, threads]
@@ -105,6 +105,13 @@ export default function App() {
   const selectedFileThreads = React.useMemo(
     () => (selectedFile ? currentSnapshotThreads.filter((thread) => isThreadOnFileSnapshot(thread, selectedFile)) : []),
     [currentSnapshotThreads, selectedFile]
+  );
+  const shareableMarkdownFile = getShareableMarkdownFile(session, files);
+  const shareableFileThreads = React.useMemo(
+    () => shareableMarkdownFile
+      ? currentSnapshotThreads.filter((thread) => isThreadOnFileSnapshot(thread, shareableMarkdownFile))
+      : [],
+    [currentSnapshotThreads, shareableMarkdownFile]
   );
   const unresolvedThreadsCount = currentSnapshotThreads.filter((thread) => thread.status !== 'resolved').length;
 
@@ -316,37 +323,38 @@ export default function App() {
   }, [isCodexPlanReview, message, unresolvedThreadsCount]);
 
   const handleBuildShareLink = React.useCallback(async () => {
-    if (!session?.shareBaseUrl || !session.shareId || !selectedFile) {
+    if (!session?.shareBaseUrl || !session.shareId || !shareableMarkdownFile) {
       setShareDialogOpen(true);
       setShareLink('');
       return;
     }
     setBuildingShareLink(true);
     try {
-      const preview = await fetchMarkdownPreview(selectedFile.path);
+      const preview = await fetchMarkdownPreview(shareableMarkdownFile.path);
       const payload: MarkdownSharePayload = {
         version: 1,
         shareId: session.shareId,
-        title: selectedFile.path.split('/').at(-1) ?? selectedFile.path,
-        filePath: selectedFile.path,
+        title: shareableMarkdownFile.path.split('/').at(-1) ?? shareableMarkdownFile.path,
+        filePath: shareableMarkdownFile.path,
         markdown: preview.content,
-        contentHash: selectedFile.snapshotHash,
-        threads: reviewThreadsToShareThreads(selectedFileThreads)
+        contentHash: shareableMarkdownFile.snapshotHash,
+        threads: reviewThreadsToShareThreads(shareableFileThreads)
       };
-      setShareLink(await buildShareUrl(session.shareBaseUrl, payload));
+      setShareLink(await buildShareUrl(new URL(session.shareBaseUrl, window.location.href).href, payload));
       setShareDialogOpen(true);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '生成分享链接失败');
     } finally {
       setBuildingShareLink(false);
     }
-  }, [message, selectedFile, selectedFileThreads, session]);
+  }, [message, session, shareableFileThreads, shareableMarkdownFile]);
 
   const handleCopyShareLink = React.useCallback(async () => {
     if (!shareLink) return;
     try {
       await navigator.clipboard.writeText(shareLink);
       message.success('分享链接已复制');
+      setShareDialogOpen(false);
     } catch {
       message.error('复制失败，请手动复制');
     }
@@ -389,53 +397,216 @@ export default function App() {
     setFocusedThreadId: setFocusedThreadIdWithRef
   });
 
+  const shareDialogs = (
+    <>
+      <Modal
+        className={styles.shareModal}
+        open={shareDialogOpen}
+        title="分享审查链接"
+        footer={<Button onClick={() => setShareDialogOpen(false)}>关闭</Button>}
+        onCancel={() => setShareDialogOpen(false)}
+      >
+        {shareLink ? (
+          <>
+            <Typography.Paragraph className={styles.shareDialogIntro} type="secondary">
+              {session?.shareBaseUrl === '/share.html'
+                ? '本地预览使用当前构建的分享页样式，仅在本机审查服务运行期间可访问。'
+                : '将完整审查内容与当前评论一并打包。拿到链接的人可以查看并继续添加反馈。'}
+            </Typography.Paragraph>
+            <Typography.Text strong>{session?.shareBaseUrl === '/share.html' ? '本地分享预览链接' : '可分享链接'}</Typography.Text>
+            <div className={styles.shareLinkField}>
+              <Input.TextArea autoSize={{ minRows: 4, maxRows: 8 }} readOnly value={shareLink} />
+              <Button icon={<CopyOutlined />} type="primary" onClick={() => { handleCopyShareLink().catch(() => undefined); }}>
+                复制
+              </Button>
+            </div>
+          </>
+        ) : (
+          <Typography.Paragraph type="secondary">分享链接尚未生成，请关闭后重试。</Typography.Paragraph>
+        )}
+      </Modal>
+      <Modal
+        open={importDialogOpen}
+        title="导入审阅者反馈"
+        okText="导入"
+        cancelText="取消"
+        confirmLoading={importingFeedback}
+        okButtonProps={{ disabled: !importLink.trim() }}
+        onCancel={() => setImportDialogOpen(false)}
+        onOk={() => { handleImportFeedback().catch(() => undefined); }}
+      >
+        <Typography.Paragraph type="secondary">
+          粘贴审阅者返回的完整反馈链接。只有与当前 Markdown 快照一致的新评论会被导入。
+        </Typography.Paragraph>
+        <Input.TextArea
+          autoSize={{ minRows: 4, maxRows: 8 }}
+          placeholder="https://…/#share=…"
+          value={importLink}
+          onChange={(event) => setImportLink(event.target.value)}
+        />
+      </Modal>
+    </>
+  );
+
+  if (isPlanReview && selectedFile) {
+    return (
+      <ReviewActionsProvider value={reviewActions}>
+        <ReviewNavigationActionsProvider value={reviewNavigationActions}>
+          <MarkdownReviewWorkspace
+            title={sessionRepoName(session)}
+            subtitle={`Plan mode · ${selectedFile.path}`}
+            commentCount={currentSnapshotThreads.length}
+            actions={(
+              <>
+                {shareableMarkdownFile ? (
+                  <>
+                    <Button icon={<ImportOutlined />} onClick={() => setImportDialogOpen(true)}>导入反馈</Button>
+                    <Button
+                      icon={<LinkOutlined />}
+                      loading={buildingShareLink}
+                      onClick={() => { handleBuildShareLink().catch(() => undefined); }}
+                    >
+                      分享
+                    </Button>
+                  </>
+                ) : null}
+                <Space.Compact>
+                  <Button
+                    disabled={planResultSubmitted}
+                    icon={<CheckCircleOutlined />}
+                    loading={submittingPlanResult}
+                    type="primary"
+                    onClick={() => { handleSubmitPlanResult('approved').catch(() => undefined); }}
+                  >
+                    通过计划
+                  </Button>
+                  <Button
+                    disabled={unresolvedThreadsCount === 0 || submittingPlanResult || planResultSubmitted}
+                    icon={<RollbackOutlined />}
+                    onClick={() => { handleSubmitPlanResult('changes-requested').catch(() => undefined); }}
+                  >
+                    退回评论
+                  </Button>
+                </Space.Compact>
+                <Popconfirm
+                  title="关闭当前 Diff Review 任务？"
+                  description="确认后这个页面对应的本地服务会停止。"
+                  okText="关闭"
+                  cancelText="取消"
+                  okButtonProps={{ danger: true, loading: shuttingDownRuntime }}
+                  onConfirm={handleShutdownRuntime}
+                >
+                  <Button
+                    aria-label="关闭当前 Diff Review 任务"
+                    danger
+                    disabled={shuttingDownRuntime}
+                    icon={<PoweroffOutlined />}
+                    loading={shuttingDownRuntime}
+                  />
+                </Popconfirm>
+              </>
+            )}
+            document={(
+              <MarkdownPreviewPanel
+                key={`${session?.id ?? 'session'}:${selectedFile.path}:${selectedFile.snapshotHash}:preview`}
+                file={selectedFile}
+                threads={selectedFileThreads}
+                locateTarget={locateTarget}
+              />
+            )}
+            comments={(
+              <ThreadList
+                threads={currentSnapshotThreads}
+                currentFiles={files}
+                currentFilePath={selectedFile.path}
+                focusedThreadId={focusedThreadId}
+                simple
+              />
+            )}
+          />
+          {shareDialogs}
+        </ReviewNavigationActionsProvider>
+      </ReviewActionsProvider>
+    );
+  }
+
   return (
     <ReviewActionsProvider value={reviewActions}>
       <ReviewNavigationActionsProvider value={reviewNavigationActions}>
         <Layout className={styles.shell}>
+          <header className={styles.mainHeader}>
+            <div className={styles.mainHeaderBrand}>
+              <div className={styles.brandMark}>DR</div>
+              <Typography.Text className={styles.headerProductName}>Diff 审查台</Typography.Text>
+            </div>
+            <div className={styles.mainHeaderActions}>
+              <div className={styles.runtimeActions}>
+                {canRefreshSnapshot ? (
+                  <RefreshButton
+                    changedAt={lastChangedAt}
+                    disabled={refreshingSnapshot}
+                    hasPendingChanges={hasPendingChanges}
+                    loading={refreshingSnapshot}
+                    onRefresh={() => {
+                      handleRefreshSnapshot().catch(() => undefined);
+                    }}
+                  />
+                ) : null}
+                <Popconfirm
+                  title="关闭当前 Diff Review 任务？"
+                  description="确认后这个页面对应的本地服务会停止。"
+                  okText="关闭"
+                  cancelText="取消"
+                  okButtonProps={{ danger: true, loading: shuttingDownRuntime }}
+                  onConfirm={handleShutdownRuntime}
+                >
+                  <Button
+                    aria-label="关闭当前 Diff Review 任务"
+                    danger
+                    disabled={shuttingDownRuntime}
+                    icon={<PoweroffOutlined />}
+                    loading={shuttingDownRuntime}
+                    size="small"
+                    type="text"
+                  />
+                </Popconfirm>
+              </div>
+              {shareableMarkdownFile ? (
+                <>
+                  <span className={styles.headerDivider} aria-hidden="true" />
+                  <Space>
+                    <Button
+                      className={styles.importFeedbackButton}
+                      icon={<ImportOutlined />}
+                      onClick={() => setImportDialogOpen(true)}
+                      color="green"
+                      variant="solid"
+                      shape="round"
+                    >
+                      导入反馈链接
+                    </Button>
+                    <Button
+                      icon={<LinkOutlined />}
+                      loading={buildingShareLink}
+                      type="primary"
+                      onClick={() => { handleBuildShareLink().catch(() => undefined); }}
+                    >
+                      分享
+                    </Button>
+                  </Space>
+                </>
+              ) : null}
+            </div>
+          </header>
+
           <aside className={styles.sidebar}>
             <div className={styles.brand}>
-              <div className={styles.brandMark}>DR</div>
               <div className={styles.brandCopy}>
                 <Typography.Text className={styles.repoName} title={session?.repoRoot}>
                   {sessionRepoName(session)}
                 </Typography.Text>
-                <Typography.Text className={styles.productName}>Diff 审查台</Typography.Text>
                 <Typography.Text type="secondary">{session ? modeLabel(session) : '正在加载会话'}</Typography.Text>
               </div>
-
-              <Popconfirm
-                title="关闭当前 Diff Review 任务？"
-                description="确认后这个页面对应的本地服务会停止。"
-                okText="关闭"
-                cancelText="取消"
-                okButtonProps={{ danger: true, loading: shuttingDownRuntime }}
-                onConfirm={handleShutdownRuntime}
-              >
-                <Button
-                  aria-label="关闭当前 Diff Review 任务"
-                  className={styles.shutdownButton}
-                  danger
-                  disabled={shuttingDownRuntime}
-                  icon={<PoweroffOutlined />}
-                  loading={shuttingDownRuntime}
-                  size="small"
-                  type="text"
-                />
-              </Popconfirm>
-
-              {canRefreshSnapshot ? (
-                <RefreshButton
-                  changedAt={lastChangedAt}
-                  disabled={refreshingSnapshot}
-                  hasPendingChanges={hasPendingChanges}
-                  loading={refreshingSnapshot}
-                  onRefresh={() => {
-                    handleRefreshSnapshot().catch(() => undefined);
-                  }}
-                  className={styles.refreshButton}
-                />
-              ) : null}
             </div>
 
             {!isPlanReview ? (
@@ -473,21 +644,6 @@ export default function App() {
                       value={markdownViewMode}
                       onChange={(value) => setMarkdownViewMode(value as MarkdownViewMode)}
                     />
-                    {canShareSelectedMarkdown ? (
-                      <Space>
-                        <Button icon={<ImportOutlined />} onClick={() => setImportDialogOpen(true)}>
-                          导入反馈链接
-                        </Button>
-                        <Button
-                          icon={<LinkOutlined />}
-                          loading={buildingShareLink}
-                          type="primary"
-                          onClick={() => { handleBuildShareLink().catch(() => undefined); }}
-                        >
-                          分享
-                        </Button>
-                      </Space>
-                    ) : null}
                   </div>
                 ) : selectedFileIsImage ? (
                   <div className={styles.topToolbar} />
@@ -609,54 +765,7 @@ export default function App() {
               />
             </div>
           </aside>
-          <Modal
-            className={styles.shareModal}
-            open={shareDialogOpen}
-            title="分享审查链接"
-            footer={(
-              <Button onClick={() => setShareDialogOpen(false)}>关闭</Button>
-            )}
-            onCancel={() => setShareDialogOpen(false)}
-          >
-            {shareLink ? (
-              <>
-                <Typography.Paragraph className={styles.shareDialogIntro} type="secondary">
-                  将完整审查内容与当前评论一并打包。拿到链接的人可以查看并继续添加反馈。
-                </Typography.Paragraph>
-                <Typography.Text strong>可分享链接</Typography.Text>
-                <div className={styles.shareLinkField}>
-                  <Input.TextArea autoSize={{ minRows: 4, maxRows: 8 }} readOnly value={shareLink} />
-                  <Button icon={<CopyOutlined />} type="primary" onClick={() => { handleCopyShareLink().catch(() => undefined); }}>
-                    复制
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <Typography.Paragraph type="secondary">
-                分享链接尚未生成，请关闭后重试。
-              </Typography.Paragraph>
-            )}
-          </Modal>
-          <Modal
-            open={importDialogOpen}
-            title="导入审阅者反馈"
-            okText="导入"
-            cancelText="取消"
-            confirmLoading={importingFeedback}
-            okButtonProps={{ disabled: !importLink.trim() }}
-            onCancel={() => setImportDialogOpen(false)}
-            onOk={() => { handleImportFeedback().catch(() => undefined); }}
-          >
-            <Typography.Paragraph type="secondary">
-              粘贴审阅者返回的完整反馈链接。只有与当前 Markdown 快照一致的新评论会被导入。
-            </Typography.Paragraph>
-            <Input.TextArea
-              autoSize={{ minRows: 4, maxRows: 8 }}
-              placeholder="https://…/#share=…"
-              value={importLink}
-              onChange={(event) => setImportLink(event.target.value)}
-            />
-          </Modal>
+          {shareDialogs}
         </Layout>
       </ReviewNavigationActionsProvider>
     </ReviewActionsProvider>

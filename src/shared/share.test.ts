@@ -3,13 +3,41 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { DiffFile, ReviewSession } from './types';
 import {
   buildShareUrl,
   decodeSharePayload,
   encodeSharePayload,
+  getShareableMarkdownFile,
   parseShareUrl,
   type MarkdownSharePayload
 } from './share';
+
+function reviewSession(selectedFiles?: string[]): ReviewSession {
+  return {
+    id: 'session-1',
+    repoName: 'repo',
+    repoRoot: '/repo',
+    mode: { kind: 'working' },
+    selectedFiles,
+    diffHash: 'diff-1',
+    createdAt: '2026-09-28T00:00:00.000Z'
+  };
+}
+
+function diffFile(path: string, isMarkdown: boolean): DiffFile {
+  return {
+    oldPath: path,
+    newPath: path,
+    path,
+    snapshotHash: `hash-${path}`,
+    status: 'modified',
+    additions: 1,
+    deletions: 0,
+    isMarkdown,
+    hunks: []
+  };
+}
 
 function payload(): MarkdownSharePayload {
   return {
@@ -61,4 +89,14 @@ test('拒绝超过 32 KiB 的完整链接', async () => {
   const large = payload();
   large.markdown = Array.from({ length: 8_000 }, (_, index) => `${index}-${crypto.randomUUID()}`).join('\n');
   await assert.rejects(() => buildShareUrl('https://reviews.example.test/', large), /32 KiB/);
+});
+
+test('仅为单一 Markdown 快照提供分享入口', () => {
+  const markdown = diffFile('docs/plan.md', true);
+  const source = diffFile('src/app.ts', false);
+
+  assert.equal(getShareableMarkdownFile(reviewSession(), [markdown]), markdown);
+  assert.equal(getShareableMarkdownFile(reviewSession(['docs/plan.md']), [markdown]), markdown);
+  assert.equal(getShareableMarkdownFile(reviewSession(), [markdown, source]), null);
+  assert.equal(getShareableMarkdownFile(reviewSession(), [source]), null);
 });

@@ -1,5 +1,5 @@
 /**
- * 文件头区域：展示文件信息，并提供文件级评论、文件路径复制和整文件 review 操作。
+ * 文件头区域：共用文件信息与文件级评论；精简模式隐藏仅适用于本地审阅的批量提交和 Viewed 操作。
  */
 import React from 'react';
 import { Button, Card, Tag, Tooltip, Typography, message } from 'antd';
@@ -13,16 +13,18 @@ import styles from './index.module.less';
 type Props = {
   file: DiffFile;
   threads: ReviewThread[];
-  isViewed: boolean;
-  showToggleAllLines: boolean;
-  hasExpandedContext: boolean;
-  onToggleAllLines: (filePath: string) => void;
-  onToggleViewed: (filePath: string) => void;
+  simple?: boolean;
+  isViewed?: boolean;
+  showToggleAllLines?: boolean;
+  hasExpandedContext?: boolean;
+  onToggleAllLines?: (filePath: string) => void;
+  onToggleViewed?: (filePath: string) => void;
 };
 
 export function FileHeader({
   file,
   threads,
+  simple = false,
   isViewed,
   showToggleAllLines,
   hasExpandedContext,
@@ -55,7 +57,7 @@ export function FileHeader({
                 type="text"
                 icon={hasExpandedContext ? <ShrinkOutlined /> : <ArrowsAltOutlined />}
                 aria-label={toggleAriaLabel}
-                onClick={() => onToggleAllLines(file.path)}
+                onClick={() => onToggleAllLines?.(file.path)}
               />
             </Tooltip>
           ) : null}
@@ -71,7 +73,7 @@ export function FileHeader({
           />
         </div>
         <div className={styles.headerActions}>
-          <Button
+          {!simple ? <Button
             disabled={fileThreads.length === 0}
             type='primary'
             className={styles.headerAction}
@@ -81,19 +83,19 @@ export function FileHeader({
             }}
           >
             批量提交当前文件的review
-          </Button>
+          </Button> : null}
           <Button className={styles.headerAction} icon={<MessageOutlined />} type={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>
             文件级评论
           </Button>
-          <Tooltip title={isViewed ? "将文件标为待审查" : '将文件标为已审查'}>
+          {!simple ? <Tooltip title={isViewed ? "将文件标为待审查" : '将文件标为已审查'}>
             <Button
               className={`${styles.headerAction} ${styles.viewedButton} ${isViewed ? styles.viewedButtonActive : ''}`}
               icon={isViewed ? <CheckOutlined /> : <span className={styles.viewedButtonIcon} aria-hidden="true" />}
-              onClick={() => onToggleViewed(file.path)}
+              onClick={() => onToggleViewed?.(file.path)}
             >
               Viewed
             </Button>
-          </Tooltip>
+          </Tooltip> : null}
         </div>
       </div>
       {open ? (

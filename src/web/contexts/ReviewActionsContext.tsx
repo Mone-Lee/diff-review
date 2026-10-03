@@ -5,6 +5,7 @@ import React from 'react';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import {
   createReviewThread,
+  deleteReviewComment,
   deleteReviewThread,
   patchReviewComment,
   patchReviewThread,
@@ -19,6 +20,7 @@ export type ReviewActions = {
   createThread: (anchor: CommentAnchor, body: string) => Promise<void>;
   patchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
   deleteThread: (id: string) => Promise<void>;
+  deleteComment: (threadId: string, commentId: string) => Promise<void>;
   replyThread: (id: string, body: string) => Promise<void>;
   patchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
   copyPrompt: (scope: PromptScope) => Promise<void>;
@@ -76,6 +78,11 @@ export function useReviewActionsValue({
     await refreshReviewState();
   }, [refreshReviewState]);
 
+  const deleteComment = React.useCallback(async (threadId: string, commentId: string) => {
+    await deleteReviewComment(threadId, commentId);
+    await refreshReviewState();
+  }, [refreshReviewState]);
+
   const replyThread = React.useCallback(async (id: string, body: string) => {
     await replyReviewThread(id, body);
     await refreshReviewState();
@@ -96,10 +103,11 @@ export function useReviewActionsValue({
     createThread,
     patchThread,
     deleteThread,
+    deleteComment,
     replyThread,
     patchComment,
     copyPrompt
-  }), [copyPrompt, createThread, deleteThread, patchComment, patchThread, replyThread]);
+  }), [copyPrompt, createThread, deleteComment, deleteThread, patchComment, patchThread, replyThread]);
 }
 
 /**

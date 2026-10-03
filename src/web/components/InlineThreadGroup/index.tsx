@@ -18,9 +18,11 @@ export type InlineThreadGroupProps = {
   onDeleteThread?: (id: string) => Promise<void>;
   onReply?: (id: string, body: string) => Promise<void>;
   onPatchComment?: (threadId: string, commentId: string, body: string) => Promise<void>;
+  onDeleteComment?: (threadId: string, commentId: string) => Promise<void>;
   onCopy?: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
   showStatusTag?: boolean;
   variant?: 'default' | 'fileLevel' | 'borderless';
+  interactionMode?: 'default' | 'shared-reviewer';
 };
 
 function inlineThreadStatusClass(status: ReviewThread['status']): string {
@@ -51,9 +53,11 @@ export function InlineThreadGroup({
   onDeleteThread,
   onReply,
   onPatchComment,
+  onDeleteComment,
   onCopy,
   showStatusTag = true,
-  variant = 'default'
+  variant = 'default',
+  interactionMode = 'default'
 }: InlineThreadGroupProps) {
   const reviewActions = useReviewActions();
   const reviewNavigationActions = useReviewNavigationActions();
@@ -62,6 +66,7 @@ export function InlineThreadGroup({
   const removeThread = onDeleteThread ?? reviewActions.deleteThread;
   const replyToThread = onReply ?? reviewActions.replyThread;
   const updateComment = onPatchComment ?? reviewActions.patchComment;
+  const removeComment = onDeleteComment ?? reviewActions.deleteComment;
   const copyThreadPrompt = onCopy ?? reviewActions.copyPrompt;
   const [replyingThreadId, setReplyingThreadId] = React.useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null);
@@ -109,6 +114,9 @@ export function InlineThreadGroup({
               const isAgentComment = comment.author === 'agent';
               const isReviewerComment = comment.author === 'reviewer';
               const canEditComment = groupStatus === 'submit' && threadStatus === 'submit' && comment.author !== 'agent' && comment.author !== 'reviewer';
+              const canDeleteComment = interactionMode === 'shared-reviewer'
+                ? threadStatus === 'submit' && comment.author === 'user'
+                : comment.author === 'reviewer';
               return (
                 <div className={`${styles.inlineThreadCommentItem} ${isAgentComment ? styles.inlineThreadCommentItemAgent : ''}`} key={comment.id}>
                   <div className={styles.commentRow}>
@@ -159,18 +167,38 @@ export function InlineThreadGroup({
                         <Typography.Paragraph className={styles.inlineThreadBody}>{comment.body}</Typography.Paragraph>
                       )}
                     </div>
-                    {canEditComment && editingCommentId !== comment.id ? (
+                    {(canEditComment || canDeleteComment) && editingCommentId !== comment.id ? (
                       <div className={styles.inlineThreadCommentActions}>
-                        <Button
-                          className={styles.threadIconBtn}
-                          type="text"
-                          icon={<EditOutlined />}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setEditingCommentId(comment.id);
-                            setEditingBody(comment.body);
-                          }}
-                        />
+                        {canEditComment ? (
+                          <Button
+                            aria-label="编辑评论"
+                            className={styles.threadIconBtn}
+                            type="text"
+                            icon={<EditOutlined />}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setEditingCommentId(comment.id);
+                              setEditingBody(comment.body);
+                            }}
+                          />
+                        ) : null}
+                        {canDeleteComment ? (
+                          <Popconfirm
+                            title="删除这条评论？"
+                            okText="删除"
+                            cancelText="取消"
+                            onConfirm={() => removeComment(thread.id, comment.id)}
+                          >
+                            <Button
+                              aria-label="删除评论"
+                              className={styles.threadIconBtn}
+                              type="text"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          </Popconfirm>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -181,7 +209,7 @@ export function InlineThreadGroup({
         );
       })}
 
-      {actionThread && replyingThreadId === actionThread.id ? (
+      {interactionMode === 'default' && actionThread && replyingThreadId === actionThread.id ? (
         <div className={styles.inlineThreadComposer}>
           <CommentComposer
             placeholder="继续评论..."
@@ -197,7 +225,7 @@ export function InlineThreadGroup({
         </div>
       ) : null}
 
-      {actionThread ? (
+      {interactionMode === 'default' && actionThread ? (
         <div className={styles.inlineThreadActions}>
           {canCopy ? (
             <Button
