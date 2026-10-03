@@ -53,6 +53,12 @@ plan mode hook 的完整流程见 [`docs/plan-mode-hooks.md`](docs/plan-mode-hoo
 ## 功能边界
 
 - 查看当前工作区 diff、暂存区 diff、指定版本 diff。
+- 支持选中部分文件进行预览。
+- 支持分享 diff-review 链接给其他人，并同步其他人的评论。
+  - 仅支持 diff 为单个 Markdown 文件的情况，例如 agent 上下文中只有一个文件，或 plan mode 产生的 Markdown 内容。
+
+  <video src="docs/images/share.mov" controls width="100%"></video>
+
 - 代码文件使用 GitHub 风格的 unified diff。
 - 图片文件支持 diff 查看。
 - Markdown 文件支持 `Preview / Code diff` 切换；`Code diff` 当前只支持并排视图，不支持行内视图。
@@ -76,6 +82,15 @@ local-diff-reviewer --new-session
 local-diff-reviewer stop
 local-diff-reviewer --repo /path/to/project
 ```
+
+### 本地调试主审阅页与分享页
+
+在源码仓库执行 `npm run diff-review:use-local`，会同时构建主审阅页、分享页和 CLI，并将全局命令切换到本地软链。重新启动审查服务后，访问「分享」中复制出的链接即可查看本次构建的分享页，无需部署 GitHub Pages。
+
+- 修改样式后执行 `npm run build`，再刷新本地页面即可更新构建产物；服务端代码变更需要重启服务。
+- 使用 `local-diff-reviewer --dev` 启动时，主页面和 `/share.html` 均由 Vite 提供，前端修改支持热更新。
+- 本地分享链接仅在本机服务运行期间可访问。已有线上链接可以保留完整的 `#share=…`，把前面的地址替换为当前审查服务的 `/share.html` 来查看本地样式。
+- `npm run diff-review:use-npm` 切回 npm 安装版后，新启动的服务继续生成 GitHub Pages 分享链接。
 
 ### 审查模式
 
