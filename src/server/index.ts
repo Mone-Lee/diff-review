@@ -620,11 +620,9 @@ async function rebuildReviewState(state: ReviewServerState, overrideMode?: Revie
   const diff = await getDiff(mode, state.session.repoRoot, state.session.selectedFiles);
   const diffFiles = parseUnifiedDiff(diff);
   const session: ReviewSession = {
+    ...state.session,
     id: crypto.randomUUID(),
-    repoName: state.session.repoName,
-    repoRoot: state.session.repoRoot,
     mode,
-    selectedFiles: state.session.selectedFiles,
     diffHash: diffHash(diff),
     createdAt: new Date().toISOString()
   };

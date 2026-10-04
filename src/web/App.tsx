@@ -323,9 +323,20 @@ export default function App() {
   }, [isCodexPlanReview, message, unresolvedThreadsCount]);
 
   const handleBuildShareLink = React.useCallback(async () => {
-    if (!session?.shareBaseUrl || !session.shareId || !shareableMarkdownFile) {
-      setShareDialogOpen(true);
-      setShareLink('');
+    if (!session) {
+      message.error('审查会话尚未加载完成，请稍后重试');
+      return;
+    }
+    if (!shareableMarkdownFile) {
+      message.warning('分享链接仅支持包含单个 Markdown 文件的审查');
+      return;
+    }
+    if (!session.shareId) {
+      message.error('当前审查会话缺少分享 ID，请重新启动 Diff Review 后再试');
+      return;
+    }
+    if (!session.shareBaseUrl) {
+      message.error('当前审查会话未配置分享门户地址，请重新启动 Diff Review 后再试');
       return;
     }
     setBuildingShareLink(true);
