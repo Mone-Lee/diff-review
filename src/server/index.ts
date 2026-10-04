@@ -286,7 +286,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
 
       const result = await updateComments(state.session.repoRoot, (store) => {
         const imported = importShareFeedback(store, payload, file, currentContent, file.snapshotHash, state.session.diffHash);
-        return { changed: imported.imported > 0, result: imported };
+        return { changed: imported.imported > 0 || imported.updated > 0, result: imported };
       });
       res.json(result);
     } catch (error) {

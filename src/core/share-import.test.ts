@@ -43,15 +43,15 @@ function feedback(commentId: string, reviewerId: string, name: string): Markdown
   };
 }
 
-test('把多位审阅者反馈合并到同一锚点并对重复链接去重', () => {
+test('把多位审阅者反馈合并到同一锚点并对未变化的链接去重', () => {
   const store: ShareImportStore = { threads: [] };
-  assert.deepEqual(importShareFeedback(store, feedback('comment-a', 'reviewer-a', 'Alice'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 1, skipped: 0 });
-  assert.deepEqual(importShareFeedback(store, feedback('comment-b', 'reviewer-b', 'Bob'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 1, skipped: 0 });
-  assert.deepEqual(importShareFeedback(store, feedback('comment-a', 'reviewer-a', 'Alice'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 0, skipped: 1 });
+  assert.deepEqual(importShareFeedback(store, feedback('comment-a', 'reviewer-a', 'Alice'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 1, updated: 0, skipped: 0 });
+  assert.deepEqual(importShareFeedback(store, feedback('comment-b', 'reviewer-b', 'Bob'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 1, updated: 0, skipped: 0 });
+  assert.deepEqual(importShareFeedback(store, feedback('comment-a', 'reviewer-a', 'Alice'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 0, updated: 0, skipped: 1 });
   const reshared = feedback('comment-a', 'reviewer-a', 'Alice');
   reshared.shareId = 'share-2';
   reshared.threads[0].comments[0].originShareId = 'share-1';
-  assert.deepEqual(importShareFeedback(store, reshared, file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 0, skipped: 1 });
+  assert.deepEqual(importShareFeedback(store, reshared, file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 0, updated: 0, skipped: 1 });
   assert.equal(store.threads.length, 1);
   assert.deepEqual(store.threads[0].comments.map((comment) => [comment.author, comment.authorName]), [
     ['reviewer', 'Alice'],
@@ -59,6 +59,27 @@ test('把多位审阅者反馈合并到同一锚点并对重复链接去重', ()
   ]);
   assert.match(formatPrompt(store.threads), /\[Reviewer: Alice\]/);
   assert.match(formatPrompt(store.threads), /Reply 1 \(Reviewer: Bob\)/);
+});
+
+test('再次导入时更新同一审阅者修改过的评论', () => {
+  const store: ShareImportStore = { threads: [] };
+  const original = feedback('comment-a', 'reviewer-a', 'Alice');
+  assert.deepEqual(importShareFeedback(store, original, file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 1, updated: 0, skipped: 0 });
+
+  const edited = feedback('comment-a', 'reviewer-a', 'Alice Updated');
+  edited.threads[0].comments[0].body = 'Updated feedback';
+  assert.deepEqual(importShareFeedback(store, edited, file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 0, updated: 1, skipped: 0 });
+  assert.equal(store.threads.length, 1);
+  assert.equal(store.threads[0].comments.length, 1);
+  assert.equal(store.threads[0].comments[0].body, 'Updated feedback');
+  assert.equal(store.threads[0].comments[0].authorName, 'Alice Updated');
+});
+
+test('不同审阅者使用相同评论 ID 时分别导入', () => {
+  const store: ShareImportStore = { threads: [] };
+  assert.deepEqual(importShareFeedback(store, feedback('comment-a', 'reviewer-a', 'Alice'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 1, updated: 0, skipped: 0 });
+  assert.deepEqual(importShareFeedback(store, feedback('comment-a', 'reviewer-b', 'Bob'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 1, updated: 0, skipped: 0 });
+  assert.deepEqual(store.threads[0].comments.map((comment) => comment.authorName), ['Alice', 'Bob']);
 });
 
 test('拒绝不同内容摘要或正文的反馈链接', () => {

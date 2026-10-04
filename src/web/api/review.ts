@@ -61,7 +61,7 @@ export async function importMarkdownShareFeedback(payload: MarkdownSharePayload)
     body: JSON.stringify({ payload })
   });
   if (!res.ok) throw new Error(await getErrorMessage(res, '导入反馈失败'));
-  return (await res.json()) as { imported: number; skipped: number };
+  return (await res.json()) as { imported: number; updated: number; skipped: number };
 }
 
 /**

@@ -379,7 +379,11 @@ export default function App() {
       await refreshReviewState();
       setImportDialogOpen(false);
       setImportLink('');
-      message.success(result.imported > 0 ? `已导入 ${result.imported} 条评论` : '没有新的评论需要导入');
+      const changes = [
+        result.imported > 0 ? `新增 ${result.imported} 条` : '',
+        result.updated > 0 ? `更新 ${result.updated} 条` : ''
+      ].filter(Boolean).join('，');
+      message.success(changes ? `反馈已导入：${changes}` : '反馈没有变化');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '导入反馈失败');
     } finally {
@@ -447,7 +451,7 @@ export default function App() {
         onOk={() => { handleImportFeedback().catch(() => undefined); }}
       >
         <Typography.Paragraph type="secondary">
-          粘贴审阅者返回的完整反馈链接。只有与当前 Markdown 快照一致的新评论会被导入。
+          粘贴审阅者返回的完整反馈链接。与当前 Markdown 快照一致的新增及修改评论会被导入。
         </Typography.Paragraph>
         <Input.TextArea
           autoSize={{ minRows: 4, maxRows: 8 }}
