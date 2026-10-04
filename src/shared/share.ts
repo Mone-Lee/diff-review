@@ -42,6 +42,12 @@ export type MarkdownSharePayload = {
   threads: ShareThread[];
 };
 
+export type ShareUrlCapacity = {
+  usedBytes: number;
+  remainingBytes: number;
+  limitBytes: number;
+};
+
 /**
  * 分享入口只面向单一 Markdown 快照；这同时覆盖 plan、Skill 自选单文件和本身只有一个文件的 diff。
  */
@@ -75,6 +81,9 @@ export function reviewThreadsToShareThreads(threads: ReviewThread[]): ShareThrea
 export async function encodeSharePayload(payload: MarkdownSharePayload): Promise<string> {
   const validated = validateSharePayload(payload);
   const input = new TextEncoder().encode(JSON.stringify(validated));
+  if (input.byteLength > MAX_DECOMPRESSED_BYTES) {
+    throw new Error('分享内容超过 2 MiB 安全限制，请缩短文档或评论');
+  }
   const compressed = await transformBytes(input, new CompressionStream('deflate-raw'));
   return toBase64Url(compressed);
 }
@@ -94,10 +103,19 @@ export async function decodeSharePayload(encoded: string): Promise<MarkdownShare
 export async function buildShareUrl(baseUrl: string, payload: MarkdownSharePayload): Promise<string> {
   const normalizedBase = normalizeShareBaseUrl(baseUrl);
   const url = `${normalizedBase}#share=${await encodeSharePayload(payload)}`;
-  if (new TextEncoder().encode(url).byteLength > MAX_SHARE_URL_BYTES) {
+  if (getShareUrlCapacity(url).remainingBytes < 0) {
     throw new Error('分享链接超过 32 KiB 限制，请缩短文档或评论');
   }
   return url;
+}
+
+export function getShareUrlCapacity(url: string): ShareUrlCapacity {
+  const usedBytes = new TextEncoder().encode(url).byteLength;
+  return {
+    usedBytes,
+    remainingBytes: MAX_SHARE_URL_BYTES - usedBytes,
+    limitBytes: MAX_SHARE_URL_BYTES
+  };
 }
 
 export async function parseShareUrl(value: string): Promise<MarkdownSharePayload> {

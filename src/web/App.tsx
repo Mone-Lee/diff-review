@@ -15,7 +15,14 @@ import {
   RollbackOutlined
 } from '@ant-design/icons';
 import { isRefreshableReviewMode, type DiffFile, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
-import { buildShareUrl, getShareableMarkdownFile, parseShareUrl, reviewThreadsToShareThreads, type MarkdownSharePayload } from '../shared/share';
+import {
+  buildShareUrl,
+  getShareableMarkdownFile,
+  getShareUrlCapacity,
+  parseShareUrl,
+  reviewThreadsToShareThreads,
+  type MarkdownSharePayload
+} from '../shared/share';
 import { applyReviewComparison, fetchReviewState, importMarkdownShareFeedback, refreshReviewSnapshot, shutdownReviewRuntime, submitPlanReviewResult, type ReviewState } from './api/review';
 import { fetchMarkdownPreview } from './api/content';
 import {
@@ -412,6 +419,7 @@ export default function App() {
     setFocusedThreadId: setFocusedThreadIdWithRef
   });
 
+  const shareLinkCapacity = shareLink ? getShareUrlCapacity(shareLink) : null;
   const shareDialogs = (
     <>
       <Modal
@@ -421,7 +429,7 @@ export default function App() {
         footer={<Button onClick={() => setShareDialogOpen(false)}>关闭</Button>}
         onCancel={() => setShareDialogOpen(false)}
       >
-        {shareLink ? (
+        {shareLink && shareLinkCapacity ? (
           <>
             <Typography.Paragraph className={styles.shareDialogIntro} type="secondary">
               {session?.shareBaseUrl === '/share.html'
@@ -429,6 +437,10 @@ export default function App() {
                 : '将完整审查内容与当前评论一并打包。拿到链接的人可以查看并继续添加反馈。'}
             </Typography.Paragraph>
             <Typography.Text strong>{session?.shareBaseUrl === '/share.html' ? '本地分享预览链接' : '可分享链接'}</Typography.Text>
+            <br />
+            <Typography.Text type="secondary">
+              链接已用 {formatKiB(shareLinkCapacity.usedBytes)}，剩余 {formatKiB(shareLinkCapacity.remainingBytes)}
+            </Typography.Text>
             <div className={styles.shareLinkField}>
               <Input.TextArea autoSize={{ minRows: 4, maxRows: 8 }} readOnly value={shareLink} />
               <Button icon={<CopyOutlined />} type="primary" onClick={() => { handleCopyShareLink().catch(() => undefined); }}>
@@ -436,9 +448,7 @@ export default function App() {
               </Button>
             </div>
           </>
-        ) : (
-          <Typography.Paragraph type="secondary">分享链接尚未生成，请关闭后重试。</Typography.Paragraph>
-        )}
+        ) : null}
       </Modal>
       <Modal
         open={importDialogOpen}
@@ -785,4 +795,8 @@ export default function App() {
       </ReviewNavigationActionsProvider>
     </ReviewActionsProvider>
   );
+}
+
+function formatKiB(bytes: number): string {
+  return `${(bytes / 1024).toFixed(1)} KiB`;
 }

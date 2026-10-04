@@ -5,7 +5,15 @@ import React from 'react';
 import { Alert, App as AntApp, Button, Input, Modal, Space, Typography } from 'antd';
 import { CopyOutlined, UserOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../shared/types';
-import { buildShareUrl, parseShareUrl, type MarkdownSharePayload, type ShareComment, type ShareThread } from '../shared/share';
+import {
+  buildShareUrl,
+  getShareUrlCapacity,
+  parseShareUrl,
+  type MarkdownSharePayload,
+  type ShareComment,
+  type ShareThread,
+  type ShareUrlCapacity
+} from '../shared/share';
 import { sameAnchor } from '../shared/thread-utils';
 import { buildMarkdownBlocks } from '../core/markdown-source-map';
 import { FileHeader } from '../web/components/FileHeader';
@@ -32,6 +40,8 @@ export default function ShareApp() {
   const [nameDraft, setNameDraft] = React.useState(() => readStorage(NAME_KEY));
   const [copying, setCopying] = React.useState(false);
   const [copyError, setCopyError] = React.useState('');
+  const [feedbackLink, setFeedbackLink] = React.useState('');
+  const [feedbackCapacity, setFeedbackCapacity] = React.useState<ShareUrlCapacity | null>(null);
   const [draftStatus, setDraftStatus] = React.useState<'idle' | 'restored' | 'saved' | 'error'>('idle');
   const payloadRef = React.useRef<MarkdownSharePayload | null>(null);
   const basePayloadRef = React.useRef<MarkdownSharePayload | null>(null);
@@ -47,6 +57,25 @@ export default function ShareApp() {
       })
       .catch((error) => setLoadError(error instanceof Error ? error.message : '分享链接无法读取'));
   }, [reviewerId]);
+
+  React.useEffect(() => {
+    if (!payload) return;
+    let active = true;
+    setFeedbackLink('');
+    setFeedbackCapacity(null);
+    buildShareUrl(window.location.href, payload)
+      .then((url) => {
+        if (!active) return;
+        setFeedbackLink(url);
+        setFeedbackCapacity(getShareUrlCapacity(url));
+        setCopyError('');
+      })
+      .catch((error) => {
+        if (!active) return;
+        setCopyError(error instanceof Error ? error.message : '反馈链接生成失败');
+      });
+    return () => { active = false; };
+  }, [payload]);
 
   const file = React.useMemo<DiffFile | null>(() => payload ? ({
     oldPath: '/dev/null',
@@ -126,11 +155,10 @@ export default function ShareApp() {
   }), [addComment, payload, reviewerId, reviewerName, updateThreads]);
 
   async function copyFeedbackLink() {
-    if (!payload) return;
+    if (!feedbackLink) return;
     setCopying(true);
     try {
-      const url = await buildShareUrl(window.location.href.split('#')[0], payload);
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(feedbackLink);
       setCopyError('');
       message.success('反馈链接已复制，请发送给发起者');
     } catch (error) {
@@ -167,10 +195,21 @@ export default function ShareApp() {
                 {draftStatus === 'error' ? (
                   <Typography.Text type="danger">反馈草稿未能保存，请及时导出</Typography.Text>
                 ) : null}
+                {feedbackCapacity ? (
+                  <Typography.Text type={feedbackCapacity.remainingBytes < 4 * 1024 ? 'warning' : 'secondary'}>
+                    反馈链接已用 {formatKiB(feedbackCapacity.usedBytes)}，剩余 {formatKiB(feedbackCapacity.remainingBytes)}
+                  </Typography.Text>
+                ) : null}
                 <Button icon={<UserOutlined />} onClick={() => { setNameDraft(reviewerName); setReviewerName(''); }}>
                   {reviewerName || '设置昵称'}
                 </Button>
-                <Button type="primary" icon={<CopyOutlined />} loading={copying} onClick={() => { copyFeedbackLink().catch(() => undefined); }}>
+                <Button
+                  type="primary"
+                  icon={<CopyOutlined />}
+                  loading={copying}
+                  disabled={!feedbackLink}
+                  onClick={() => { copyFeedbackLink().catch(() => undefined); }}
+                >
                   导出反馈链接
                 </Button>
               </Space>
@@ -222,6 +261,10 @@ export default function ShareApp() {
       </ReviewNavigationActionsProvider>
     </ReviewActionsProvider>
   );
+}
+
+function formatKiB(bytes: number): string {
+  return `${(bytes / 1024).toFixed(1)} KiB`;
 }
 
 function createReviewerComment(body: string, authorName: string, reviewerId: string, shareId: string): ShareComment {

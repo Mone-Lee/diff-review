@@ -8,6 +8,7 @@ import {
   buildShareUrl,
   decodeSharePayload,
   encodeSharePayload,
+  getShareUrlCapacity,
   getShareableMarkdownFile,
   parseShareUrl,
   type MarkdownSharePayload
@@ -89,6 +90,26 @@ test('拒绝超过 32 KiB 的完整链接', async () => {
   const large = payload();
   large.markdown = Array.from({ length: 8_000 }, (_, index) => `${index}-${crypto.randomUUID()}`).join('\n');
   await assert.rejects(() => buildShareUrl('https://reviews.example.test/', large), /32 KiB/);
+});
+
+test('编码与解码使用一致的 2 MiB 内容限制', async () => {
+  const large = payload();
+  large.threads[0].comments = Array.from({ length: 110 }, (_, index) => ({
+    ...large.threads[0].comments[0],
+    id: `comment-${index}`,
+    body: 'a'.repeat(20_000)
+  }));
+
+  await assert.rejects(() => encodeSharePayload(large), /2 MiB/);
+});
+
+test('报告完整分享链接的已用和剩余容量', async () => {
+  const url = await buildShareUrl('https://reviews.example.test/', payload());
+  const capacity = getShareUrlCapacity(url);
+
+  assert.equal(capacity.usedBytes, new TextEncoder().encode(url).byteLength);
+  assert.equal(capacity.remainingBytes, capacity.limitBytes - capacity.usedBytes);
+  assert.ok(capacity.remainingBytes > 0);
 });
 
 test('仅为单一 Markdown 快照提供分享入口', () => {
