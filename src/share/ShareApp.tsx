@@ -17,6 +17,7 @@ import {
   ReviewNavigationActionsProvider,
   type ReviewActions
 } from '../web/contexts/ReviewActionsContext';
+import { restoreShareDraft, saveShareDraft } from './share-draft';
 import styles from './share.module.less';
 
 const NAME_KEY = 'diff-review-share-reviewer-name';
@@ -31,12 +32,21 @@ export default function ShareApp() {
   const [nameDraft, setNameDraft] = React.useState(() => readStorage(NAME_KEY));
   const [copying, setCopying] = React.useState(false);
   const [copyError, setCopyError] = React.useState('');
+  const [draftStatus, setDraftStatus] = React.useState<'idle' | 'restored' | 'saved' | 'error'>('idle');
+  const payloadRef = React.useRef<MarkdownSharePayload | null>(null);
+  const basePayloadRef = React.useRef<MarkdownSharePayload | null>(null);
 
   React.useEffect(() => {
     parseShareUrl(window.location.href)
-      .then(setPayload)
+      .then((parsedPayload) => {
+        const restoredDraft = restoreShareDraft(parsedPayload, reviewerId);
+        basePayloadRef.current = parsedPayload;
+        payloadRef.current = restoredDraft.payload;
+        setPayload(restoredDraft.payload);
+        setDraftStatus(restoredDraft.restored ? 'restored' : 'idle');
+      })
       .catch((error) => setLoadError(error instanceof Error ? error.message : '分享链接无法读取'));
-  }, []);
+  }, [reviewerId]);
 
   const file = React.useMemo<DiffFile | null>(() => payload ? ({
     oldPath: '/dev/null',
@@ -52,9 +62,15 @@ export default function ShareApp() {
   const threads = React.useMemo(() => payload ? toReviewThreads(payload, reviewerId) : [], [payload, reviewerId]);
 
   const updateThreads = React.useCallback((updater: (threads: ShareThread[]) => ShareThread[]) => {
-    setPayload((current) => current ? { ...current, threads: updater(current.threads) } : current);
+    const current = payloadRef.current;
+    const basePayload = basePayloadRef.current;
+    if (!current || !basePayload) return;
+    const nextPayload = { ...current, threads: updater(current.threads) };
+    payloadRef.current = nextPayload;
+    setPayload(nextPayload);
+    setDraftStatus(saveShareDraft(basePayload, nextPayload, reviewerId) ? 'saved' : 'error');
     setCopyError('');
-  }, []);
+  }, [reviewerId]);
 
   const addComment = React.useCallback((anchor: CommentAnchor, body: string) => {
     if (anchor.type !== 'file' && anchor.type !== 'markdown-line') return Promise.reject(new Error('共享预览仅支持块级评论'));
@@ -145,6 +161,12 @@ export default function ShareApp() {
             fullWidthHeader
             actions={(
               <Space wrap>
+                {draftStatus === 'restored' || draftStatus === 'saved' ? (
+                  <Typography.Text type="secondary">反馈草稿已保存在此浏览器</Typography.Text>
+                ) : null}
+                {draftStatus === 'error' ? (
+                  <Typography.Text type="danger">反馈草稿未能保存，请及时导出</Typography.Text>
+                ) : null}
                 <Button icon={<UserOutlined />} onClick={() => { setNameDraft(reviewerName); setReviewerName(''); }}>
                   {reviewerName || '设置昵称'}
                 </Button>
