@@ -23,6 +23,7 @@ import { ThreadList } from '../web/components/ThreadList';
 import {
   ReviewActionsProvider,
   ReviewNavigationActionsProvider,
+  type LocateTarget,
   type ReviewActions
 } from '../web/contexts/ReviewActionsContext';
 import { restoreShareDraft, saveShareDraft } from './share-draft';
@@ -43,6 +44,8 @@ export default function ShareApp() {
   const [feedbackLink, setFeedbackLink] = React.useState('');
   const [feedbackCapacity, setFeedbackCapacity] = React.useState<ShareUrlCapacity | null>(null);
   const [draftStatus, setDraftStatus] = React.useState<'idle' | 'restored' | 'saved' | 'error'>('idle');
+  const [locateTarget, setLocateTarget] = React.useState<LocateTarget | null>(null);
+  const [focusedThreadId, setFocusedThreadId] = React.useState<string | null>(null);
   const payloadRef = React.useRef<MarkdownSharePayload | null>(null);
   const basePayloadRef = React.useRef<MarkdownSharePayload | null>(null);
 
@@ -89,6 +92,14 @@ export default function ShareApp() {
     hunks: []
   }) : null, [payload]);
   const threads = React.useMemo(() => payload ? toReviewThreads(payload, reviewerId) : [], [payload, reviewerId]);
+  const navigationActions = React.useMemo(() => ({
+    locateThread: (threadId: string) => {
+      const target = threads.find((thread) => thread.id === threadId);
+      if (!target) return;
+      setLocateTarget({ threadId, anchor: target.anchor });
+      setFocusedThreadId(threadId);
+    }
+  }), [threads]);
 
   const updateThreads = React.useCallback((updater: (threads: ShareThread[]) => ShareThread[]) => {
     const current = payloadRef.current;
@@ -180,7 +191,7 @@ export default function ShareApp() {
 
   return (
     <ReviewActionsProvider value={actions}>
-      <ReviewNavigationActionsProvider value={{ locateThread: () => undefined }}>
+      <ReviewNavigationActionsProvider value={navigationActions}>
         <>
           <MarkdownReviewWorkspace
             title={payload.title}
@@ -221,7 +232,7 @@ export default function ShareApp() {
                 <MarkdownPreviewPanel
                   file={file}
                   threads={threads}
-                  locateTarget={null}
+                  locateTarget={locateTarget}
                   previewData={preview}
                   remoteAssetsOnly
                   preserveUrlFragment
@@ -234,7 +245,7 @@ export default function ShareApp() {
                 threads={threads}
                 currentFiles={[file]}
                 currentFilePath={file.path}
-                focusedThreadId={null}
+                focusedThreadId={focusedThreadId}
                 simple
                 interactionMode="shared-reviewer"
               />
