@@ -48,6 +48,7 @@ type Props = {
   locateTarget: { threadId: string; anchor: CommentAnchor } | null;
   previewData?: MarkdownPreview;
   remoteAssetsOnly?: boolean;
+  interactionMode?: 'default' | 'shared-reviewer';
 };
 
 type MarkdownAstNode = {
@@ -192,7 +193,8 @@ export function MarkdownPreviewPanel({
   threads,
   locateTarget,
   previewData,
-  remoteAssetsOnly = false
+  remoteAssetsOnly = false,
+  interactionMode = 'default'
 }: Props) {
   const [preview, setPreview] = React.useState<MarkdownPreview | null>(previewData ?? null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -314,12 +316,14 @@ export function MarkdownPreviewPanel({
         lineThreads={lineThreadsByLine.get(lineNumber) ?? []}
         selectionThreads={selectionThreadsByLine.get(lineNumber) ?? []}
         className={options?.className}
+        interactionMode={interactionMode}
       >
         {content}
       </MarkdownCommentBlock>
     );
   }, [
     file.path,
+    interactionMode,
     lineThreadsByLine,
     selectionThreadsByLine
   ]);

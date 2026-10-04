@@ -14,6 +14,7 @@ type Props = {
   file: DiffFile;
   threads: ReviewThread[];
   simple?: boolean;
+  interactionMode?: 'default' | 'shared-reviewer';
   isViewed?: boolean;
   showToggleAllLines?: boolean;
   hasExpandedContext?: boolean;
@@ -25,6 +26,7 @@ export function FileHeader({
   file,
   threads,
   simple = false,
+  interactionMode = 'default',
   isViewed,
   showToggleAllLines,
   hasExpandedContext,
@@ -116,7 +118,7 @@ export function FileHeader({
       ) : null}
       {fileLevelThreads.length > 0 ? (
         <div className={styles.fileLevelInlineThreads}>
-          <InlineThreadGroup threads={fileLevelThreads} variant="fileLevel" />
+          <InlineThreadGroup threads={fileLevelThreads} variant="fileLevel" interactionMode={interactionMode} />
         </div>
       ) : null}
     </Card>

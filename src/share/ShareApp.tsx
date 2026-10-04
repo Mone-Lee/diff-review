@@ -178,13 +178,14 @@ export default function ShareApp() {
             document={(
               <>
                 {copyError ? <Alert className={styles.notice} message={copyError} type="warning" showIcon /> : null}
-                <FileHeader file={file} threads={threads} simple />
+                <FileHeader file={file} threads={threads} simple interactionMode="shared-reviewer" />
                 <MarkdownPreviewPanel
                   file={file}
                   threads={threads}
                   locateTarget={null}
                   previewData={preview}
                   remoteAssetsOnly
+                  interactionMode="shared-reviewer"
                 />
               </>
             )}

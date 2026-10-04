@@ -16,6 +16,7 @@ type Props = {
   selectionThreads?: ReviewThread[];
   children: React.ReactNode;
   className?: string;
+  interactionMode?: 'default' | 'shared-reviewer';
 };
 
 // 外层允许透传额外 className，是为了把“块级内容本身的外边距”提升到评论容器上。
@@ -26,7 +27,8 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
   lineThreads,
   selectionThreads = [],
   children,
-  className
+  className,
+  interactionMode = 'default'
 }: Props) {
   const { createThread } = useReviewActions();
   const [isComposerOpen, setIsComposerOpen] = React.useState(false);
@@ -54,7 +56,7 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
       ) : null}
       {visibleThreads.length > 0 ? (
         <div className={styles.inlineThreadStack} data-review-ignore-selection>
-          <InlineThreadGroup threads={visibleThreads} />
+          <InlineThreadGroup threads={visibleThreads} interactionMode={interactionMode} />
         </div>
       ) : null}
     </div>
