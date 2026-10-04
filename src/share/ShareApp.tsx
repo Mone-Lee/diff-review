@@ -224,6 +224,7 @@ export default function ShareApp() {
                   locateTarget={null}
                   previewData={preview}
                   remoteAssetsOnly
+                  preserveUrlFragment
                   interactionMode="shared-reviewer"
                 />
               </>

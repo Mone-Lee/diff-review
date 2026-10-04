@@ -14,6 +14,7 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
+import GithubSlugger from 'github-slugger';
 import type { PluggableList } from 'unified';
 import type { CommentAnchor, DiffFile, MarkdownPreview, ReviewThread } from '../../../shared/types';
 import { fetchMarkdownPreview } from '../../api/content';
@@ -48,6 +49,7 @@ type Props = {
   locateTarget: { threadId: string; anchor: CommentAnchor } | null;
   previewData?: MarkdownPreview;
   remoteAssetsOnly?: boolean;
+  preserveUrlFragment?: boolean;
   interactionMode?: 'default' | 'shared-reviewer';
 };
 
@@ -194,6 +196,7 @@ export function MarkdownPreviewPanel({
   locateTarget,
   previewData,
   remoteAssetsOnly = false,
+  preserveUrlFragment = false,
   interactionMode = 'default'
 }: Props) {
   const [preview, setPreview] = React.useState<MarkdownPreview | null>(previewData ?? null);
@@ -359,6 +362,30 @@ export function MarkdownPreviewPanel({
     );
   }, [preview, renderCommentableBlock]);
 
+  // 分享页的 URL Fragment 承载完整快照，页内链接改为直接滚动，避免浏览器覆盖分享数据。
+  const handleInternalLinkClick = React.useCallback((event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (!preserveUrlFragment || !href.startsWith('#')) return;
+    event.preventDefault();
+
+    const scrollContainer = scrollRef.current;
+    const markdownBody = markdownBodyRef.current;
+    if (!scrollContainer || !markdownBody) return;
+
+    let anchorName = href.slice(1);
+    try {
+      anchorName = decodeURIComponent(anchorName);
+    } catch {
+      return;
+    }
+
+    const explicitTarget = [...markdownBody.querySelectorAll<HTMLElement>('[id], [name]')]
+      .find((element) => element.id === anchorName || element.getAttribute('name') === anchorName);
+    const slugger = new GithubSlugger();
+    const target = explicitTarget ?? [...markdownBody.querySelectorAll<HTMLHeadingElement>('h1, h2, h3, h4, h5, h6')]
+      .find((heading) => slugger.slug(heading.textContent ?? '') === anchorName);
+    if (target) scrollToTarget(scrollContainer, target);
+  }, [preserveUrlFragment]);
+
   const markdownComponents = React.useMemo<Components>(() => ({
     h1({ children, node, ...props }) {
       return renderCommentableHeading(1, getNodeStartLine(node), props, children);
@@ -470,7 +497,13 @@ export function MarkdownPreviewPanel({
 
       const isExternal = /^https?:/i.test(safeHref);
       return (
-        <a href={safeHref} target={isExternal ? '_blank' : undefined} rel={isExternal ? 'noreferrer' : undefined} {...props}>
+        <a
+          href={safeHref}
+          target={isExternal ? '_blank' : undefined}
+          rel={isExternal ? 'noreferrer' : undefined}
+          {...props}
+          onClick={(event) => handleInternalLinkClick(event, safeHref)}
+        >
           {children}
         </a>
       );
@@ -492,7 +525,7 @@ export function MarkdownPreviewPanel({
         <img src={resolvedSrc} alt={alt ?? ''} loading="lazy" {...props} />
       );
     }
-  }), [file.path, preview, remoteAssetsOnly, renderCommentableBlock, renderCommentableHeading]);
+  }), [file.path, handleInternalLinkClick, preview, remoteAssetsOnly, renderCommentableBlock, renderCommentableHeading]);
 
   // preview 为 null 时，当前 UI 统一展示 loading 态；加载失败也沿用这一视觉占位。
   if (!preview) {
