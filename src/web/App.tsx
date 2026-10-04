@@ -703,6 +703,10 @@ export default function App() {
                       threads={selectedFileThreads}
                       locateTarget={locateTarget}
                     />
+                  ) : selectedFile.isMarkdown && selectedFile.hunks.length === 0 ? (
+                    <Card className={styles.emptyStateCard} bordered={false}>
+                      <Typography.Text type="secondary">没有更改</Typography.Text>
+                    </Card>
                   ) : selectedFileIsImage ? (
                     <ImageDiffViewer
                       key={`${session?.id ?? 'session'}:${selectedFile.path}:${selectedFile.snapshotHash}:image`}

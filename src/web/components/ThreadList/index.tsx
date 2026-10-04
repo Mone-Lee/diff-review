@@ -238,7 +238,7 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                           <Tag className={`${styles.threadTag} ${statusTagClass(threadStatus)}`}>{COMMENT_STATUS_TEXT_MAP[threadStatus]}</Tag>
                         ) : null
                       }
-                      {isHistorical ? <Tag className={styles.threadTag}>历史快照</Tag> : null}
+                      {/* {isHistorical ? <Tag className={styles.threadTag}>历史快照</Tag> : null} */}
                     </Flex>
                   </Space>
                 </button>

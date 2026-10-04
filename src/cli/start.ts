@@ -14,6 +14,7 @@ import { buildMarkdownShareSnapshot } from '../core/markdown-share';
 import { parseUnifiedDiff } from '../core/diff-parser';
 import { diffHash, getDiff, getRepoRoot, parseReviewMode } from '../core/git';
 import { readSkillSelectedFiles } from '../core/review-scope';
+import { includeSelectedMarkdownFiles } from '../core/selected-markdown';
 import { updateInstalledSkill } from '../core/skill-update';
 import { installPlanHooks } from '../hooks/hooks-installer';
 import {
@@ -85,7 +86,7 @@ async function main() {
   logStartup(repoRoot, mode);
   const selectedFiles = readSkillSelectedFiles(process.env.DIFF_REVIEW_SKILL_FILES, repoRoot, process.cwd());
   const diff = await getDiff(mode, repoRoot, selectedFiles);
-  const diffFiles = parseUnifiedDiff(diff);
+  const diffFiles = await includeSelectedMarkdownFiles(parseUnifiedDiff(diff), selectedFiles, mode, repoRoot);
   const session: ReviewSession = {
     id: crypto.randomUUID(),
     repoName: basename(repoRoot),
@@ -104,6 +105,7 @@ async function main() {
     const reusedUrl = await refreshRunningReview(session, diffFiles);
     if (reusedUrl) {
       console.log(`Diff Review refreshed: ${reusedUrl}`);
+      console.log(`Current review URL: ${reusedUrl}`);
       console.log(`Repo: ${session.repoName} (${repoRoot})`);
       console.log(`Mode: ${modeLabel(mode)}`);
       console.log(`Files: ${diffFiles.length}`);

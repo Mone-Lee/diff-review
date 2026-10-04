@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
 import { parseUnifiedDiff } from '../core/diff-parser';
+import { includeSelectedMarkdownFiles } from '../core/selected-markdown';
 import { importShareFeedback } from '../core/share-import';
 import { diffHash, getDefaultWorkingBase, getDiff, getRecentCommits, readDiffFileContents, readDiffImageContent, readFileForPreview } from '../core/git';
 import { REVIEW_REFRESH_PROTOCOL, isRefreshableReviewMode, type DiffFile, type MarkdownPreview, type PlanReviewResult, type PromptScope, type ReviewComment, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
@@ -618,7 +619,12 @@ function applyReviewState(currentState: ReviewServerState, nextState: Pick<Revie
 async function rebuildReviewState(state: ReviewServerState, overrideMode?: ReviewMode): Promise<ReviewServerState> {
   const mode = overrideMode ?? state.session.mode;
   const diff = await getDiff(mode, state.session.repoRoot, state.session.selectedFiles);
-  const diffFiles = parseUnifiedDiff(diff);
+  const diffFiles = await includeSelectedMarkdownFiles(
+    parseUnifiedDiff(diff),
+    state.session.selectedFiles,
+    mode,
+    state.session.repoRoot
+  );
   const session: ReviewSession = {
     ...state.session,
     id: crypto.randomUUID(),

@@ -53,7 +53,7 @@ npx --yes --registry=https://registry.npmjs.org/ local-diff-reviewer@latest [arg
   --comment '{"type":"reply","threadId":"existing-thread-id","body":"Answer the existing thread as the agent."}'
 ```
 
-After a newly started script prints a local URL, open it in the Codex browser when available. If the script reports `Diff Review refreshed`, do not open another page: the already open review page updates automatically. If browser automation is not available, report the URL.
+After a newly started command prints a local URL, verify that its `/api/session` identifies the target repository and open it in the Codex browser when available. If the command reports `Diff Review refreshed`, do not open, navigate, or replace any browser page because doing so could discard an in-progress comment. Leave the current page untouched and tell the user which repository was refreshed and report the returned URL, including its port. Do not summarize a refresh without the URL. If browser automation is not available for a newly started page, still report the URL.
 
 When the user gives you copied prompt text containing `[thread:<id>]` to handle, collect the distinct thread IDs as the reply checklist for this task. Before your final response, write a concise result to each original thread unless the user explicitly asks you not to write back. Do not postpone replies until a later viewer launch. When the request is fully completed as asked, reply with exactly `已处理` by default. Do not append a restatement of the request or the action taken: for a request to delete a line, write `已处理`, not `已处理。已删除代码`. Add detail only when the user requests it or it conveys necessary information the original comment does not contain, such as a deviation, limitation, or decision needed. For partial or unhandled requests, state the remaining issue or reason briefly, for example `部分处理：仍需确认兼容范围` or `未处理：缺少必要配置`. A chat response or a new finding does not replace a reply to the original thread.
 
@@ -63,7 +63,7 @@ Confirm write-back for every checklist ID: inspect the API response for the save
 
 ## Context File Selection (Skill Only)
 
-When invoking this skill, use files the user explicitly added to the agent context for this review as the selected review scope. Extract their file paths from file attachments or explicit file references. Do not treat the automatically reported active editor file, selection, open tabs, files read by tools, or paths mentioned in copied review comments as a selection. If no files were explicitly added, review all changes as usual.
+When invoking this skill, use files the user explicitly added to the agent context for this review as the selected review scope. Extract their file paths from file attachments or explicit file references. Do not treat the automatically reported active editor file, selection, open tabs, files read by tools, or paths mentioned in copied review comments as a selection. If the only file context comes from the active editor or open tabs, do not set `DIFF_REVIEW_SKILL_FILES`. If no files were explicitly added, review all changes as usual.
 
 Pass selected files only through the command-scoped `DIFF_REVIEW_SKILL_FILES` environment variable, encoded as a JSON array. Prefer absolute paths so nested workspace directories are unambiguous. Use the tool's structured environment argument when available; otherwise safely shell-quote the JSON. Never export this variable globally or carry a previous invocation's selection into a later one. This is an internal Skill channel, not a public CLI flag or a viewer file picker.
 
