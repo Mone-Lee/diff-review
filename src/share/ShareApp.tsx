@@ -4,7 +4,7 @@
 import React from 'react';
 import { Alert, App as AntApp, Button, Input, Modal, Space, Typography } from 'antd';
 import { CopyOutlined, DownloadOutlined, UserOutlined } from '@ant-design/icons';
-import type { CommentAnchor, DiffFile, ReviewThread } from '../shared/types';
+import type { CommentAnchor, DiffFile, MarkdownPreview, ReviewThread } from '../shared/types';
 import {
   buildShareUrl,
   getShareUrlCapacity,
@@ -84,6 +84,7 @@ export default function ShareApp() {
     return () => { active = false; };
   }, [payload]);
 
+  // 按正文内容缓存 preview，避免评论、昵称及复制状态变化时重复执行 buildMarkdownBlocks
   const file = React.useMemo<DiffFile | null>(() => payload ? ({
     oldPath: '/dev/null',
     newPath: payload.filePath,
@@ -94,7 +95,15 @@ export default function ShareApp() {
     deletions: 0,
     isMarkdown: true,
     hunks: []
-  }) : null, [payload]);
+  }) : null, [payload?.contentHash, payload?.filePath, payload?.markdown]);
+
+  const preview = React.useMemo<MarkdownPreview | null>(() => payload ? ({
+    filePath: payload.filePath,
+    content: payload.markdown,
+    deleted: false,
+    blocks: buildMarkdownBlocks(payload.markdown)
+  }) : null, [payload?.filePath, payload?.markdown]);
+
   const threads = React.useMemo(() => payload ? toReviewThreads(payload, reviewerId) : [], [payload, reviewerId]);
   const navigationActions = React.useMemo(() => ({
     locateThread: (threadId: string) => {
@@ -238,14 +247,7 @@ export default function ShareApp() {
   }
 
   if (loadError) return <main className={styles.errorPage}><Alert message="无法打开分享预览" description={loadError} type="error" showIcon /></main>;
-  if (!payload || !file) return <main className={styles.loading}>正在展开文档快照…</main>;
-
-  const preview = {
-    filePath: payload.filePath,
-    content: payload.markdown,
-    deleted: false,
-    blocks: buildMarkdownBlocks(payload.markdown)
-  };
+  if (!payload || !file || !preview) return <main className={styles.loading}>正在展开文档快照…</main>;
 
   return (
     <ReviewActionsProvider value={actions}>
