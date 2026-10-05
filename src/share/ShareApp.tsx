@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { Alert, App as AntApp, Button, Input, Modal, Space, Typography } from 'antd';
-import { CopyOutlined, UserOutlined } from '@ant-design/icons';
+import { CopyOutlined, DownloadOutlined, UserOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../shared/types';
 import {
   buildShareUrl,
@@ -42,6 +42,7 @@ export default function ShareApp() {
   const [copying, setCopying] = React.useState(false);
   const [copyError, setCopyError] = React.useState('');
   const [feedbackLink, setFeedbackLink] = React.useState('');
+  const [feedbackDialogOpen, setFeedbackDialogOpen] = React.useState(false);
   const [feedbackCapacity, setFeedbackCapacity] = React.useState<ShareUrlCapacity | null>(null);
   const [draftStatus, setDraftStatus] = React.useState<'idle' | 'restored' | 'saved' | 'error'>('idle');
   const [locateTarget, setLocateTarget] = React.useState<LocateTarget | null>(null);
@@ -171,12 +172,30 @@ export default function ShareApp() {
     try {
       await navigator.clipboard.writeText(feedbackLink);
       setCopyError('');
+      setFeedbackDialogOpen(false);
       message.success('反馈链接已复制，请发送给发起者');
-    } catch (error) {
-      setCopyError(error instanceof Error ? error.message : '反馈链接生成失败');
+    } catch {
+      setCopyError('无法访问剪贴板，请手动复制或下载反馈链接');
+      setFeedbackDialogOpen(true);
     } finally {
       setCopying(false);
     }
+  }
+
+  // 将完整反馈链接保存为文本文件，为剪贴板不可用的浏览器提供可传递的导出结果。
+  function downloadFeedbackLink() {
+    if (!feedbackLink) return;
+    const objectUrl = URL.createObjectURL(new Blob([feedbackLink], { type: 'text/plain;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = 'diff-review-feedback.txt';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    setCopyError('');
+    setFeedbackDialogOpen(false);
+    message.success('反馈链接文件已下载，请发送给发起者');
   }
 
   if (loadError) return <main className={styles.errorPage}><Alert message="无法打开分享预览" description={loadError} type="error" showIcon /></main>;
@@ -251,6 +270,25 @@ export default function ShareApp() {
               />
             )}
           />
+          <Modal
+            open={feedbackDialogOpen}
+            title="手动导出反馈"
+            footer={<Button onClick={() => setFeedbackDialogOpen(false)}>关闭</Button>}
+            onCancel={() => setFeedbackDialogOpen(false)}
+          >
+            <Alert message="浏览器未能写入剪贴板，请使用下方任一方式导出。" type="warning" showIcon />
+            <div className={styles.feedbackLinkField}>
+              <Input.TextArea autoSize={{ minRows: 4, maxRows: 8 }} readOnly value={feedbackLink} />
+              <Space>
+                <Button icon={<CopyOutlined />} loading={copying} onClick={() => { copyFeedbackLink().catch(() => undefined); }}>
+                  再次复制
+                </Button>
+                <Button type="primary" icon={<DownloadOutlined />} onClick={downloadFeedbackLink}>
+                  下载链接文件
+                </Button>
+              </Space>
+            </div>
+          </Modal>
           <Modal
             open={!reviewerName}
             title="留下你的署名"

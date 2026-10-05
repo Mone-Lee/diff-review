@@ -2,6 +2,23 @@
   margin: 12px 12px 0;
 }
 
+.feedbackLinkField {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+
+  :global(.ant-input) {
+    resize: none;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  :global(.ant-space) {
+    justify-content: flex-end;
+  }
+}
+
 .loading,
 .errorPage {
   display: grid;
