@@ -39,6 +39,8 @@ export default function ShareApp() {
   const [reviewerId] = React.useState(readReviewerId);
   const [reviewerName, setReviewerName] = React.useState(() => readStorage(NAME_KEY));
   const [nameDraft, setNameDraft] = React.useState(() => readStorage(NAME_KEY));
+  const [nameDialogOpen, setNameDialogOpen] = React.useState(false);
+  const [nameRequired, setNameRequired] = React.useState(false);
   const [copying, setCopying] = React.useState(false);
   const [copyError, setCopyError] = React.useState('');
   const [feedbackLink, setFeedbackLink] = React.useState('');
@@ -49,6 +51,7 @@ export default function ShareApp() {
   const [focusedThreadId, setFocusedThreadId] = React.useState<string | null>(null);
   const payloadRef = React.useRef<MarkdownSharePayload | null>(null);
   const basePayloadRef = React.useRef<MarkdownSharePayload | null>(null);
+  const nameRequestResolverRef = React.useRef<((name: string) => void) | null>(null);
 
   React.useEffect(() => {
     parseShareUrl(window.location.href)
@@ -113,18 +116,30 @@ export default function ShareApp() {
     setCopyError('');
   }, [reviewerId]);
 
+  // 首次提交评论时暂停写入，待审阅者补充昵称后继续同一次提交，避免清空已输入的正文。
+  const requestReviewerName = React.useCallback(() => {
+    if (reviewerName) return Promise.resolve(reviewerName);
+    setNameDraft('');
+    setNameRequired(true);
+    setNameDialogOpen(true);
+    return new Promise<string>((resolve) => {
+      nameRequestResolverRef.current = resolve;
+    });
+  }, [reviewerName]);
+
   const addComment = React.useCallback((anchor: CommentAnchor, body: string) => {
     if (anchor.type !== 'file' && anchor.type !== 'markdown-line') return Promise.reject(new Error('共享预览仅支持块级评论'));
-    const comment = createReviewerComment(body, reviewerName, reviewerId, payload?.shareId ?? '');
-    updateThreads((current) => {
-      const existing = current.find((thread) => sameAnchor(thread.anchor, anchor));
-      if (existing) {
-        return current.map((thread) => thread.id === existing.id ? { ...thread, comments: [...thread.comments, comment] } : thread);
-      }
-      return [...current, { id: crypto.randomUUID(), anchor, comments: [comment] }];
+    return requestReviewerName().then((authorName) => {
+      const comment = createReviewerComment(body, authorName, reviewerId, payload?.shareId ?? '');
+      updateThreads((current) => {
+        const existing = current.find((thread) => sameAnchor(thread.anchor, anchor));
+        if (existing) {
+          return current.map((thread) => thread.id === existing.id ? { ...thread, comments: [...thread.comments, comment] } : thread);
+        }
+        return [...current, { id: crypto.randomUUID(), anchor, comments: [comment] }];
+      });
     });
-    return Promise.resolve();
-  }, [payload?.shareId, reviewerId, reviewerName, updateThreads]);
+  }, [payload?.shareId, requestReviewerName, reviewerId, updateThreads]);
 
   const actions = React.useMemo<ReviewActions>(() => ({
     createThread: addComment,
@@ -144,7 +159,8 @@ export default function ShareApp() {
       }));
     },
     replyThread: async (id, body) => {
-      const comment = createReviewerComment(body, reviewerName, reviewerId, payload?.shareId ?? '');
+      const authorName = await requestReviewerName();
+      const comment = createReviewerComment(body, authorName, reviewerId, payload?.shareId ?? '');
       updateThreads((current) => current.map((thread) => (
         thread.id === id ? { ...thread, comments: [...thread.comments, comment] } : thread
       )));
@@ -164,7 +180,7 @@ export default function ShareApp() {
       if (!thread) return;
       await navigator.clipboard.writeText(thread.comments.map((comment) => `${comment.authorName}: ${comment.body}`).join('\n'));
     }
-  }), [addComment, payload, reviewerId, reviewerName, updateThreads]);
+  }), [addComment, payload, requestReviewerName, reviewerId, updateThreads]);
 
   async function copyFeedbackLink() {
     if (!feedbackLink) return;
@@ -196,6 +212,19 @@ export default function ShareApp() {
     setCopyError('');
     setFeedbackDialogOpen(false);
     message.success('反馈链接文件已下载，请发送给发起者');
+  }
+
+  // 保存昵称；首次署名时继续此前暂停的评论提交。
+  function saveReviewerName() {
+    const name = nameDraft.trim().slice(0, 100);
+    if (!name) return;
+    writeStorage(NAME_KEY, name);
+    setReviewerName(name);
+    setNameDialogOpen(false);
+    setNameRequired(false);
+    const resolveNameRequest = nameRequestResolverRef.current;
+    nameRequestResolverRef.current = null;
+    resolveNameRequest?.(name);
   }
 
   if (loadError) return <main className={styles.errorPage}><Alert message="无法打开分享预览" description={loadError} type="error" showIcon /></main>;
@@ -230,7 +259,11 @@ export default function ShareApp() {
                     反馈链接已用 {formatKiB(feedbackCapacity.usedBytes)}，剩余 {formatKiB(feedbackCapacity.remainingBytes)}
                   </Typography.Text>
                 ) : null}
-                <Button icon={<UserOutlined />} onClick={() => { setNameDraft(reviewerName); setReviewerName(''); }}>
+                <Button icon={<UserOutlined />} onClick={() => {
+                  setNameDraft(reviewerName);
+                  setNameRequired(false);
+                  setNameDialogOpen(true);
+                }}>
                   {reviewerName || '设置昵称'}
                 </Button>
                 <Button
@@ -290,21 +323,21 @@ export default function ShareApp() {
             </div>
           </Modal>
           <Modal
-            open={!reviewerName}
+            open={nameDialogOpen}
             title="留下你的署名"
-            okText="进入审阅"
-            cancelButtonProps={{ style: { display: 'none' } }}
-            closable={false}
-            keyboard={false}
-            maskClosable={false}
+            okText={nameRequired ? '保存并提交评论' : '保存'}
+            cancelText="取消"
+            cancelButtonProps={nameRequired ? { style: { display: 'none' } } : undefined}
+            closable={!nameRequired}
+            keyboard={!nameRequired}
+            maskClosable={!nameRequired}
             okButtonProps={{ disabled: !nameDraft.trim() }}
-            onOk={() => {
-              const name = nameDraft.trim().slice(0, 100);
-              writeStorage(NAME_KEY, name);
-              setReviewerName(name);
-            }}
+            onCancel={() => setNameDialogOpen(false)}
+            onOk={saveReviewerName}
           >
-            <Typography.Paragraph type="secondary">昵称会随评论写入反馈链接，无需注册账号。</Typography.Paragraph>
+            <Typography.Paragraph type="secondary">
+              {nameRequired ? '提交评论前请留下昵称，当前评论会在保存后继续提交。' : '昵称会随评论写入反馈链接，无需注册账号。'}
+            </Typography.Paragraph>
             <Input autoFocus maxLength={100} placeholder="例如：小李" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} />
           </Modal>
         </>
