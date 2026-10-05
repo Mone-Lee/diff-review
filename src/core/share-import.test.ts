@@ -30,6 +30,7 @@ function feedback(commentId: string, reviewerId: string, name: string): Markdown
     contentHash: 'digest-1',
     threads: [{
       id: `thread-${commentId}`,
+      status: 'submit',
       anchor: { type: 'markdown-line', filePath: file.path, lineNumber: 1 },
       comments: [{
         id: commentId,
@@ -45,7 +46,9 @@ function feedback(commentId: string, reviewerId: string, name: string): Markdown
 
 test('把多位审阅者反馈合并到同一锚点并对未变化的链接去重', () => {
   const store: ShareImportStore = { threads: [] };
-  assert.deepEqual(importShareFeedback(store, feedback('comment-a', 'reviewer-a', 'Alice'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 1, updated: 0, skipped: 0 });
+  const resolvedFeedback = feedback('comment-a', 'reviewer-a', 'Alice');
+  resolvedFeedback.threads[0].status = 'resolved';
+  assert.deepEqual(importShareFeedback(store, resolvedFeedback, file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 1, updated: 0, skipped: 0 });
   assert.deepEqual(importShareFeedback(store, feedback('comment-b', 'reviewer-b', 'Bob'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 1, updated: 0, skipped: 0 });
   assert.deepEqual(importShareFeedback(store, feedback('comment-a', 'reviewer-a', 'Alice'), file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 0, updated: 0, skipped: 1 });
   const reshared = feedback('comment-a', 'reviewer-a', 'Alice');
@@ -53,6 +56,7 @@ test('把多位审阅者反馈合并到同一锚点并对未变化的链接去�
   reshared.threads[0].comments[0].originShareId = 'share-1';
   assert.deepEqual(importShareFeedback(store, reshared, file, '# Spec\nBody', 'digest-1', 'review-1'), { imported: 0, updated: 0, skipped: 1 });
   assert.equal(store.threads.length, 1);
+  assert.equal(store.threads[0].status, 'submit');
   assert.deepEqual(store.threads[0].comments.map((comment) => [comment.author, comment.authorName]), [
     ['reviewer', 'Alice'],
     ['reviewer', 'Bob']

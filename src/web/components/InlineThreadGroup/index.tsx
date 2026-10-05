@@ -46,6 +46,12 @@ function canCopyThread(status: ReviewThread['status'], lastAuthor?: 'user' | 'ag
   return status === 'replied' && lastAuthor === 'user';
 }
 
+// 分享页采用协议中的只读状态，避免因分享载荷省略评论角色而错误推导为待提交。
+function getSharedGroupStatus(threads: ReviewThread[]): ReviewThread['status'] {
+  if (threads.length > 0 && threads.every((thread) => thread.status === 'resolved')) return 'resolved';
+  return threads.some((thread) => thread.status === 'replied') ? 'replied' : 'submit';
+}
+
 export function InlineThreadGroup({
   threads,
   onFocus,
@@ -72,7 +78,7 @@ export function InlineThreadGroup({
   const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null);
   const [editingBody, setEditingBody] = React.useState('');
   const firstThread = threads[0];
-  const groupStatus = getMergedThreadStatus(threads);
+  const groupStatus = interactionMode === 'shared-reviewer' ? getSharedGroupStatus(threads) : getMergedThreadStatus(threads);
   const actionThread = getActionThread(threads);
   const actionThreadStatus = actionThread ? getThreadStatus(actionThread) : groupStatus;
   const actionThreadResolved = actionThreadStatus === 'resolved';
@@ -93,14 +99,14 @@ export function InlineThreadGroup({
       className={[styles.inlineThread, inlineThreadStatusClass(groupStatus), variantClassName].filter(Boolean).join(' ')}
       onClick={() => focusThread(firstThread.id)}
     >
-      <div className={styles.inlineThreadHeader}>
-        {showStatusTag && groupStatus !== 'replied' ? (
+      {showStatusTag && (interactionMode === 'shared-reviewer' || groupStatus !== 'replied') ? (
+        <div className={styles.inlineThreadHeader}>
           <Tag className={`${styles.threadTag} ${statusTagClass(groupStatus)}`}>{COMMENT_STATUS_TEXT_MAP[groupStatus]}</Tag>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {threads.map((thread) => {
-        const threadStatus = getThreadStatus(thread);
+        const threadStatus = interactionMode === 'shared-reviewer' ? thread.status : getThreadStatus(thread);
         return (
           <div
             className={styles.inlineThreadSection}
@@ -113,9 +119,11 @@ export function InlineThreadGroup({
             {thread.comments.map((comment) => {
               const isAgentComment = comment.author === 'agent';
               const isReviewerComment = comment.author === 'reviewer';
-              const canEditComment = groupStatus === 'submit' && threadStatus === 'submit' && comment.author !== 'agent' && comment.author !== 'reviewer';
+              const canEditComment = interactionMode === 'shared-reviewer'
+                ? comment.author === 'user'
+                : groupStatus === 'submit' && threadStatus === 'submit' && comment.author !== 'agent' && comment.author !== 'reviewer';
               const canDeleteComment = interactionMode === 'shared-reviewer'
-                ? threadStatus === 'submit' && comment.author === 'user'
+                ? comment.author === 'user'
                 : comment.author === 'reviewer';
               return (
                 <div className={`${styles.inlineThreadCommentItem} ${isAgentComment ? styles.inlineThreadCommentItemAgent : ''}`} key={comment.id}>

@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { DiffFile, ReviewSession } from './types';
+import type { DiffFile, ReviewSession, ReviewThread } from './types';
 import {
   buildShareUrl,
   decodeSharePayload,
@@ -11,6 +11,8 @@ import {
   getShareUrlCapacity,
   getShareableMarkdownFile,
   parseShareUrl,
+  reviewThreadsToShareThreads,
+  validateSharePayload,
   type MarkdownSharePayload
 } from './share';
 
@@ -51,6 +53,7 @@ function payload(): MarkdownSharePayload {
     threads: [
       {
         id: 'thread-1',
+        status: 'resolved',
         anchor: { type: 'markdown-line', filePath: 'docs/计划.md', lineNumber: 1, blockId: 'heading-计划' },
         comments: [
           {
@@ -70,6 +73,27 @@ function payload(): MarkdownSharePayload {
 test('分享载荷支持 Unicode 和 GFM 内容往返', async () => {
   const encoded = await encodeSharePayload(payload());
   assert.deepEqual(await decodeSharePayload(encoded), payload());
+});
+
+test('旧版链接缺少线程状态时按待提交恢复', () => {
+  const legacyPayload = payload() as unknown as { threads: Array<Record<string, unknown>> };
+  delete legacyPayload.threads[0].status;
+
+  assert.equal(validateSharePayload(legacyPayload).threads[0].status, 'submit');
+});
+
+test('分享线程保留主审阅页的真实状态', () => {
+  const thread: ReviewThread = {
+    id: 'thread-replied',
+    filePath: 'docs/计划.md',
+    anchor: { type: 'markdown-line', filePath: 'docs/计划.md', lineNumber: 1 },
+    status: 'replied',
+    comments: [],
+    createdAt: '2026-09-28T00:00:00.000Z',
+    updatedAt: '2026-09-28T00:00:00.000Z'
+  };
+
+  assert.equal(reviewThreadsToShareThreads([thread])[0].status, 'replied');
 });
 
 test('分享 URL 使用 fragment 且可以恢复载荷', async () => {

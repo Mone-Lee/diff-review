@@ -43,6 +43,11 @@ function statusCardClass(status: ReviewThread['status']): string {
   return styles.resolved;
 }
 
+// 分享页展示协议携带的只读状态；主审阅页继续按评论内容推导开放线程状态。
+function getDisplayThreadStatus(thread: ReviewThread, interactionMode: NonNullable<Props['interactionMode']>): ReviewThread['status'] {
+  return interactionMode === 'shared-reviewer' ? thread.status : getThreadStatus(thread);
+}
+
 export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId, simple = false, interactionMode = 'default' }: Props) {
   const { deleteThread } = useReviewActions();
   const { locateThread } = useReviewNavigationActions();
@@ -64,17 +69,17 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
   const groups = React.useMemo(() => scopeThreads.map((thread) => ({ key: thread.id, thread })), [scopeThreads]);
   const visibleGroups = React.useMemo(() => {
     const filtered = groups.filter((group) => {
-      const status = getThreadStatus(group.thread);
+      const status = getDisplayThreadStatus(group.thread, interactionMode);
       if (filter === 'resolved') return status === 'resolved';
       if (filter === 'pending') return status !== 'resolved';
       return true;
     });
     return filtered.sort((left, right) => {
-      const leftStatus = getThreadStatus(left.thread);
-      const rightStatus = getThreadStatus(right.thread);
+      const leftStatus = getDisplayThreadStatus(left.thread, interactionMode);
+      const rightStatus = getDisplayThreadStatus(right.thread, interactionMode);
       return GROUP_STATUS_ORDER[leftStatus] - GROUP_STATUS_ORDER[rightStatus];
     });
-  }, [filter, groups]);
+  }, [filter, groups, interactionMode]);
 
   const batchTargets = React.useMemo(() => {
     const resolved = scopeThreads.filter((thread) => getThreadStatus(thread) === 'resolved');
@@ -208,7 +213,7 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
         <div className={styles.threads}>
           {visibleGroups.map((group) => {
             const thread = group.thread;
-            const threadStatus = getThreadStatus(thread);
+            const threadStatus = getDisplayThreadStatus(thread, interactionMode);
             const isFocused = focusedThreadId === thread.id;
             const isHistorical = !currentFiles.some((file) => isThreadOnFileSnapshot(thread, file));
 
@@ -233,11 +238,9 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                       {formatAnchor(thread)}
                     </Typography.Text>
                     <Flex gap="small">
-                      {
-                        threadStatus !== 'replied' ? (
-                          <Tag className={`${styles.threadTag} ${statusTagClass(threadStatus)}`}>{COMMENT_STATUS_TEXT_MAP[threadStatus]}</Tag>
-                        ) : null
-                      }
+                      {interactionMode === 'shared-reviewer' || threadStatus !== 'replied' ? (
+                        <Tag className={`${styles.threadTag} ${statusTagClass(threadStatus)}`}>{COMMENT_STATUS_TEXT_MAP[threadStatus]}</Tag>
+                      ) : null}
                       {/* {isHistorical ? <Tag className={styles.threadTag}>历史快照</Tag> : null} */}
                     </Flex>
                   </Space>

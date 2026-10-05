@@ -1,7 +1,7 @@
 /**
  * Markdown 分享协议：定义可移植载荷、URL Fragment 编解码与跨运行时输入校验。
  */
-import type { CommentAnchor, DiffFile, ReviewSession, ReviewThread } from './types';
+import type { CommentAnchor, DiffFile, ReviewSession, ReviewThread, ReviewThreadStatus } from './types';
 
 export const DEFAULT_SHARE_BASE_URL = 'https://mone-lee.github.io/diff-review/share.html';
 export const SHARE_PAYLOAD_VERSION = 1;
@@ -28,6 +28,7 @@ export type ShareComment = {
 
 export type ShareThread = {
   id: string;
+  status: ReviewThreadStatus;
   anchor: ShareAnchor;
   comments: ShareComment[];
 };
@@ -65,6 +66,7 @@ export function reviewThreadsToShareThreads(threads: ReviewThread[]): ShareThrea
     .filter((thread) => isShareableAnchor(thread.anchor))
     .map((thread) => ({
       id: thread.id,
+      status: thread.status,
       anchor: thread.anchor as ShareAnchor,
       comments: thread.comments.map((comment) => ({
         id: comment.shareOrigin?.commentId ?? comment.id,
@@ -165,10 +167,18 @@ export function validateSharePayload(value: unknown): MarkdownSharePayload {
 function validateThread(value: unknown, filePath: string, lineCount: number): ShareThread {
   if (!isRecord(value)) throw new Error('分享线程格式无效');
   const id = requiredString(value.id, '线程 ID', 200);
+  const status = validateThreadStatus(value.status);
   const anchor = validateAnchor(value.anchor, filePath, lineCount);
   if (!Array.isArray(value.comments) || value.comments.length > MAX_THREADS) throw new Error('分享评论数量无效');
   const comments = value.comments.map(validateComment);
-  return { id, anchor, comments };
+  return { id, status, anchor, comments };
+}
+
+// status 在 v1 中向后兼容地扩展；旧链接没有该字段时按待提交展示。
+function validateThreadStatus(value: unknown): ReviewThreadStatus {
+  if (value === undefined) return 'submit';
+  if (value === 'submit' || value === 'replied' || value === 'resolved') return value;
+  throw new Error('分享线程状态无效');
 }
 
 function validateAnchor(value: unknown, filePath: string, lineCount: number): ShareAnchor {

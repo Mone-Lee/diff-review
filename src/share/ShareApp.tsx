@@ -136,7 +136,7 @@ export default function ShareApp() {
         if (existing) {
           return current.map((thread) => thread.id === existing.id ? { ...thread, comments: [...thread.comments, comment] } : thread);
         }
-        return [...current, { id: crypto.randomUUID(), anchor, comments: [comment] }];
+        return [...current, { id: crypto.randomUUID(), status: 'submit', anchor, comments: [comment] }];
       });
     });
   }, [payload?.shareId, requestReviewerName, reviewerId, updateThreads]);
@@ -379,7 +379,7 @@ function toReviewThreads(payload: MarkdownSharePayload, reviewerId: string): Rev
     anchor: thread.anchor,
     diffHash: payload.contentHash,
     fileSnapshotHash: payload.contentHash,
-    status: 'submit',
+    status: thread.status,
     comments: thread.comments.map((comment) => ({
       id: comment.id,
       body: comment.body,

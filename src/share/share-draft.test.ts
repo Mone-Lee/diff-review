@@ -16,6 +16,7 @@ function createPayload(body = '原评论', shareId = 'share-1'): MarkdownSharePa
     contentHash: 'hash-1',
     threads: [{
       id: 'thread-1',
+      status: 'submit',
       anchor: { type: 'markdown-line', filePath: 'docs/spec.md', lineNumber: 1 },
       comments: [{
         id: 'comment-1',
