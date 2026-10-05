@@ -434,7 +434,7 @@ export default function App() {
             <Typography.Paragraph className={styles.shareDialogIntro} type="secondary">
               {session?.shareBaseUrl === '/share.html'
                 ? '本地预览使用当前构建的分享页样式，仅在本机审查服务运行期间可访问。'
-                : '将完整审查内容与当前评论一并打包。拿到链接的人可以查看并继续添加反馈。'}
+                : '链接包含当前 Markdown 正文、文件和 Markdown 块评论及其线程状态；代码行和文本选区评论不会打包。拿到链接的人可以查看并继续添加反馈。'}
             </Typography.Paragraph>
             <Typography.Text strong>{session?.shareBaseUrl === '/share.html' ? '本地分享预览链接' : '可分享链接'}</Typography.Text>
             <br />
