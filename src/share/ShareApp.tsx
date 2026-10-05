@@ -214,11 +214,21 @@ export default function ShareApp() {
     message.success('反馈链接文件已下载，请发送给发起者');
   }
 
-  // 保存昵称；首次署名时继续此前暂停的评论提交。
+  // 保存昵称并同步当前审阅者的已有评论；首次署名时继续此前暂停的评论提交。
   function saveReviewerName() {
     const name = nameDraft.trim().slice(0, 100);
     if (!name) return;
     writeStorage(NAME_KEY, name);
+    if (reviewerName !== name) {
+      updateThreads((current) => current.map((thread) => ({
+        ...thread,
+        comments: thread.comments.map((comment) => (
+          comment.source === 'reviewer' && comment.reviewerId === reviewerId
+            ? { ...comment, authorName: name }
+            : comment
+        ))
+      })));
+    }
     setReviewerName(name);
     setNameDialogOpen(false);
     setNameRequired(false);
