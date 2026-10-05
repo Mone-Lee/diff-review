@@ -127,6 +127,20 @@ test('编码与解码使用一致的 2 MiB 内容限制', async () => {
   await assert.rejects(() => encodeSharePayload(large), /2 MiB/);
 });
 
+test('损坏的压缩数据不会产生额外的未处理拒绝', async () => {
+  const unhandledReasons: unknown[] = [];
+  const captureUnhandledRejection = (reason: unknown) => unhandledReasons.push(reason);
+  process.on('unhandledRejection', captureUnhandledRejection);
+
+  try {
+    await assert.rejects(() => decodeSharePayload('AAAA'), /分享链接内容无效或已损坏/);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandledReasons, []);
+  } finally {
+    process.off('unhandledRejection', captureUnhandledRejection);
+  }
+});
+
 test('报告完整分享链接的已用和剩余容量', async () => {
   const url = await buildShareUrl('https://reviews.example.test/', payload());
   const capacity = getShareUrlCapacity(url);

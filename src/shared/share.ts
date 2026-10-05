@@ -226,6 +226,7 @@ function stringValue(value: unknown, label: string, maxLength: number): string {
   return value;
 }
 
+// 驱动压缩流的读写两端，并在任一端失败或输出超限时统一终止、等待和释放流锁。
 async function transformBytes(
   input: Uint8Array,
   stream: CompressionStream | DecompressionStream,
@@ -236,28 +237,45 @@ async function transformBytes(
   const safeInput = new Uint8Array(input.byteLength);
   safeInput.set(input);
   const writing = writer.write(safeInput).then(() => writer.close());
+  // 立即绑定拒绝处理，避免读取端先失败时，稍后发生的写入失败成为 unhandledRejection。
+  const writingResult = writing.then(
+    () => ({ ok: true as const }),
+    (error: unknown) => ({ ok: false as const, error })
+  );
   const chunks: Uint8Array[] = [];
   let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxOutputBytes) {
-      await reader.cancel();
-      await writer.abort().catch(() => undefined);
-      await writing.catch(() => undefined);
-      throw new Error('分享链接解压后的内容超过安全限制');
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxOutputBytes) {
+        throw new Error('分享链接解压后的内容超过安全限制');
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+    const result = await writingResult;
+    if (!result.ok) throw result.error;
+
+    const output = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      output.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return output;
+  } catch (error) {
+    // cancel/abort 自身也可能因流已报错而拒绝，统一收敛，保留最先触发失败的主错误。
+    await Promise.allSettled([
+      reader.cancel(error),
+      writer.abort(error),
+      writingResult
+    ]);
+    throw error;
+  } finally {
+    reader.releaseLock();
+    writer.releaseLock();
   }
-  await writing;
-  const output = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    output.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return output;
 }
 
 function toBase64Url(bytes: Uint8Array): string {
