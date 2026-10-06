@@ -4,7 +4,7 @@
 import type { ReviewThread } from '../shared/types';
 
 export function formatPrompt(threads: ReviewThread[]): string {
-  return threads
+  const threadPrompt = threads
     .map((thread) => {
       const location = getThreadLocation(thread);
       const [firstComment, ...replies] = thread.comments;
@@ -22,6 +22,9 @@ export function formatPrompt(threads: ReviewThread[]): string {
       return [`[thread:${thread.id}]`, location, getSelectedTextLine(thread), formatFirstComment(firstComment), replyText].filter(Boolean).join('\n');
     })
     .join('\n\n');
+
+  if (!threads.some((thread) => thread.anchor.type === 'markdown-selection')) return threadPrompt;
+  return `Markdown selections: \`Selected (JSON)\` contains rendered text. Locate it within the source lines shown for that thread; Markdown syntax may interrupt the text. Edit only the selected content.\n\n${threadPrompt}`;
 }
 
 function formatFirstComment(comment: ReviewThread['comments'][number] | undefined) {
@@ -33,14 +36,14 @@ function formatFirstComment(comment: ReviewThread['comments'][number] | undefine
 function getThreadLocation(thread: ReviewThread) {
   if (thread.anchor.type === 'file') return thread.filePath;
   if (thread.anchor.type === 'diff-line') return `${thread.filePath}:${thread.anchor.side}:${thread.anchor.lineNumber}`;
-  if (thread.anchor.type === 'markdown-selection') return `${thread.filePath}:${formatLineRange(thread.anchor.startLine, thread.anchor.endLine)}`;
+  if (thread.anchor.type === 'markdown-selection') return `${thread.filePath}:${formatLineRange(thread.anchor.sourceStartLine ?? thread.anchor.startLine, thread.anchor.sourceEndLine ?? thread.anchor.endLine)}`;
   return `${thread.filePath}:${thread.anchor.lineNumber}`;
 }
 
 function getSelectedTextLine(thread: ReviewThread) {
   if (thread.anchor.type !== 'markdown-selection') return '';
-  const selectedText = thread.anchor.selectedText.trim().replace(/\s+/g, ' ');
-  return selectedText ? `Selected: ${selectedText}` : '';
+  const { selectedText, tableColumn } = thread.anchor;
+  return [`Selected (JSON): ${JSON.stringify(selectedText)}`, tableColumn ? `Table column: ${tableColumn}` : ''].filter(Boolean).join('\n');
 }
 
 function formatLineRange(startLine: number, endLine: number) {

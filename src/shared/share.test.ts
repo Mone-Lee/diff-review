@@ -96,6 +96,48 @@ test('分享线程保留主审阅页的真实状态', () => {
   assert.equal(reviewThreadsToShareThreads([thread])[0].status, 'replied');
 });
 
+test('分享载荷保留单行和跨行选区评论锚点', async () => {
+  const selectionAnchors = [
+    {
+      type: 'markdown-selection' as const,
+      filePath: 'docs/计划.md',
+      startLine: 1,
+      endLine: 1,
+      startOffset: 0,
+      endOffset: 2,
+      selectedText: '计划',
+      sourceStartLine: 1,
+      sourceEndLine: 1
+    },
+    {
+      type: 'markdown-selection' as const,
+      filePath: 'docs/计划.md',
+      startLine: 3,
+      endLine: 5,
+      startOffset: 0,
+      endOffset: 2,
+      selectedText: '项目 状态 分享 ✅',
+      sourceStartLine: 3,
+      sourceEndLine: 5,
+      tableColumn: 1
+    }
+  ];
+  const threads: ReviewThread[] = selectionAnchors.map((anchor, index) => ({
+    id: `selection-${index}`,
+    filePath: anchor.filePath,
+    anchor,
+    status: 'submit',
+    comments: [],
+    createdAt: '2026-09-28T00:00:00.000Z',
+    updatedAt: '2026-09-28T00:00:00.000Z'
+  }));
+  const sharedThreads = reviewThreadsToShareThreads(threads);
+  const sharedPayload = { ...payload(), threads: sharedThreads };
+
+  assert.deepEqual(sharedThreads.map((thread) => thread.anchor), selectionAnchors);
+  assert.deepEqual((await decodeSharePayload(await encodeSharePayload(sharedPayload))).threads, sharedThreads);
+});
+
 test('分享 URL 使用 fragment 且可以恢复载荷', async () => {
   const url = await buildShareUrl('https://reviews.example.test/share?ignored=1#old', payload());
   assert.match(url, /^https:\/\/reviews\.example\.test\/share#share=/);

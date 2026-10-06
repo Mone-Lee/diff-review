@@ -1,5 +1,5 @@
 /**
- * Markdown 单块评论容器：负责 hover 入口、弹层与当前块的内嵌线程。
+ * Markdown 单块评论容器：负责 hover 入口、评论弹层与块级/行级评论的内嵌展示。
  */
 import React from 'react';
 import { MessageOutlined } from '@ant-design/icons';
@@ -13,7 +13,6 @@ type Props = {
   lineNumber: number;
   filePath: string;
   lineThreads: ReviewThread[];
-  selectionThreads?: ReviewThread[];
   children: React.ReactNode;
   className?: string;
   interactionMode?: 'default' | 'shared-reviewer';
@@ -25,7 +24,6 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
   lineNumber,
   filePath,
   lineThreads,
-  selectionThreads = [],
   children,
   className,
   interactionMode = 'default'
@@ -33,7 +31,6 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
   const { createThread } = useReviewActions();
   const [isComposerOpen, setIsComposerOpen] = React.useState(false);
   const blockClassName = [styles.markdownCommentBlock, className].filter(Boolean).join(' ');
-  const visibleThreads = [...lineThreads, ...selectionThreads];
 
   return (
     <div className={blockClassName} data-review-anchor={`line:${lineNumber}`} data-review-line={lineNumber}>
@@ -54,9 +51,9 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
           />
         </div>
       ) : null}
-      {visibleThreads.length > 0 ? (
+      {lineThreads.length > 0 ? (
         <div className={styles.inlineThreadStack} data-review-ignore-selection>
-          <InlineThreadGroup threads={visibleThreads} interactionMode={interactionMode} />
+          <InlineThreadGroup threads={lineThreads} interactionMode={interactionMode} />
         </div>
       ) : null}
     </div>

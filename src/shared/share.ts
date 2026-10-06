@@ -14,7 +14,8 @@ const MAX_DECOMPRESSED_BYTES = 2 * 1024 * 1024;
 
 export type ShareAnchor =
   | { type: 'file'; filePath: string }
-  | { type: 'markdown-line'; filePath: string; lineNumber: number; blockId?: string };
+  | { type: 'markdown-line'; filePath: string; lineNumber: number; blockId?: string }
+  | Extract<CommentAnchor, { type: 'markdown-selection' }>;
 
 export type ShareComment = {
   id: string;
@@ -58,7 +59,7 @@ export function getShareableMarkdownFile(session: ReviewSession | null, files: D
 }
 
 export function isShareableAnchor(anchor: CommentAnchor): anchor is ShareAnchor {
-  return anchor.type === 'file' || anchor.type === 'markdown-line';
+  return anchor.type === 'file' || anchor.type === 'markdown-line' || anchor.type === 'markdown-selection';
 }
 
 export function reviewThreadsToShareThreads(threads: ReviewThread[]): ShareThread[] {
@@ -184,11 +185,32 @@ function validateThreadStatus(value: unknown): ReviewThreadStatus {
 function validateAnchor(value: unknown, filePath: string, lineCount: number): ShareAnchor {
   if (!isRecord(value) || value.filePath !== filePath) throw new Error('分享锚点文件不匹配');
   if (value.type === 'file') return { type: 'file', filePath };
-  if (value.type !== 'markdown-line' || !Number.isInteger(value.lineNumber)) throw new Error('分享锚点格式无效');
-  const lineNumber = value.lineNumber as number;
-  if (lineNumber < 1 || lineNumber > lineCount) throw new Error('分享锚点超出文档范围');
   const blockId = typeof value.blockId === 'string' && value.blockId.length <= 500 ? value.blockId : undefined;
-  return { type: 'markdown-line', filePath, lineNumber, blockId };
+  if (value.type === 'markdown-line' && Number.isInteger(value.lineNumber)) {
+    const lineNumber = value.lineNumber as number;
+    if (lineNumber < 1 || lineNumber > lineCount) throw new Error('分享锚点超出文档范围');
+    return { type: 'markdown-line', filePath, lineNumber, blockId };
+  }
+  if (value.type !== 'markdown-selection') throw new Error('分享锚点格式无效');
+
+  const startLine = boundedInteger(value.startLine, 1, lineCount);
+  const endLine = boundedInteger(value.endLine, startLine, lineCount);
+  const startOffset = boundedInteger(value.startOffset, 0, MAX_MARKDOWN_LENGTH);
+  const endOffset = boundedInteger(value.endOffset, 0, MAX_MARKDOWN_LENGTH);
+  const selectedText = stringValue(value.selectedText, '选区文字', MAX_TEXT_LENGTH);
+  if (!selectedText.trim()) throw new Error('选区文字不能为空');
+  if (startLine === endLine && endOffset <= startOffset) throw new Error('分享选区范围无效');
+
+  const sourceStartLine = optionalBoundedInteger(value.sourceStartLine, 1, lineCount);
+  const sourceEndLine = optionalBoundedInteger(value.sourceEndLine, sourceStartLine ?? 1, lineCount);
+  const tableColumn = optionalBoundedInteger(value.tableColumn, 1, 10_000);
+  return {
+    type: 'markdown-selection', filePath, startLine, endLine, startOffset, endOffset, selectedText,
+    ...(sourceStartLine === undefined ? {} : { sourceStartLine }),
+    ...(sourceEndLine === undefined ? {} : { sourceEndLine }),
+    ...(tableColumn === undefined ? {} : { tableColumn }),
+    ...(blockId === undefined ? {} : { blockId })
+  };
 }
 
 function validateComment(value: unknown): ShareComment {
@@ -224,6 +246,17 @@ function requiredString(value: unknown, label: string, maxLength: number): strin
 function stringValue(value: unknown, label: string, maxLength: number): string {
   if (typeof value !== 'string' || value.length > maxLength) throw new Error(`${label}格式无效`);
   return value;
+}
+
+function boundedInteger(value: unknown, min: number, max: number): number {
+  if (!Number.isInteger(value) || (value as number) < min || (value as number) > max) {
+    throw new Error('分享锚点格式无效');
+  }
+  return value as number;
+}
+
+function optionalBoundedInteger(value: unknown, min: number, max: number): number | undefined {
+  return value === undefined ? undefined : boundedInteger(value, min, max);
 }
 
 // 驱动压缩流的读写两端，并在任一端失败或输出超限时统一终止、等待和释放流锁。

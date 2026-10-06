@@ -62,6 +62,10 @@ export type CommentAnchor =
     startOffset: number;
     endOffset: number;
     selectedText: string;
+    /** 源码定位范围；旧锚点缺省时使用块起始行。 */
+    sourceStartLine?: number;
+    sourceEndLine?: number;
+    tableColumn?: number;
     blockId?: string;
   };
 

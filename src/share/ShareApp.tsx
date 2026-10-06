@@ -137,7 +137,9 @@ export default function ShareApp() {
   }, [reviewerName]);
 
   const addComment = React.useCallback((anchor: CommentAnchor, body: string) => {
-    if (anchor.type !== 'file' && anchor.type !== 'markdown-line') return Promise.reject(new Error('共享预览仅支持块级评论'));
+    if (anchor.type !== 'file' && anchor.type !== 'markdown-line' && anchor.type !== 'markdown-selection') {
+      return Promise.reject(new Error('共享预览不支持该评论位置'));
+    }
     return requestReviewerName().then((authorName) => {
       const comment = createReviewerComment(body, authorName, reviewerId, payload?.shareId ?? '');
       updateThreads((current) => {

@@ -6,13 +6,16 @@ import { CommentComposer } from '../CommentComposer';
 import styles from './index.module.less';
 
 type Props = {
+  style?: React.CSSProperties;
+  selectedText?: string;
   onCancel: () => void;
   onSubmit: (body: string) => Promise<void>;
 };
 
-export function CommentPopover({ onCancel, onSubmit }: Props) {
+export function CommentPopover({ onCancel, onSubmit, style, selectedText }: Props) {
   return (
-    <div className={styles.popover}>
+    <div className={styles.popover} style={style}>
+      {selectedText ? <div className={styles.selectedText}>{selectedText}</div> : null}
       <CommentComposer placeholder="请输入行内评论..." submitLabel="评论" onSubmit={onSubmit} onCancel={onCancel} />
     </div>
   );
