@@ -41,6 +41,15 @@ npm run diff-review:status
 npm run diff-review:use-npm -- 4.1.4
 ```
 
+### 调试主审阅页与分享页
+
+`diff-review:use-local` 会同时构建主审阅页、分享页和 CLI。切换到本地版本并重新启动审查服务后，访问「分享」中复制出的链接，即可查看当前构建的分享页，无需部署 GitHub Pages。
+
+- 修改样式后执行 `npm run build`，再刷新本地页面即可更新构建产物；服务端代码变更需要重启服务。
+- 使用 `local-diff-reviewer --dev` 启动时，主页面和 `/share.html` 均由 Vite 提供，前端修改支持热更新。
+- 本地分享链接仅在本机服务运行期间可访问。已有线上链接可以保留完整的 `#share=…`，把前面的地址替换为当前审查服务的 `/share.html` 来查看本地样式。
+- 执行 `npm run diff-review:use-npm` 切回 npm 安装版后，新启动的服务会继续生成 GitHub Pages 分享链接。
+
 ## 同步 Skill
 
 修改根目录的 `SKILL.md` 后，可用一条命令同步到当前电脑的 Agent Skill 目录：

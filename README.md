@@ -2,8 +2,8 @@
 
 <p align="center">
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E=18.0.0-brightgreen.svg" alt="Node.js Version"></a>
-  <a href="https://www.npmjs.com/package/fq-weapp-ui-mcp"><img src="https://img.shields.io/npm/v/fq-weapp-ui-mcp.svg?style=flat-square" alt="npm version"></a>
-  <img src="https://img.shields.io/npm/dm/fq-weapp-ui-mcp" alt="NPM Downloads">
+  <a href="https://www.npmjs.com/package/local-diff-reviewer"><img src="https://img.shields.io/npm/v/local-diff-reviewer.svg?style=flat-square" alt="npm version"></a>
+  <img src="https://img.shields.io/npm/dm/local-diff-reviewer" alt="NPM Downloads">
 </p>
 
 ![Diff 审查台界面截图](https://raw.githubusercontent.com/Mone-Lee/diff-review/master/docs/images/diff-review-ui.jpg)
@@ -50,29 +50,49 @@ curl -fsSL https://raw.githubusercontent.com/Mone-Lee/diff-review/master/scripts
 
 plan mode hook 的完整流程见 [`docs/plan-mode-hooks.md`](docs/plan-mode-hooks.md)。
 
-## 功能边界
+## 功能一览
 
-- 查看当前工作区 diff、暂存区 diff、指定版本 diff。
-- 支持选中部分文件进行预览。
-- 支持分享 diff-review 链接给其他人，并同步其他人的评论。
-  - 仅支持 diff 为单个 Markdown 文件的情况，例如 agent 上下文中只有一个文件，或 plan mode 产生的 Markdown 内容。
+> 从 Git diff 查看、多格式预览，到精细评论、分享协作和 Agent 反馈闭环，都在一个本地审查台中完成。
 
-  [![分享功能演示](docs/images/share-demo.gif)](docs/images/share.mp4?raw=1)
+| 能力 | 支持内容 |
+| --- | --- |
+| 🔍 **Diff 审查** | 工作区、暂存区、指定版本；支持筛选部分文件 |
+| 🧩 **多格式查看** | 代码、图片，以及 Markdown `Preview / Code diff` 双视图 |
+| 💬 **精细评论** | 文件级、代码行级、Markdown 块级与源码行评论；支持文字选区的单行、跨行评论 |
+| 🔄 **评论闭环** | 多轮回复、状态流转、评论定位，以及极简 AI prompt |
+| 🔗 **分享协作** | 分享 Markdown 审查链接，并将他人评论同步回本地 |
+| 🤖 **Agent 工作流** | 作为 Codex / Copilot / Qoder 的 plan mode hook，在执行前审查并退回意见 |
 
-  动图可直接预览；点击可播放高清版本。
+### 查看与定位
 
-- 代码文件使用 GitHub 风格的 unified diff。
-- 图片文件支持 diff 查看。
-- Markdown 文件支持 `Preview / Code diff` 切换；`Code diff` 当前只支持并排视图，不支持行内视图。
-- 支持文件级评论、代码行级评论、Markdown 源码行评论。
-- Markdown 评论在两种视图间会按视图能力降级展示：
-  - `Preview` 中的新评论按块级锚定；`Code diff` 中可精确到行。
+- 查看当前工作区 diff、暂存区 diff 或指定版本 diff，并可只选择部分文件预览。
+- 代码文件使用 GitHub 风格 diff，支持并排与行内视图；图片文件支持直接比较。
+- Markdown 文件可在渲染后的 `Preview` 与源码 `Code diff` 之间切换。
+
+### 评论与协作
+
+- 支持文件级评论、代码行级评论、Markdown 块级评论和 Markdown 源码行评论。
+- 在 Markdown `Preview` 中按住 `Shift` 拖选文字，可针对单行或跨行选区添加评论。
+- 一条评论线程可包含多条评论；同一锚点的新评论会继续追加到已有线程。
+- 评论支持 `submit`、`replied`、`resolved` 三种状态，并可复制为交给 AI 处理的极简 prompt。
+
+### 分享与 Agent 工作流
+
+- 可分享 diff-review 链接给其他审阅者，并将对方的评论同步回本地审查台。
+- 可作为 Codex / Copilot / Qoder 的 plan mode hook，在 Agent 执行前审查计划，并通过评论退回修改意见。
+
+[![分享功能演示](docs/images/share-demo.gif)](docs/images/share.mp4?raw=1)
+
+动图可直接预览；点击可播放高清版本。
+
+### 当前边界
+
+- 分享功能仅支持 diff 中只有单个 Markdown 文件的场景，例如 Agent 上下文中只有一个文件，或 plan mode 产生的 Markdown 内容。
+- Markdown `Code diff` 当前只支持并排视图，不支持行内视图。
+- Markdown 评论会根据视图能力调整展示位置：
+  - `Preview` 中的新评论按块级或文字选区锚定；`Code diff` 中可精确到源码行。
   - 从 `Code diff` 当前文本一侧创建的评论，会归并展示到对应的 Markdown 块；同一块内的多条评论目前会集中显示在块级内容底部。
   - 对于只存在于旧版本一侧的评论，`Preview` 无法精确展示；定位这类评论时会切换到 `Code diff`。
-- 支持 `submit` / `replied` / `resolved` 评论状态。
-- 一条评论线程下可以包含多条评论；同一锚点的新评论会追加到已有线程。
-- 支持复制极简 AI prompt。
-- 支持作为 Codex / Copilot / Qoder 的 plan mode hook，在 agent 执行前审查计划并通过评论退回。
 
 ## CLI 使用方式
 
@@ -84,15 +104,6 @@ local-diff-reviewer --new-session
 local-diff-reviewer stop
 local-diff-reviewer --repo /path/to/project
 ```
-
-### 本地调试主审阅页与分享页
-
-在源码仓库执行 `npm run diff-review:use-local`，会同时构建主审阅页、分享页和 CLI，并将全局命令切换到本地软链。重新启动审查服务后，访问「分享」中复制出的链接即可查看本次构建的分享页，无需部署 GitHub Pages。
-
-- 修改样式后执行 `npm run build`，再刷新本地页面即可更新构建产物；服务端代码变更需要重启服务。
-- 使用 `local-diff-reviewer --dev` 启动时，主页面和 `/share.html` 均由 Vite 提供，前端修改支持热更新。
-- 本地分享链接仅在本机服务运行期间可访问。已有线上链接可以保留完整的 `#share=…`，把前面的地址替换为当前审查服务的 `/share.html` 来查看本地样式。
-- `npm run diff-review:use-npm` 切回 npm 安装版后，新启动的服务继续生成 GitHub Pages 分享链接。
 
 ### 审查模式
 
