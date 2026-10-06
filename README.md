@@ -60,6 +60,7 @@ plan mode hook 的完整流程见 [`docs/plan-mode-hooks.md`](docs/plan-mode-hoo
 | 🧩 **多格式查看** | 代码、图片，以及 Markdown `Preview / Code diff` 双视图 |
 | 💬 **精细评论** | 文件级、代码行级、Markdown 块级与源码行评论；支持文字选区的单行、跨行评论 |
 | 🔄 **评论闭环** | 多轮回复、状态流转、评论定位，以及极简 AI prompt |
+| 🔒 **纯本地** | 服务运行在 `127.0.0.1`，代码不出本机；审查过程不依赖把代码上传到远端平台 |
 | 🔗 **分享协作** | 分享 Markdown 审查链接，并将他人评论同步回本地 |
 | 🤖 **Agent 工作流** | 作为 Codex / Copilot / Qoder 的 plan mode hook，在执行前审查并退回意见 |
 
