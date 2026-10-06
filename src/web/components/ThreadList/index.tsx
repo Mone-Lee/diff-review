@@ -146,7 +146,7 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
 
   return (
     <div>
-      {!simple ? <div className={styles.threadScopeBar}>
+      {!simple && currentFiles.length > 1 ? <div className={styles.threadScopeBar}>
         <Typography.Text className={styles.threadScopeLabel}>查看范围</Typography.Text>
         <div className={!currentFilePath ? `${styles.threadScopeSwitchRow} ${styles.threadScopeSwitchRowDisabled}` : styles.threadScopeSwitchRow}>
           <button

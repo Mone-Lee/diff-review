@@ -16,6 +16,7 @@ type Props = {
   simple?: boolean;
   interactionMode?: 'default' | 'shared-reviewer';
   isViewed?: boolean;
+  showViewed?: boolean;
   showToggleAllLines?: boolean;
   hasExpandedContext?: boolean;
   onToggleAllLines?: (filePath: string) => void;
@@ -28,6 +29,7 @@ export function FileHeader({
   simple = false,
   interactionMode = 'default',
   isViewed,
+  showViewed = true,
   showToggleAllLines,
   hasExpandedContext,
   onToggleAllLines,
@@ -89,7 +91,7 @@ export function FileHeader({
           <Button className={styles.headerAction} icon={<MessageOutlined />} type={open ? 'primary' : 'default'} onClick={() => setOpen((value) => !value)}>
             文件级评论
           </Button>
-          {!simple ? <Tooltip title={isViewed ? "将文件标为待审查" : '将文件标为已审查'}>
+          {!simple && showViewed ? <Tooltip title={isViewed ? "将文件标为待审查" : '将文件标为已审查'}>
             <Button
               className={`${styles.headerAction} ${styles.viewedButton} ${isViewed ? styles.viewedButtonActive : ''}`}
               icon={isViewed ? <CheckOutlined /> : <span className={styles.viewedButtonIcon} aria-hidden="true" />}

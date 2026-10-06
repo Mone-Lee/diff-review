@@ -607,14 +607,15 @@ export default function App() {
                       onClick={() => setImportDialogOpen(true)}
                       color="green"
                       variant="solid"
-                      shape="round"
                     >
-                      导入反馈链接
+                      导入反馈
                     </Button>
                     <Button
                       icon={<LinkOutlined />}
                       loading={buildingShareLink}
                       type="primary"
+                      color="purple"
+                      variant="filled"
                       onClick={() => { handleBuildShareLink().catch(() => undefined); }}
                     >
                       分享
@@ -692,6 +693,7 @@ export default function App() {
                     file={selectedFile}
                     threads={selectedFileThreads}
                     isViewed={viewedFilePaths.has(selectedFile.path)}
+                    showViewed={files.length >= 3}
                     showToggleAllLines={!selectedFileIsImage && (!selectedFile.isMarkdown || markdownViewMode === 'diff')}
                     hasExpandedContext={selectedFile ? (expandedContextByFile[selectedFile.path] ?? false) : false}
                     onToggleAllLines={toggleAllLines}

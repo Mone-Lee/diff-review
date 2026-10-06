@@ -287,7 +287,7 @@ export default function ShareApp() {
                   disabled={!feedbackLink}
                   onClick={() => { copyFeedbackLink().catch(() => undefined); }}
                 >
-                  导出反馈链接
+                  导出反馈
                 </Button>
               </Space>
             )}

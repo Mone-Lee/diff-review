@@ -58,7 +58,7 @@ export function FileList({ files, threads, selectedPath, viewedFilePaths, onSele
   const normalizedSearchText = debouncedSearchText.trim().toLowerCase();
   const hasSearch = normalizedSearchText.length > 0;
   const visibleFiles = React.useMemo(() => {
-    if (!hideViewedFiles) return files;
+    if (files.length < 3 || !hideViewedFiles) return files;
     return files.filter((file) => !viewedFilePaths.has(file.path));
   }, [files, hideViewedFiles, viewedFilePaths]);
   const fileTree = React.useMemo(() => buildFileTree(visibleFiles), [visibleFiles]);
@@ -118,7 +118,8 @@ export function FileList({ files, threads, selectedPath, viewedFilePaths, onSele
   }
 
   function renderViewedToggle(file: DiffFile) {
-    const isViewed = viewedFilePaths.has(file.path);
+    if (files.length < 3) return null;
+    const isViewed = files.length >= 3 && viewedFilePaths.has(file.path);
 
     return (
       <Tooltip title={isViewed ? '将文件标为待审查' : '将文件标为已审查'}>
@@ -141,7 +142,7 @@ export function FileList({ files, threads, selectedPath, viewedFilePaths, onSele
   function renderFileItem(file: DiffFile, displayPath = file.path, isTreeItem = false) {
     const isActive = file.path === selectedPath;
     const threadCount = unresolvedThreadCountByFilePath.get(file.path) ?? 0;
-    const isViewed = viewedFilePaths.has(file.path);
+    const isViewed = files.length >= 3 && viewedFilePaths.has(file.path);
     const className = [
       styles.fileItem,
       isActive && isTreeItem ? styles.fileItemActive : '',
@@ -245,7 +246,7 @@ export function FileList({ files, threads, selectedPath, viewedFilePaths, onSele
           onChange={handleSearchInputChange}
           onPressEnter={handleSearchInputEnter}
         />
-        <Tooltip title={hideViewedFiles ? '显示已审查文件' : '隐藏已审查文件'}>
+        {files.length >= 3 ? <Tooltip title={hideViewedFiles ? '显示已审查文件' : '隐藏已审查文件'}>
           <Button
             className={styles.viewedFilterButton}
             type="text"
@@ -255,7 +256,7 @@ export function FileList({ files, threads, selectedPath, viewedFilePaths, onSele
             aria-label={hideViewedFiles ? '显示已审查文件' : '隐藏已审查文件'}
             onClick={() => setHideViewedFiles((current) => !current)}
           />
-        </Tooltip>
+        </Tooltip> : null}
       </div>
       {viewMode === 'list' ? (
         <List
