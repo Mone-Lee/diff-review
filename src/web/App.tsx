@@ -545,6 +545,7 @@ export default function App() {
                 currentFiles={files}
                 currentFilePath={selectedFile.path}
                 focusedThreadId={focusedThreadId}
+                focusRequest={locateTarget}
                 simple
               />
             )}
@@ -791,6 +792,7 @@ export default function App() {
                 currentFiles={files}
                 currentFilePath={selectedFile?.path ?? ''}
                 focusedThreadId={focusedThreadId}
+                focusRequest={locateTarget}
               />
             </div>
           </aside>

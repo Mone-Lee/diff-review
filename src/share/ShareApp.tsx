@@ -312,6 +312,7 @@ export default function ShareApp() {
                 currentFiles={[file]}
                 currentFilePath={file.path}
                 focusedThreadId={focusedThreadId}
+                focusRequest={locateTarget}
                 simple
                 interactionMode="shared-reviewer"
               />

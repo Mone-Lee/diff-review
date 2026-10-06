@@ -17,6 +17,7 @@ type Props = {
   currentFiles: DiffFile[];
   currentFilePath: string;
   focusedThreadId: string | null;
+  focusRequest?: object | null;
   simple?: boolean;
   interactionMode?: 'default' | 'shared-reviewer';
 };
@@ -48,7 +49,7 @@ function getDisplayThreadStatus(thread: ReviewThread, interactionMode: NonNullab
   return interactionMode === 'shared-reviewer' ? thread.status : getThreadStatus(thread);
 }
 
-export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId, simple = false, interactionMode = 'default' }: Props) {
+export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId, focusRequest, simple = false, interactionMode = 'default' }: Props) {
   const { deleteThread } = useReviewActions();
   const { locateThread } = useReviewNavigationActions();
   const [filter, setFilter] = React.useState<ThreadFilter>('all');
@@ -122,21 +123,26 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
   }, [currentFilePath]);
 
   React.useEffect(() => {
+    if (focusedThreadId) setFilter('all');
+  }, [focusedThreadId, focusRequest]);
+
+  React.useEffect(() => {
     if (!focusedThreadId) return;
     const group = visibleGroups.find((item) => item.thread.id === focusedThreadId);
     if (group) {
       groupRefs.current[group.key]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
-  }, [focusedThreadId, visibleGroups]);
+  }, [focusedThreadId, focusRequest, visibleGroups]);
 
   React.useEffect(() => {
     if (!focusedThreadId) return;
-    setLocateFlashThreadId(focusedThreadId);
+    setLocateFlashThreadId(null);
+    const frame = window.requestAnimationFrame(() => setLocateFlashThreadId(focusedThreadId));
     const timer = window.setTimeout(() => {
       setLocateFlashThreadId((current) => (current === focusedThreadId ? null : current));
     }, 1400);
-    return () => window.clearTimeout(timer);
-  }, [focusedThreadId]);
+    return () => { window.cancelAnimationFrame(frame); window.clearTimeout(timer); };
+  }, [focusedThreadId, focusRequest]);
 
   return (
     <div>
