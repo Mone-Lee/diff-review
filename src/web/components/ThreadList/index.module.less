@@ -1,5 +1,6 @@
 .threads {
   display: grid;
+  min-width: 0;
   gap: 8px;
 }
 
@@ -146,6 +147,7 @@
 }
 
 .thread {
+  min-width: 0;
   border: 1px solid #e7d8a6;
   border-radius: 8px !important;
   background: #fffef8;
@@ -271,4 +273,14 @@
       0 0 0 2px rgba(47, 111, 237, 0.2),
       0 8px 24px rgba(47, 111, 237, 0.14);
   }
+}
+
+.selectedText {
+  margin: 2px 6px 6px;
+  overflow: hidden;
+  color: #7b8495;
+  font-size: 12px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

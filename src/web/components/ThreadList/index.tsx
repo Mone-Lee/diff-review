@@ -251,6 +251,9 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                     </Flex>
                   </Space>
                 </button>
+                {thread.anchor.type === 'markdown-selection' ? (
+                  <div className={styles.selectedText} aria-label="选中内容">“{thread.anchor.selectedText}”</div>
+                ) : null}
                 <div>
                   <InlineThreadGroup
                     threads={[thread]}
