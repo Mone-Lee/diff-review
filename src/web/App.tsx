@@ -481,6 +481,7 @@ export default function App() {
             title={sessionRepoName(session)}
             subtitle={`Plan mode · ${selectedFile.path}`}
             commentCount={currentSnapshotThreads.length}
+            fullWidthHeader
             actions={(
               <>
                 {shareableMarkdownFile ? (
