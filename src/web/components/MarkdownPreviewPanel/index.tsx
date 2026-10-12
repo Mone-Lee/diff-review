@@ -7,7 +7,8 @@
  * 4) 对 mermaid 代码块交由 MermaidDiagram 组件渲染。
  */
 import React from 'react';
-import { Alert, Spin, message } from 'antd';
+import { Alert, Spin } from 'antd';
+import { MessageOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
@@ -149,7 +150,7 @@ function ensureSelectionHighlightStyle() {
   if (document.getElementById(MARKDOWN_SELECTION_HIGHLIGHT_STYLE_ID)) return;
   const style = document.createElement('style');
   style.id = MARKDOWN_SELECTION_HIGHLIGHT_STYLE_ID;
-  style.textContent = `::highlight(${MARKDOWN_SELECTION_HIGHLIGHT_NAME}), ::highlight(diff-review-markdown-active-selection) { background: #fff9e6; text-decoration: underline #e8bd00 2px; }`;
+  style.textContent = `::highlight(${MARKDOWN_SELECTION_HIGHLIGHT_NAME}) { background: #fff9e6; text-decoration: underline #e8bd00 2px; }`;
   document.head.appendChild(style);
 }
 
@@ -229,11 +230,17 @@ export function MarkdownPreviewPanel({
   const { locateThread } = useReviewNavigationActions();
   const selectionGestureRef = React.useRef(false);
   const selectionComposerRef = React.useRef<HTMLDivElement | null>(null);
+  const [selectionCandidate, setSelectionCandidate] = React.useState<{
+    anchor: SelectionAnchor; range: Range; top: number; left: number;
+  } | null>(null);
   const [selectionDraft, setSelectionDraft] = React.useState<{
     anchor: SelectionAnchor; range: Range; top: number; left: number;
   } | null>(null);
 
-  React.useEffect(() => { setSelectionDraft(null); }, [file.path, preview]);
+  React.useEffect(() => {
+    setSelectionCandidate(null);
+    setSelectionDraft(null);
+  }, [file.path, preview]);
 
   React.useLayoutEffect(() => {
     if (!selectionDraft) return;
@@ -242,56 +249,51 @@ export function MarkdownPreviewPanel({
     selectionComposerRef.current?.querySelector('textarea')?.focus({ preventScroll: true });
   }, [selectionDraft]);
 
-  // 仅在 Shift 拖选结束后打开输入框，普通拖选继续使用浏览器复制手势。
+  // 普通文字选择结束后保留浏览器原生选区，并把评论入口固定在文本顺序上的选区末尾。
   const captureSelection = React.useCallback(() => {
-    const isCommentGesture = selectionGestureRef.current;
+    const isSelectionGesture = selectionGestureRef.current;
     selectionGestureRef.current = false;
-    markdownBodyRef.current?.classList.remove(styles.commentSelection);
-    if (!isCommentGesture) return;
-    if (selectionDraft) return;
+    if (!isSelectionGesture || selectionDraft) return;
     const selection = window.getSelection();
     const body = markdownBodyRef.current;
     const shell = scrollRef.current;
-    if (!selection?.rangeCount || !body || !shell) return;
+    if (!selection?.rangeCount || selection.isCollapsed || !body || !shell ||
+      !body.contains(selection.anchorNode) || !body.contains(selection.focusNode)) {
+      setSelectionCandidate(null);
+      return;
+    }
     const range = selection.getRangeAt(0).cloneRange();
     const anchor = readSelection(body, range, file.path);
-    if (typeof anchor === 'string') { message.info(anchor); return; }
-    if (!anchor) return;
-    const rect = [...range.getClientRects()].at(-1) ?? range.getBoundingClientRect();
+    if (!anchor || typeof anchor === 'string') {
+      setSelectionCandidate(null);
+      return;
+    }
+    const endRect = [...range.getClientRects()].at(-1) ?? range.getBoundingClientRect();
     const shellRect = shell.getBoundingClientRect();
-    setSelectionDraft({
+    const selectionEndLeft = endRect.right - shellRect.left + shell.scrollLeft;
+    const selectionEndTop = endRect.top - shellRect.top + shell.scrollTop;
+    setSelectionCandidate({
       anchor, range,
-      top: rect.bottom - shellRect.top + shell.scrollTop + 8,
-      left: Math.max(8, Math.min(rect.left - shellRect.left, shell.clientWidth - 324)) + shell.scrollLeft
+      top: Math.max(shell.scrollTop + 8, selectionEndTop - 42),
+      left: Math.max(shell.scrollLeft + 8, Math.min(selectionEndLeft + 8, shell.scrollLeft + shell.clientWidth - 48))
     });
-    selection.removeAllRanges();
   }, [file.path, selectionDraft]);
 
-  // 浏览器原生 ::selection 不支持可靠的下划线，拖选期间叠加 Custom Highlight。
+  // 原生选区消失时同步收起评论入口；选区仍在时不干预复制、右键菜单等浏览器行为。
   React.useEffect(() => {
-    const api = getHighlightApi();
-    if (!api) return;
-    const name = 'diff-review-markdown-active-selection';
     function update() {
       const selection = window.getSelection();
       const body = markdownBodyRef.current;
-      if (selectionGestureRef.current && selection?.rangeCount && !selection.isCollapsed && body?.contains(selection.anchorNode) && body.contains(selection.focusNode)) {
-        api!.highlights.set(name, new api!.HighlightValue(selection.getRangeAt(0).cloneRange()));
-      } else {
-        api!.highlights.delete(name);
-      }
+      const isBodySelection = selection?.rangeCount && !selection.isCollapsed && body?.contains(selection.anchorNode) && body.contains(selection.focusNode);
+      if (!selectionGestureRef.current && !isBodySelection) setSelectionCandidate(null);
     }
     document.addEventListener('selectionchange', update);
-    return () => {
-      document.removeEventListener('selectionchange', update);
-      api.highlights.delete(name);
-    };
-  }, [file.path]);
+    return () => document.removeEventListener('selectionchange', update);
+  }, []);
 
   React.useEffect(() => {
     const cancel = () => {
       selectionGestureRef.current = false;
-      markdownBodyRef.current?.classList.remove(styles.commentSelection);
     };
     document.addEventListener('pointerup', captureSelection);
     document.addEventListener('pointercancel', cancel);
@@ -300,6 +302,22 @@ export function MarkdownPreviewPanel({
       document.removeEventListener('pointercancel', cancel);
     };
   }, [captureSelection]);
+
+  // 点击显式入口后才把原生选区提升为评论选区，并打开输入框。
+  const openSelectionComposer = React.useCallback(() => {
+    if (!selectionCandidate) return;
+    const shell = scrollRef.current;
+    if (!shell) return;
+
+    setSelectionDraft({
+      anchor: selectionCandidate.anchor,
+      range: selectionCandidate.range,
+      top: selectionCandidate.top + 44,
+      left: Math.max(shell.scrollLeft + 8, Math.min(selectionCandidate.left, shell.scrollLeft + shell.clientWidth - 324))
+    });
+    setSelectionCandidate(null);
+    window.getSelection()?.removeAllRanges();
+  }, [selectionCandidate]);
 
 
   React.useEffect(() => {
@@ -628,11 +646,33 @@ export function MarkdownPreviewPanel({
   return (
     <div className={styles.markdownShell} ref={scrollRef}
       onPointerDown={(event) => {
-        selectionGestureRef.current = event.button === 0 && event.shiftKey && Boolean(markdownBodyRef.current?.contains(event.target as Node));
-        markdownBodyRef.current?.classList.toggle(styles.commentSelection, selectionGestureRef.current);
-        if (selectionGestureRef.current) window.getSelection()?.removeAllRanges();
+        const target = event.target as Element;
+        if (target.closest('[data-review-selection-action]')) return;
+        selectionGestureRef.current = event.button === 0 && Boolean(markdownBodyRef.current?.contains(target));
+        if (selectionGestureRef.current) setSelectionCandidate(null);
       }}
-      onKeyDown={(event) => { if (event.key === 'Escape') setSelectionDraft(null); }}>
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        setSelectionCandidate(null);
+        setSelectionDraft(null);
+      }}>
+      {selectionCandidate ? (
+        <button
+          className={styles.selectionCommentTrigger}
+          type="button"
+          aria-label="评论选中内容"
+          title="评论选中内容"
+          data-review-selection-action
+          style={{ top: selectionCandidate.top, left: selectionCandidate.left }}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onClick={openSelectionComposer}
+        >
+          <MessageOutlined />
+        </button>
+      ) : null}
       {selectionDraft ? (
         <div data-review-ignore-selection ref={selectionComposerRef}>
           <CommentPopover
@@ -651,13 +691,13 @@ export function MarkdownPreviewPanel({
         <div className={styles.markdownBody} ref={markdownBodyRef}
           onPointerMove={(event) => {
             const body = markdownBodyRef.current;
-            if (!body || selectionGestureRef.current) return;
+            if (!body || selectionGestureRef.current || selectionCandidate) return;
             const hoveredThread = findSelectionThreadAtPoint(body, threads, file.path, event.clientX, event.clientY);
             body.classList.toggle(styles.selectionHighlightHover, Boolean(hoveredThread));
           }}
           onPointerLeave={() => markdownBodyRef.current?.classList.remove(styles.selectionHighlightHover)}
           onClick={(event) => {
-            if (event.shiftKey || selectionDraft || !window.getSelection()?.isCollapsed) return;
+            if (selectionDraft || !window.getSelection()?.isCollapsed) return;
             const body = markdownBodyRef.current;
             if (!body) return;
             const thread = findSelectionThreadAtPoint(body, threads, file.path, event.clientX, event.clientY);
