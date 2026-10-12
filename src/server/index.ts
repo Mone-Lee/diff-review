@@ -420,10 +420,6 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.delete('/api/threads/:id', async (req, res, next) => {
     try {
       await updateComments(state.session.repoRoot, (store) => {
-        const currentThread = store.threads.find((item) => item.id === req.params.id);
-        if (currentThread?.comments.some((comment) => comment.author === 'reviewer')) {
-          throw new Error('REVIEWER_COMMENT_READ_ONLY');
-        }
         const nextThreads = store.threads.filter((item) => item.id !== req.params.id);
         const changed = nextThreads.length !== store.threads.length;
         store.threads = nextThreads;
@@ -431,10 +427,6 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       });
       res.status(204).end();
     } catch (error) {
-      if (error instanceof Error && error.message === 'REVIEWER_COMMENT_READ_ONLY') {
-        res.status(400).json({ error: 'Imported reviewer comments are read-only' });
-        return;
-      }
       next(error);
     }
   });

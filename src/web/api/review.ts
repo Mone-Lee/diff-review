@@ -158,10 +158,14 @@ export async function patchReviewThread(id: string, status: ReviewThread['status
 }
 
 /**
- * 删除指定评论线程。
+ * 删除指定评论线程，并在失败时抛出统一错误。
  */
 export async function deleteReviewThread(id: string) {
-  await fetch(`/api/threads/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/api/threads/${id}`, { method: 'DELETE' });
+
+  if (!res.ok) {
+    throw new Error(await getErrorMessage(res, '删除评论线程失败'));
+  }
 }
 
 /**

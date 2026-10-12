@@ -263,6 +263,10 @@ export default function App() {
     message.success('提示词已复制到剪贴板');
   }, [message]);
 
+  const handleReviewActionError = React.useCallback((error: unknown) => {
+    message.error(error instanceof Error ? error.message : '评论操作失败');
+  }, [message]);
+
   /**
    * 只有用户显式点击 Refresh 时才切换到最新 diff，避免编辑过程中的自动跳屏。
    */
@@ -408,7 +412,8 @@ export default function App() {
 
   const reviewActions = useReviewActionsValue({
     refreshReviewState,
-    onPromptCopied: handlePromptCopied
+    onPromptCopied: handlePromptCopied,
+    onActionError: handleReviewActionError
   });
 
   const reviewNavigationActions = useReviewNavigationActionsValue({

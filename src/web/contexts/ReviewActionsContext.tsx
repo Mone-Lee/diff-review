@@ -33,6 +33,7 @@ export type ReviewNavigationActions = {
 type UseReviewActionsOptions = {
   refreshReviewState: () => Promise<void>;
   onPromptCopied: () => void;
+  onActionError: (error: unknown) => void;
 };
 
 type UseReviewNavigationActionsOptions = {
@@ -61,7 +62,8 @@ const ReviewNavigationActionsContext = React.createContext<ReviewNavigationActio
  */
 export function useReviewActionsValue({
   refreshReviewState,
-  onPromptCopied
+  onPromptCopied,
+  onActionError
 }: UseReviewActionsOptions) {
   const createThread = React.useCallback(async (anchor: CommentAnchor, body: string) => {
     await createReviewThread(anchor, body);
@@ -74,14 +76,24 @@ export function useReviewActionsValue({
   }, [refreshReviewState]);
 
   const deleteThread = React.useCallback(async (id: string) => {
-    await deleteReviewThread(id);
-    await refreshReviewState();
-  }, [refreshReviewState]);
+    try {
+      await deleteReviewThread(id);
+      await refreshReviewState();
+    } catch (error) {
+      onActionError(error);
+      throw error;
+    }
+  }, [onActionError, refreshReviewState]);
 
   const deleteComment = React.useCallback(async (threadId: string, commentId: string) => {
-    await deleteReviewComment(threadId, commentId);
-    await refreshReviewState();
-  }, [refreshReviewState]);
+    try {
+      await deleteReviewComment(threadId, commentId);
+      await refreshReviewState();
+    } catch (error) {
+      onActionError(error);
+      throw error;
+    }
+  }, [onActionError, refreshReviewState]);
 
   const replyThread = React.useCallback(async (id: string, body: string) => {
     await replyReviewThread(id, body);

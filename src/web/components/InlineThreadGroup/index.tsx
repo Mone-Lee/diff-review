@@ -84,7 +84,6 @@ export function InlineThreadGroup({
   const actionThreadResolved = actionThreadStatus === 'resolved';
   const actionThreadLastComment = actionThread?.comments.at(-1);
   const canCopy = canCopyThread(actionThreadStatus, actionThreadLastComment?.author);
-  const containsReviewerComment = threads.some((thread) => thread.comments.some((comment) => comment.author === 'reviewer'));
   if (!firstThread) return null;
 
   const variantClassName =
@@ -260,7 +259,7 @@ export function InlineThreadGroup({
               要求再改
             </Button>
           ) : null}
-          {actionThreadStatus !== 'replied' && !containsReviewerComment ? (
+          {actionThreadStatus !== 'replied' ? (
             <Popconfirm
               title={threads.length > 1 ? '删除这组评论？' : '删除这条评论线程？'}
               okText="删除"
