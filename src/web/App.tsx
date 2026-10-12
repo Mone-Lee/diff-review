@@ -486,10 +486,21 @@ export default function App() {
               <>
                 {shareableMarkdownFile ? (
                   <>
-                    <Button icon={<ImportOutlined />} onClick={() => setImportDialogOpen(true)}>导入反馈</Button>
                     <Button
+                      className={styles.importFeedbackButton}
+                      color="green"
+                      icon={<ImportOutlined />}
+                      variant="solid"
+                      onClick={() => setImportDialogOpen(true)}
+                    >
+                      导入反馈
+                    </Button>
+                    <Button
+                      color="purple"
                       icon={<LinkOutlined />}
                       loading={buildingShareLink}
+                      type="primary"
+                      variant="filled"
                       onClick={() => { handleBuildShareLink().catch(() => undefined); }}
                     >
                       分享
