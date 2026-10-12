@@ -73,7 +73,7 @@ plan mode hook 的完整流程见 [`docs/plan-mode-hooks.md`](docs/plan-mode-hoo
 ### 评论与协作
 
 - 支持文件级评论、代码行级评论、Markdown 块级评论和 Markdown 源码行评论。
-- 在 Markdown `Preview` 中按住 `Shift` 拖选文字，可针对单行或跨行选区添加评论。
+- 在 Markdown `Preview` 中拖选文字，可针对单行或跨行选区添加评论。
 - 一条评论线程可包含多条评论；同一锚点的新评论会继续追加到已有线程。
 - 评论支持 `submit`、`replied`、`resolved` 三种状态，并可复制为交给 AI 处理的极简 prompt。
 
