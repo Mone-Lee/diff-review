@@ -2,4 +2,8 @@ node_modules/
 dist/
 .diff-review/
 
-AGENTS.md
+*.md
+!README.md
+!test.md
+!docs/plan-mode-hooks.md
+!docs/comment-snapshot-binding.md
