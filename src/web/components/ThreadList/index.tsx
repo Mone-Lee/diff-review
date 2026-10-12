@@ -7,7 +7,7 @@ import { Button, Card, Dropdown, Empty, Modal, Segmented, Space, Switch, Tag, Ty
 import type { DiffFile, ReviewThread } from '../../../shared/types';
 import { COMMENT_STATUS_TEXT_MAP } from '../../../shared/types';
 import { getThreadStatus, isThreadOnFileSnapshot } from '../../../shared/thread-utils';
-import { formatAnchor } from '../../utils';
+import { formatAnchor, formatAnchorLocation } from '../../utils';
 import { InlineThreadGroup } from '../InlineThreadGroup';
 import { useReviewActions, useReviewNavigationActions } from '../../contexts/ReviewActionsContext';
 import styles from './index.module.less';
@@ -19,6 +19,7 @@ type Props = {
   focusedThreadId: string | null;
   focusRequest?: object | null;
   simple?: boolean;
+  hideFilePath?: boolean;
   interactionMode?: 'default' | 'shared-reviewer';
 };
 
@@ -49,7 +50,7 @@ function getDisplayThreadStatus(thread: ReviewThread, interactionMode: NonNullab
   return interactionMode === 'shared-reviewer' ? thread.status : getThreadStatus(thread);
 }
 
-export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId, focusRequest, simple = false, interactionMode = 'default' }: Props) {
+export function ThreadList({ threads, currentFiles, currentFilePath, focusedThreadId, focusRequest, simple = false, hideFilePath = false, interactionMode = 'default' }: Props) {
   const { deleteThread } = useReviewActions();
   const { locateThread } = useReviewNavigationActions();
   const [filter, setFilter] = React.useState<ThreadFilter>('all');
@@ -241,7 +242,7 @@ export function ThreadList({ threads, currentFiles, currentFilePath, focusedThre
                 <button type="button" className={styles.threadTopButton} onClick={() => locateThread(thread.id)}>
                   <Space className={styles.threadTop} align="start" size={8}>
                     <Typography.Text className={styles.threadAnchor} strong>
-                      {formatAnchor(thread)}
+                      {hideFilePath ? formatAnchorLocation(thread) : formatAnchor(thread)}
                     </Typography.Text>
                     <Flex gap="small">
                       {interactionMode === 'shared-reviewer' || threadStatus !== 'replied' ? (

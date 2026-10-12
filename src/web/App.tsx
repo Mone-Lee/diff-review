@@ -559,6 +559,7 @@ export default function App() {
                 focusedThreadId={focusedThreadId}
                 focusRequest={locateTarget}
                 simple
+                hideFilePath
               />
             )}
           />

@@ -18,6 +18,19 @@ export function formatAnchor(thread: ReviewThread): string {
   return `${thread.filePath}:${thread.anchor.lineNumber}`;
 }
 
+// 单文件工作区省略重复文件名后，用自然语言保留评论的有效定位信息。
+export function formatAnchorLocation(thread: ReviewThread): string {
+  if (thread.anchor.type === 'file') return '全文';
+  if (thread.anchor.type === 'diff-line') {
+    const sideLabel = thread.anchor.side === 'old' ? '旧版本' : '新版本';
+    return `${sideLabel} · 第 ${thread.anchor.lineNumber} 行`;
+  }
+  if (thread.anchor.type === 'markdown-selection') {
+    return `第 ${formatLineRange(thread.anchor.startLine, thread.anchor.endLine)} 行`;
+  }
+  return `第 ${thread.anchor.lineNumber} 行`;
+}
+
 function formatLineRange(startLine: number, endLine: number) {
   return startLine === endLine ? String(startLine) : `${startLine}-${endLine}`;
 }
