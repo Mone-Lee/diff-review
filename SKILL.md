@@ -1,6 +1,6 @@
 ---
 name: diff-review
-description: Use when the user types /diff-review, asks to review the current workspace diff in a local GitHub-style viewer, or provides copied review comments containing [thread:ID] to address and reply to.
+description: Use when the user types /diff-review, asks to review the current workspace diff in a local GitHub-style viewer, or provides copied review comments containing [thread:ID] to address and reply to. Read this SKILL.md in a standalone tool call and wait for its result before constructing or running any review command.
 metadata:
   short-description: Open a local diff review viewer
 ---
@@ -8,6 +8,8 @@ metadata:
 # Diff Review
 
 Use this skill when the user asks for `/diff-review`, wants to inspect current workspace changes, staged changes, or a revision pair in a local review UI, or provides copied comments containing `[thread:<id>]` for handling and reply write-back.
+
+Read this entire `SKILL.md` in a standalone tool call and wait for the result before constructing any `local-diff-reviewer` command. Never combine reading this file and launching the reviewer in one shell command or one tool call: tool-call arguments are fixed before the file output is available, so a combined call cannot apply the instructions below.
 
 ## Commands
 
@@ -63,7 +65,9 @@ Confirm write-back for every checklist ID: inspect the API response for the save
 
 ## Context File Selection (Skill Only)
 
-When invoking this skill, use files the user explicitly added to the agent context for this review as the selected review scope. Extract their file paths from file attachments or explicit file references. Do not treat the automatically reported active editor file, selection, open tabs, files read by tools, or paths mentioned in copied review comments as a selection. If the only file context comes from the active editor or open tabs, do not set `DIFF_REVIEW_SKILL_FILES`. If no files were explicitly added, review all changes as usual.
+When invoking this skill, use files the user explicitly added to the agent context for this review as the selected review scope. Treat absolute paths listed in the machine-generated `# Files mentioned by the user:` section as explicit selections and pass those exact paths. Also extract paths from other explicit file attachments or references. Do not treat the automatically reported active editor file, selection, open tabs, files read by tools, or paths mentioned in copied review comments as a selection. If the only file context comes from the active editor or open tabs, do not set `DIFF_REVIEW_SKILL_FILES`. If no files were explicitly added, review all changes as usual.
+
+If the interface shows an explicit file attachment but its exact repository path is unavailable, do not silently omit `DIFF_REVIEW_SKILL_FILES` and do not launch immediately. If the attachment name is available, first search the target repository for exact basename matches. Use a single unambiguous match automatically. When there are multiple matches, present the matching repository-relative paths as choices together with an option to review all changes. When there is no match, offer a recommended choice to reselect the file or provide its path, plus an option to review all changes. Use an interactive choice control when available; otherwise ask one concise question with the same options. Launch only after the user chooses a resolvable file scope or explicitly chooses all changes.
 
 Pass selected files only through the command-scoped `DIFF_REVIEW_SKILL_FILES` environment variable, encoded as a JSON array. Prefer absolute paths so nested workspace directories are unambiguous. Use the tool's structured environment argument when available; otherwise safely shell-quote the JSON. Never export this variable globally or carry a previous invocation's selection into a later one. This is an internal Skill channel, not a public CLI flag or a viewer file picker.
 
