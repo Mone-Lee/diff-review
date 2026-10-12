@@ -353,7 +353,14 @@ export default function ShareApp() {
             <Typography.Paragraph type="secondary">
               {nameRequired ? '提交评论前请留下昵称，当前评论会在保存后继续提交。' : '昵称会随评论写入反馈链接，无需注册账号。'}
             </Typography.Paragraph>
-            <Input autoFocus maxLength={100} placeholder="例如：小李" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} />
+            <Input
+              autoFocus
+              maxLength={100}
+              placeholder="例如：小李"
+              value={nameDraft}
+              onChange={(event) => setNameDraft(event.target.value)}
+              onPressEnter={saveReviewerName}
+            />
           </Modal>
         </>
       </ReviewNavigationActionsProvider>
