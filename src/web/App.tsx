@@ -489,6 +489,27 @@ export default function App() {
             fullWidthHeader
             actions={(
               <>
+                <div className={styles.runtimeActions}>
+                  <Popconfirm
+                    title="关闭当前 Diff Review 任务？"
+                    description="确认后这个页面对应的本地服务会停止。"
+                    okText="关闭"
+                    cancelText="取消"
+                    okButtonProps={{ danger: true, loading: shuttingDownRuntime }}
+                    onConfirm={handleShutdownRuntime}
+                  >
+                    <Button
+                      aria-label="关闭当前 Diff Review 任务"
+                      danger
+                      disabled={shuttingDownRuntime}
+                      icon={<PoweroffOutlined />}
+                      loading={shuttingDownRuntime}
+                      size="small"
+                      type="text"
+                    />
+                  </Popconfirm>
+                </div>
+                <span className={styles.headerDivider} aria-hidden="true" />
                 {shareableMarkdownFile ? (
                   <>
                     <Button
@@ -530,22 +551,6 @@ export default function App() {
                     退回评论
                   </Button>
                 </Space.Compact>
-                <Popconfirm
-                  title="关闭当前 Diff Review 任务？"
-                  description="确认后这个页面对应的本地服务会停止。"
-                  okText="关闭"
-                  cancelText="取消"
-                  okButtonProps={{ danger: true, loading: shuttingDownRuntime }}
-                  onConfirm={handleShutdownRuntime}
-                >
-                  <Button
-                    aria-label="关闭当前 Diff Review 任务"
-                    danger
-                    disabled={shuttingDownRuntime}
-                    icon={<PoweroffOutlined />}
-                    loading={shuttingDownRuntime}
-                  />
-                </Popconfirm>
               </>
             )}
             document={(
