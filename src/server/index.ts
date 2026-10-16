@@ -29,7 +29,11 @@ const packageVersion = readPackageVersion();
 
 export async function startServer(state: ReviewServerState, port = 4966): Promise<string> {
   let markdownPreviews = await buildMarkdownPreviewCache(state);
-  const fileWatcher = new FileWatcherService(state.session.repoRoot);
+  const fileWatcher = new FileWatcherService(state.session.repoRoot, async () => {
+    if (!isRefreshableReviewMode(state.session.mode)) return false;
+    const currentDiff = await getDiff(state.session.mode, state.session.repoRoot, state.session.selectedFiles);
+    return diffHash(currentDiff) !== state.session.diffHash;
+  });
   const app = express();
 
   app.use(express.json({ limit: '2mb' }));

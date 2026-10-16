@@ -13,9 +13,13 @@ export class FileWatcherService {
   private readonly watchers: FSWatcher[] = [];
   private pendingChanges = false;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private changeVersion = 0;
   private closed = false;
 
-  constructor(private readonly repoRoot: string) {
+  constructor(
+    private readonly repoRoot: string,
+    private readonly hasReviewChanges: () => Promise<boolean>
+  ) {
     this.startWatching();
   }
 
@@ -38,6 +42,7 @@ export class FileWatcherService {
    * 在 review 快照已经重算后清空待刷新状态，并通知前端恢复为最新快照。
    */
   clearPendingChanges() {
+    this.changeVersion += 1;
     if (!this.pendingChanges) return;
     this.pendingChanges = false;
     this.broadcast({ type: 'synced', hasPendingChanges: false });
@@ -70,23 +75,34 @@ export class FileWatcherService {
   }
 
   /**
-   * 把短时间内的多次磁盘事件合并成一次“可刷新”通知，避免前端按钮频繁闪动。
+   * 把短时间内的多次磁盘事件合并成一次 diff 校验，只有审查范围实际变化时才通知前端。
    */
   private handleChange() {
     if (this.closed) return;
-    this.pendingChanges = true;
+    const changeVersion = ++this.changeVersion;
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
     }
 
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
-      this.broadcast({
-        type: 'change',
-        hasPendingChanges: true,
-        changedAt: new Date().toISOString()
-      });
+      this.confirmReviewChange(changeVersion).catch(() => undefined);
     }, 180);
+  }
+
+  /**
+   * 校验当前 diff 是否偏离页面快照，并丢弃校验期间已被更新事件取代的旧结果。
+   */
+  private async confirmReviewChange(changeVersion: number) {
+    const hasChanges = await this.hasReviewChanges();
+    if (this.closed || changeVersion !== this.changeVersion || !hasChanges) return;
+
+    this.pendingChanges = true;
+    this.broadcast({
+      type: 'change',
+      hasPendingChanges: true,
+      changedAt: new Date().toISOString()
+    });
   }
 
   private tryWatch(path: string, options?: { recursive?: boolean }) {

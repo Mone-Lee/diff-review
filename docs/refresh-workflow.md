@@ -59,10 +59,10 @@ private pendingChanges = false;
 private readonly clients = new Set<Response>();
 ```
 
-当监听到磁盘事件时，服务端不会立刻刷新 diff，而是只做两件事：
+当监听到磁盘事件时，服务端不会立刻替换页面快照，而是：
 
-1. 把 `pendingChanges` 设为 `true`
-2. 在短暂 debounce 后广播：
+1. 在短暂 debounce 后重新计算当前审查范围的 diffHash
+2. 只有新 hash 与页面快照不同时，才把 `pendingChanges` 设为 `true` 并广播：
 
 ```ts
 {
@@ -158,16 +158,17 @@ Vite 预构建依赖或刷新构建产物时，不会仅因为这些目录变化
 - 变化的是源码、文档、临时文件还是生成产物
 - 当前 review 模式下这次变化是否会影响最终页面展示
 
-所以 `FileWatcherService` 的职责非常克制：
+所以 `FileWatcherService` 不直接把文件系统事件等同于可刷新状态：
 
-- 它不试图判断“这次变化值不值得刷新”
-- 它只负责发出“仓库可能变了，你可以刷新”的信号
+- 文件事件只触发一次防抖后的 diff 校验
+- `.git/objects`、临时文件或非选中范围的写入不会单独触发 Refresh
+- 只有当前 mode 与 selectedFiles 对应的 diffHash 改变才发出“可以刷新”的信号
 
-真正要不要更新页面，仍然交给用户点击 `Refresh` 后，通过 `getDiff(...)` 再正式计算一次。
+真正更新页面仍然交给用户点击 `Refresh` 后，通过 `getDiff(...)` 正式生成新快照。
 
-### 为什么监听层不直接调用 `getDiff()`
+### 为什么监听层只校验 diffHash
 
-表面上看，文件一变就直接重新跑一次 diff，似乎也能工作；但当前设计故意没有这么做。
+文件事件经过 debounce 后会调用 `getDiff()`，但只比较结果摘要，不会直接替换页面快照。
 
 主要原因有三个：
 
@@ -175,12 +176,12 @@ Vite 预构建依赖或刷新构建产物时，不会仅因为这些目录变化
    - 输入中自动保存
    - formatter 连续写盘
    - 构建工具更新多个文件
-2. 重新计算 diff 的代价比接收一个 fs 事件高得多
+2. 每个底层事件都重新计算 diff 的代价较高
 3. 自动替换当前快照会打断用户阅读和评论
 
 所以系统把这两层拆开：
 
-- 监听层：轻量、快速、只负责提示
+- 监听层：合并事件、校验 diffHash，只在审查范围实际变化时提示
 - 刷新层：显式、昂贵、真正重建快照
 
 ### 一个实际例子
@@ -190,15 +191,14 @@ Vite 预构建依赖或刷新构建产物时，不会仅因为这些目录变化
 1. 编辑器保存文件
 2. 操作系统向 Node 进程报告一次文件系统变化
 3. `watch(repoRoot, ...)` 的回调被触发
-4. `FileWatcherService.handleChange()` 把 `pendingChanges` 设为 `true`
-5. debounce 结束后，服务端发出一条 `change` SSE
-6. 前端显示 `Refresh` 按钮
+4. debounce 结束后，服务端重新计算当前审查范围的 diffHash
+5. 新 hash 与页面快照不同时，服务端把 `pendingChanges` 设为 `true`
+6. 服务端发出 `change` SSE，前端显示 `Refresh` 按钮
 
-但此时系统仍然不知道：
+此时系统已经确认审查内容发生变化，但仍然不会自动切换，因为：
 
-- 这次变更是不是最终 Git diff 的一部分
-- 有没有别的文件也一起变了
 - 当前用户是否正好在读某段内容，不适合自动跳屏
+- 新快照需要重新解析文件并绑定对应评论
 
 所以页面只是提示，而不是直接切换。
 
@@ -403,13 +403,13 @@ private readonly clients = new Set<Response>();
 - formatter 会在一次保存里连续改多行甚至多次写盘
 - 某些工具会同时改源码和产物文件
 
-如果每次文件系统事件都立刻推送一个 `change`，前端就会在很短时间收到很多次重复通知。
+如果每次文件系统事件都立刻校验 diff，服务端就会在很短时间运行很多次重复的 Git 命令。
 
 所以当前实现会先：
 
-1. 立刻把内部状态设为 `pendingChanges = true`
-2. 但把真正的 SSE 推送稍微延后一点
-3. 如果这期间又来了新事件，就合并成一次通知
+1. 延后本次 diffHash 校验
+2. 如果这期间又来了新事件，就重置计时
+3. 最终只运行一次校验，并在 hash 变化时发送 SSE
 
 这就是 debounce 的作用：把“很多很密集的底层文件事件”收敛成“用户视角下的一次仓库变化”。
 
@@ -539,8 +539,10 @@ sequenceDiagram
 
     User->>FS: 修改并保存文件
     FS-->>Watcher: 触发 fs 事件
-    Watcher->>Watcher: pendingChanges = true
     Watcher->>Watcher: debounce 合并短时间内的重复事件
+    Watcher->>Git: 读取当前审查范围 diffHash
+    Git-->>Watcher: 返回最新 diffHash
+    Watcher->>Watcher: 与页面快照不同，pendingChanges = true
     Watcher-->>WatchAPI: 广播 change 事件
     WatchAPI-->>Hook: data: { type: "change", hasPendingChanges: true, changedAt }
     Hook->>Hook: hasPendingChanges = true
@@ -664,7 +666,8 @@ clearPendingChanges();
 ```text
 用户修改文件
   -> FileWatcherService 收到 fs 事件
-  -> 服务端把 pendingChanges 标为 true
+  -> debounce 后重新计算当前审查范围的 diffHash
+  -> hash 不同时把 pendingChanges 标为 true
   -> /api/watch 通过 SSE 推送 change
   -> useFileWatch() 把页面状态设为 hasPendingChanges = true
   -> 页面显示 Refresh 按钮
