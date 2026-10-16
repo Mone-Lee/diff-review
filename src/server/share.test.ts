@@ -1,5 +1,5 @@
 /**
- * 本地分享门户集成测试：验证同源会话地址、分享入口与资源托管，避免被主站 SPA 回退吞掉。
+ * 分享门户集成测试：验证源码运行时保留公网门户地址，同时继续提供本地分享资源预览。
  */
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
@@ -13,7 +13,7 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-test('本地分享链接与静态资源使用当前审查服务', { timeout: 15_000 }, async () => {
+test('源码运行时保留公网分享门户并托管本地分享资源', { timeout: 15_000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'diff-review-share-server-'));
   const webDist = join(root, 'web');
   const shareDist = join(root, 'share');
@@ -38,14 +38,14 @@ test('本地分享链接与静态资源使用当前审查服务', { timeout: 15_
     const [url] = await once(lines, 'line') as [string];
     const response = await fetch(`${url}/api/session`);
     const clientSession = await response.json() as typeof session;
-    assert.equal(clientSession.shareBaseUrl, '/share.html');
+    assert.equal(clientSession.shareBaseUrl, session.shareBaseUrl);
     assert.equal(clientSession.shareId, session.shareId);
     const reviewState = await (await fetch(`${url}/api/review-state`)).json() as { session: typeof session };
-    assert.equal(reviewState.session.shareBaseUrl, '/share.html');
+    assert.equal(reviewState.session.shareBaseUrl, session.shareBaseUrl);
     const refreshedState = await (await fetch(`${url}/api/refresh`, { method: 'POST' })).json() as { session: typeof session };
-    assert.equal(refreshedState.session.shareBaseUrl, '/share.html');
+    assert.equal(refreshedState.session.shareBaseUrl, session.shareBaseUrl);
     assert.equal(refreshedState.session.shareId, session.shareId);
-    const share = await fetch(new URL(clientSession.shareBaseUrl, url));
+    const share = await fetch(`${url}/share.html`);
     assert.equal(share.status, 200);
     assert.equal(await share.text(), '<main>Shared review</main>');
     assert.equal(share.headers.get('cache-control'), 'no-cache');

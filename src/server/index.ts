@@ -31,20 +31,11 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   let markdownPreviews = await buildMarkdownPreviewCache(state);
   const fileWatcher = new FileWatcherService(state.session.repoRoot);
   const app = express();
-  const packageRoot = resolve(import.meta.dirname, '../..');
-  const usesLocalSource = existsSync(join(packageRoot, 'src/share/main.tsx'));
-
-  // npm 发布包不包含源码；本地软链和源码启动使用当前页面同源门户，兼容 Vite 的实际端口。
-  function clientSession(): ReviewSession {
-    return usesLocalSource && state.session.shareBaseUrl
-      ? { ...state.session, shareBaseUrl: '/share.html' }
-      : state.session;
-  }
 
   app.use(express.json({ limit: '2mb' }));
 
   app.get('/api/session', (_req, res) => {
-    res.json(clientSession());
+    res.json(state.session);
   });
 
   app.get('/api/diff', (_req, res) => {
@@ -59,7 +50,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.get('/api/review-state', async (_req, res, next) => {
     try {
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: clientSession(), files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
+      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -100,7 +91,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       markdownPreviews = await buildMarkdownPreviewCache(nextReviewState);
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
-      res.json({ session: clientSession(), files: state.diffFiles });
+      res.json({ session: state.session, files: state.diffFiles });
     } catch (error) {
       next(error);
     }
@@ -127,7 +118,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: clientSession(), files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
+      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
@@ -167,7 +158,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       applyReviewState(state, nextReviewState);
       fileWatcher.clearPendingChanges();
       const comments = await readComments(state.session.repoRoot);
-      res.json({ session: clientSession(), files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
+      res.json({ session: state.session, files: state.diffFiles, threads: selectThreadsForDiffFiles(comments.threads, state.diffFiles) });
     } catch (error) {
       next(error);
     }
