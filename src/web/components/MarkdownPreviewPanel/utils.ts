@@ -73,9 +73,11 @@ export function getThreadPreviewStartLine(thread: ReviewThread) {
   return null;
 }
 
-// 仅允许常见安全协议与站内相对路径，拦截 javascript: 等危险链接。
+// 允许常见安全协议与所有站内相对路径，拦截 javascript:、data: 等危险协议。
 export function isSafeUrl(url: string) {
-  return /^(https?:|mailto:|#|\.{0,2}\/|\/)/i.test(url.trim());
+  const normalizedUrl = url.trim();
+  if (!normalizedUrl) return false;
+  return /^(https?:|mailto:)/i.test(normalizedUrl) || !/^[a-z][a-z\d+.-]*:/i.test(normalizedUrl);
 }
 
 export function resolveAssetPath(markdownPath: string, rawUrl: string) {
