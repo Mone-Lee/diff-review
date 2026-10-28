@@ -278,18 +278,34 @@ async function refreshRunningReview(session: ReviewSession, diffFiles: DiffFile[
       const capabilities = (await capabilityResponse.json()) as { appVersion?: unknown; reviewRefreshProtocol?: unknown };
       if (capabilities.reviewRefreshProtocol !== REVIEW_REFRESH_PROTOCOL) continue;
       if (capabilities.appVersion !== packageVersion) continue;
+      const uiUrl = await resolveRuntimeUiUrl(runtime, apiUrl);
+      if (!uiUrl) continue;
       const response = await fetch(`${apiUrl}/api/review-state`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session, diffFiles })
       });
       if (!response.ok) continue;
-      return runtime.usesVite ? `http://127.0.0.1:${runtime.vitePort ?? 5173}` : apiUrl;
+      return uiUrl;
     } catch {
       // Runtime records may outlive a process that has just exited; fall through to a new server.
     }
   }
   return undefined;
+}
+
+// 刷新前确认用户实际访问的页面仍可用，避免 API 存活但 Vite 已退出时返回失效地址。
+async function resolveRuntimeUiUrl(runtime: RuntimeEntry, apiUrl: string): Promise<string | undefined> {
+  if (!runtime.usesVite) return apiUrl;
+  if (typeof runtime.vitePort !== 'number') return undefined;
+
+  const uiUrl = `http://127.0.0.1:${runtime.vitePort}`;
+  try {
+    const response = await fetch(uiUrl, { signal: AbortSignal.timeout(1000) });
+    return response.ok ? uiUrl : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function logStartup(repoRoot: string, mode: ReviewSession['mode']) {
@@ -712,7 +728,7 @@ function findAvailablePort(preferredPort: number): Promise<number> {
 }
 
 function startVite(apiUrl: string, port: number): number | undefined {
-  // 由 review 进程托管 Vite 子进程，便于 Ctrl+C 一并退出。
+  // 由 review 进程托管 Vite 子进程；收到终止信号时两者必须一起退出，不能留下仅 API 存活的残缺实例。
   const child = spawn('npm', ['run', 'web:dev'], {
     cwd: packageRoot,
     stdio: 'inherit',
@@ -725,8 +741,14 @@ function startVite(apiUrl: string, port: number): number | undefined {
     }
   });
 
-  process.on('SIGINT', () => child.kill('SIGINT'));
-  process.on('SIGTERM', () => child.kill('SIGTERM'));
+  process.once('SIGINT', () => {
+    child.kill('SIGINT');
+    process.exit(130);
+  });
+  process.once('SIGTERM', () => {
+    child.kill('SIGTERM');
+    process.exit(143);
+  });
   return child.pid;
 }
 

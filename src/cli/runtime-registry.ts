@@ -39,8 +39,8 @@ const POLL_INTERVAL_MS = 100;
 export async function recordRuntime(entry: RuntimeEntry): Promise<void> {
   const path = runtimePath(entry.repoRoot);
   const store = await readRuntime(path);
-  // 只保留仍存活的主进程记录，再写入当前这次运行信息。
-  const aliveEntries = store.entries.filter((item) => isPidAlive(item.pid));
+  // 只保留主进程与必要子进程都存活的记录，再写入当前这次运行信息。
+  const aliveEntries = store.entries.filter(isRuntimeAlive);
   const deduped = aliveEntries.filter((item) => item.pid !== entry.pid);
   deduped.push(entry);
   await writeRuntime(path, { entries: deduped });
@@ -48,7 +48,7 @@ export async function recordRuntime(entry: RuntimeEntry): Promise<void> {
 
 export async function getLiveRuntimes(repoRoot: string): Promise<RuntimeEntry[]> {
   const store = await readRuntime(runtimePath(repoRoot));
-  return store.entries.filter((entry) => isPidAlive(entry.pid)).sort((left, right) => right.startedAt.localeCompare(left.startedAt));
+  return store.entries.filter(isRuntimeAlive).sort((left, right) => right.startedAt.localeCompare(left.startedAt));
 }
 
 export async function stopRecordedRuntimes(repoRoot: string): Promise<{
@@ -142,6 +142,13 @@ function isPidAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+// Vite 模式必须同时保持 CLI/API 主进程和 Vite 子进程存活，否则页面地址不可用，不能继续视为可刷新实例。
+function isRuntimeAlive(entry: RuntimeEntry): boolean {
+  if (!isPidAlive(entry.pid)) return false;
+  if (!entry.usesVite) return true;
+  return typeof entry.vitePid === 'number' && isPidAlive(entry.vitePid);
 }
 
 // stop 会优先给子进程和主进程发送 SIGTERM；若宽限期后仍存活，再升级为 SIGKILL。
