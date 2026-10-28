@@ -554,6 +554,7 @@ export default function App() {
             document={(
               <MarkdownPreviewPanel
                 key={`${session?.id ?? 'session'}:${selectedFile.path}:${selectedFile.snapshotHash}:preview`}
+                copyLabel="Copy plan"
                 file={selectedFile}
                 threads={selectedFileThreads}
                 locateTarget={locateTarget}

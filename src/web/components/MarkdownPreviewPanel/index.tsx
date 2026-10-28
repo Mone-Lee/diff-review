@@ -7,8 +7,8 @@
  * 4) 对 mermaid 代码块交由 MermaidDiagram 组件渲染。
  */
 import React from 'react';
-import { Alert, Spin } from 'antd';
-import { MessageOutlined } from '@ant-design/icons';
+import { Alert, Button, Spin } from 'antd';
+import { CheckOutlined, FileTextOutlined, MessageOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
@@ -55,6 +55,7 @@ type Props = {
   remoteAssetsOnly?: boolean;
   preserveUrlFragment?: boolean;
   interactionMode?: 'default' | 'shared-reviewer';
+  copyLabel?: string;
 };
 
 type MarkdownAstNode = {
@@ -64,6 +65,8 @@ type MarkdownAstNode = {
 };
 
 const MARKDOWN_HIGHLIGHT_PATTERN = /==(.+?)==/g;
+
+const COPY_STAY_TIME = 3000; // 复制成功提示停留时长，单位毫秒。
 
 // 将 ==高亮== 这种轻量扩展语法转换成 mark 标签。
 // 只处理 markdown 已解析出的普通 text 节点，避免影响 code、html 等语义节点。
@@ -220,12 +223,15 @@ export function MarkdownPreviewPanel({
   previewData,
   remoteAssetsOnly = false,
   preserveUrlFragment = false,
-  interactionMode = 'default'
+  interactionMode = 'default',
+  copyLabel = 'Copy Markdown'
 }: Props) {
   const [preview, setPreview] = React.useState<MarkdownPreview | null>(previewData ?? null);
+  const [copied, setCopied] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const markdownBodyRef = React.useRef<HTMLDivElement | null>(null);
   const autoScrollKeyRef = React.useRef('');
+  const copyResetTimerRef = React.useRef<number | null>(null);
   const { createThread } = useReviewActions();
   const { locateThread } = useReviewNavigationActions();
   const selectionGestureRef = React.useRef(false);
@@ -241,6 +247,22 @@ export function MarkdownPreviewPanel({
     setSelectionCandidate(null);
     setSelectionDraft(null);
   }, [file.path, preview]);
+
+  React.useEffect(() => () => {
+    if (copyResetTimerRef.current !== null) window.clearTimeout(copyResetTimerRef.current);
+  }, []);
+
+  // 复制 Markdown 原文并保留五秒成功反馈；重复点击时重新计算反馈时长。
+  async function copyMarkdown() {
+    if (!preview) return;
+    await navigator.clipboard.writeText(preview.content);
+    setCopied(true);
+    if (copyResetTimerRef.current !== null) window.clearTimeout(copyResetTimerRef.current);
+    copyResetTimerRef.current = window.setTimeout(() => {
+      setCopied(false);
+      copyResetTimerRef.current = null;
+    }, COPY_STAY_TIME);
+  }
 
   React.useLayoutEffect(() => {
     if (!selectionDraft) return;
@@ -688,6 +710,17 @@ export function MarkdownPreviewPanel({
       ) : null}
       {preview.deleted ? <Alert className={styles.deletedBanner} message="该文件已删除，仅展示删除前预览" type="warning" showIcon /> : null}
       <article className={styles.markdownArticle}>
+        <div className={styles.markdownActions}>
+          <Button
+            aria-live="polite"
+            className={copied ? styles.copySuccess : undefined}
+            icon={copied ? <CheckOutlined /> : <FileTextOutlined />}
+            type="text"
+            onClick={() => { copyMarkdown().catch(() => undefined); }}
+          >
+            {copied ? 'Copied!' : copyLabel}
+          </Button>
+        </div>
         <div className={styles.markdownBody} ref={markdownBodyRef}
           onPointerMove={(event) => {
             const body = markdownBodyRef.current;

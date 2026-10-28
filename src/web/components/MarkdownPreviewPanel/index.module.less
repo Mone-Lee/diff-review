@@ -23,6 +23,32 @@
   background: #fff;
 }
 
+.markdownActions {
+  display: flex;
+  justify-content: flex-end;
+  margin: -6px -8px 10px 0;
+}
+
+.markdownActions :global(.ant-btn) {
+  color: var(--muted);
+  font-weight: bold;
+}
+
+.markdownActions :global(.ant-btn:hover) {
+  color: var(--ink);
+}
+
+.markdownActions .copySuccess:global(.ant-btn) {
+  background: #e9f8ef;
+  color: #16803c;
+  font-weight: 600;
+}
+
+.markdownActions .copySuccess:global(.ant-btn:hover) {
+  background: #d8f3e2;
+  color: #116b32;
+}
+
 .markdownBody {
   min-width: 0;
   line-height: 1.72;
