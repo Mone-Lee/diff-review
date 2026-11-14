@@ -701,8 +701,8 @@ export function MarkdownPreviewPanel({
             style={{ top: selectionDraft.top, left: selectionDraft.left, right: 'auto', maxWidth: 'calc(100% - 16px)' }}
             selectedText={selectionDraft.anchor.selectedText}
             onCancel={() => setSelectionDraft(null)}
-            onSubmit={async (body) => {
-              await createThread(selectionDraft.anchor, body);
+            onSubmit={async (body, attachments) => {
+              await createThread(selectionDraft.anchor, body, attachments);
               setSelectionDraft(null);
             }}
           />

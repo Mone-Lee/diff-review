@@ -106,8 +106,8 @@ export function FileHeader({
         <CommentComposer
           style={{ marginTop: 16 }}
           placeholder="请输入文件级审查评论..."
-          onSubmit={async (body) => {
-            await createThread({ type: 'file', filePath: file.path }, body);
+          onSubmit={async (body, attachments) => {
+            await createThread({ type: 'file', filePath: file.path }, body, attachments);
             setOpen(false);
           }}
           onCancel={() => setOpen(false)}

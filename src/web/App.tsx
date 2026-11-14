@@ -19,6 +19,7 @@ import {
   buildShareUrl,
   getShareableMarkdownFile,
   getShareUrlCapacity,
+  isShareableAnchor,
   parseShareUrl,
   reviewThreadsToShareThreads,
   type MarkdownSharePayload
@@ -91,6 +92,7 @@ export default function App() {
   const [planResultSubmitted, setPlanResultSubmitted] = React.useState(false);
   const [shareDialogOpen, setShareDialogOpen] = React.useState(false);
   const [shareLink, setShareLink] = React.useState('');
+  const [shareImagesOmitted, setShareImagesOmitted] = React.useState(false);
   const [buildingShareLink, setBuildingShareLink] = React.useState(false);
   const [importDialogOpen, setImportDialogOpen] = React.useState(false);
   const [importLink, setImportLink] = React.useState('');
@@ -363,7 +365,10 @@ export default function App() {
         threads: reviewThreadsToShareThreads(shareableFileThreads)
       };
       setShareLink(await buildShareUrl(new URL(session.shareBaseUrl, window.location.href).href, payload));
+      const imagesOmitted = shareableFileThreads.some((thread) => isShareableAnchor(thread.anchor) && thread.comments.some((comment) => comment.attachments?.length));
+      setShareImagesOmitted(imagesOmitted);
       setShareDialogOpen(true);
+      if (imagesOmitted) message.warning('分享链接已生成，已省略图片附件及纯图片评论');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '生成分享链接失败');
     } finally {
@@ -437,8 +442,11 @@ export default function App() {
         {shareLink && shareLinkCapacity ? (
           <>
             <Typography.Paragraph className={styles.shareDialogIntro} type="secondary">
-              链接包含当前 Markdown 正文、文件和 Markdown 块评论及其线程状态；代码行和文本选区评论不会打包。拿到链接的人可以查看并继续添加反馈。
+              链接包含当前 Markdown 正文、文件、段落和文本选区评论及其线程状态；代码行评论不会打包。拿到链接的人可以查看并继续添加反馈。图片附件会自动省略，纯图片评论不打包。
             </Typography.Paragraph>
+            {shareImagesOmitted ? <Typography.Paragraph type="warning" role="status">
+              本次分享已省略图片附件及纯图片评论，图文评论保留文字。本地评论和图片不受影响。
+            </Typography.Paragraph> : null}
             <Typography.Text strong>可分享链接</Typography.Text>
             <br />
             <Typography.Text type="secondary">

@@ -1,12 +1,14 @@
 /**
  * 内嵌评论组：承载同一锚点下的一组评论与回复/状态操作。
  */
+import type { ReviewAttachment } from '../../../shared/attachments';
 import React from 'react';
-import { Button, Input, Popconfirm, Tag, Typography } from 'antd';
+import { Button, Popconfirm, Tag, Typography } from 'antd';
 import { CheckOutlined, CopyOutlined, DeleteOutlined, EditOutlined, ReloadOutlined, RedoOutlined } from '@ant-design/icons';
 import type { ReviewThread } from '../../../shared/types';
 import { COMMENT_STATUS_TEXT_MAP } from '../../../shared/types';
 import { getMergedThreadStatus, getThreadStatus } from '../../../shared/thread-utils';
+import { CommentImages } from '../CommentImages';
 import { CommentComposer } from '../CommentComposer';
 import { useReviewActions, useReviewNavigationActions } from '../../contexts/ReviewActionsContext';
 import styles from './index.module.less';
@@ -16,8 +18,8 @@ export type InlineThreadGroupProps = {
   onFocus?: (threadId: string) => void;
   onPatch?: (id: string, status: ReviewThread['status']) => Promise<void>;
   onDeleteThread?: (id: string) => Promise<void>;
-  onReply?: (id: string, body: string) => Promise<void>;
-  onPatchComment?: (threadId: string, commentId: string, body: string) => Promise<void>;
+  onReply?: (id: string, body: string, attachments?: ReviewAttachment[]) => Promise<void>;
+  onPatchComment?: (threadId: string, commentId: string, body: string, attachments?: ReviewAttachment[]) => Promise<void>;
   onDeleteComment?: (threadId: string, commentId: string) => Promise<void>;
   onCopy?: (scope: { type: 'thread'; threadId: string }) => Promise<void>;
   showStatusTag?: boolean;
@@ -76,7 +78,6 @@ export function InlineThreadGroup({
   const copyThreadPrompt = onCopy ?? reviewActions.copyPrompt;
   const [replyingThreadId, setReplyingThreadId] = React.useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null);
-  const [editingBody, setEditingBody] = React.useState('');
   const firstThread = threads[0];
   const groupStatus = interactionMode === 'shared-reviewer' ? getSharedGroupStatus(threads) : getMergedThreadStatus(threads);
   const actionThread = getActionThread(threads);
@@ -138,40 +139,21 @@ export function InlineThreadGroup({
                         </Typography.Text>
                       ) : null}
                       {editingCommentId === comment.id ? (
-                        <div className={styles.inlineThreadEdit}>
-                          <Input.TextArea
-                            value={editingBody}
-                            autoSize={{ minRows: 3, maxRows: 8 }}
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={(event) => setEditingBody(event.target.value)}
-                          />
-                          <div className={styles.inlineThreadEditActions}>
-                            <Button
-                              size="small"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setEditingCommentId(null);
-                                setEditingBody('');
-                              }}
-                            >
-                              取消
-                            </Button>
-                            <Button
-                              size="small"
-                              type="primary"
-                              onClick={async (event) => {
-                                event.stopPropagation();
-                                await updateComment(thread.id, comment.id, editingBody);
-                                setEditingCommentId(null);
-                                setEditingBody('');
-                              }}
-                            >
-                              保存
-                            </Button>
-                          </div>
-                        </div>
+                        <CommentComposer
+                          key={comment.id}
+                          placeholder="编辑评论..." submitLabel="保存"
+                          initialBody={comment.body} initialAttachments={comment.attachments}
+                          onCancel={() => setEditingCommentId(null)}
+                          onSubmit={async (body, attachments) => {
+                            await updateComment(thread.id, comment.id, body, attachments);
+                            setEditingCommentId(null);
+                          }}
+                        />
                       ) : (
-                        <Typography.Paragraph className={styles.inlineThreadBody}>{comment.body}</Typography.Paragraph>
+                        <>
+                          <CommentImages attachments={comment.attachments ?? []} />
+                          {comment.body ? <Typography.Paragraph className={styles.inlineThreadBody}>{comment.body}</Typography.Paragraph> : null}
+                        </>
                       )}
                     </div>
                     {(canEditComment || canDeleteComment) && editingCommentId !== comment.id ? (
@@ -185,7 +167,6 @@ export function InlineThreadGroup({
                             onClick={(event) => {
                               event.stopPropagation();
                               setEditingCommentId(comment.id);
-                              setEditingBody(comment.body);
                             }}
                           />
                         ) : null}
@@ -224,8 +205,8 @@ export function InlineThreadGroup({
             onCancel={() => {
               setReplyingThreadId(null);
             }}
-            onSubmit={async (body) => {
-              await replyToThread(actionThread.id, body);
+            onSubmit={async (body, attachments) => {
+              await replyToThread(actionThread.id, body, attachments);
               setReplyingThreadId(null);
             }}
           />

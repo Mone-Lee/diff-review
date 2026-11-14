@@ -65,8 +65,8 @@ export function InlineDiffLine({
       {activeLine === anchorKey && lineNumber ? (
         <CommentPopover
           onCancel={() => setActiveLine(null)}
-          onSubmit={async (body) => {
-            await createThread({ type: 'diff-line', filePath, side, lineNumber }, body);
+          onSubmit={async (body, attachments) => {
+            await createThread({ type: 'diff-line', filePath, side, lineNumber }, body, attachments);
             setActiveLine(null);
           }}
         />

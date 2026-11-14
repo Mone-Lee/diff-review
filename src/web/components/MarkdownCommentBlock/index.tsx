@@ -44,8 +44,8 @@ export const MarkdownCommentBlock = React.memo(function MarkdownCommentBlock({
         <div data-review-ignore-selection>
           <CommentPopover
             onCancel={() => setIsComposerOpen(false)}
-            onSubmit={async (body) => {
-              await createThread({ type: 'markdown-line', filePath, lineNumber, blockId: `line-${lineNumber}` }, body);
+            onSubmit={async (body, attachments) => {
+              await createThread({ type: 'markdown-line', filePath, lineNumber, blockId: `line-${lineNumber}` }, body, attachments);
               setIsComposerOpen(false);
             }}
           />

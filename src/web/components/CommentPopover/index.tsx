@@ -1,6 +1,7 @@
 /**
  * 行内评论弹层：在 Diff/Markdown 视图中承载快速评论输入。
  */
+import type { ReviewAttachment } from '../../../shared/attachments';
 import React from 'react';
 import { CommentComposer } from '../CommentComposer';
 import styles from './index.module.less';
@@ -9,7 +10,7 @@ type Props = {
   style?: React.CSSProperties;
   selectedText?: string;
   onCancel: () => void;
-  onSubmit: (body: string) => Promise<void>;
+  onSubmit: (body: string, attachments?: ReviewAttachment[]) => Promise<void>;
 };
 
 export function CommentPopover({ onCancel, onSubmit, style, selectedText }: Props) {

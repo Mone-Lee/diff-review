@@ -1,6 +1,7 @@
 /**
  * Review API 封装：负责前端与 review 会话、评论线程、评论编辑和 prompt 生成接口之间的通信。
  */
+import type { ReviewAttachment } from '../../shared/attachments';
 import type { CommentAnchor, DiffFile, GitCommitSummary, PlanReviewResult, ReviewMode, ReviewSession, ReviewThread, ReviewWatchEvent } from '../../shared/types';
 import type { MarkdownSharePayload } from '../../shared/share';
 
@@ -134,12 +135,13 @@ export type { ReviewWatchEvent };
 /**
  * 创建新的评论线程。
  */
-export async function createReviewThread(anchor: CommentAnchor, body: string) {
-  await fetch('/api/threads', {
+export async function createReviewThread(anchor: CommentAnchor, body: string, attachments?: ReviewAttachment[]) {
+  const res = await fetch('/api/threads', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ filePath: anchor.filePath, anchor, body })
+    body: JSON.stringify({ filePath: anchor.filePath, anchor, body, attachments })
   });
+  if (!res.ok) throw new Error(await getErrorMessage(res, '添加评论失败'));
 }
 
 /**
@@ -171,18 +173,19 @@ export async function deleteReviewThread(id: string) {
 /**
  * 向评论线程追加一条用户回复。
  */
-export async function replyReviewThread(id: string, body: string) {
-  await fetch(`/api/threads/${id}/comments`, {
+export async function replyReviewThread(id: string, body: string, attachments?: ReviewAttachment[]) {
+  const res = await fetch(`/api/threads/${id}/comments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ body, author: 'user' })
+    body: JSON.stringify({ body, author: 'user', attachments })
   });
+  if (!res.ok) throw new Error(await getErrorMessage(res, '回复评论失败'));
 }
 
 /**
  * 更新指定评论内容，并在失败时抛出统一错误。
  */
-export async function patchReviewComment(threadId: string, commentId: string, body: string) {
+export async function patchReviewComment(threadId: string, commentId: string, body: string, attachments?: ReviewAttachment[]) {
   if (!commentId) {
     throw new Error('Comment id is required');
   }
@@ -190,7 +193,7 @@ export async function patchReviewComment(threadId: string, commentId: string, bo
   const res = await fetch(`/api/threads/${threadId}/comments/${commentId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ body })
+    body: JSON.stringify({ body, attachments })
   });
 
   if (!res.ok) {

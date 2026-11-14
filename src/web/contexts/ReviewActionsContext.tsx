@@ -1,6 +1,7 @@
 /**
  * Review 动作上下文：负责组装评论增删改、prompt 复制与线程定位动作，并向审查子树统一分发。
  */
+import type { ReviewAttachment } from '../../shared/attachments';
 import React from 'react';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../shared/types';
 import {
@@ -17,12 +18,14 @@ import {
 export type LocateTarget = { threadId: string; anchor: CommentAnchor };
 
 export type ReviewActions = {
-  createThread: (anchor: CommentAnchor, body: string) => Promise<void>;
+  /** 仅本地审查提供附件 API；静态分享页不声明此能力。 */
+  supportsAttachments?: boolean;
+  createThread: (anchor: CommentAnchor, body: string, attachments?: ReviewAttachment[]) => Promise<void>;
   patchThread: (id: string, status: ReviewThread['status']) => Promise<void>;
   deleteThread: (id: string) => Promise<void>;
   deleteComment: (threadId: string, commentId: string) => Promise<void>;
-  replyThread: (id: string, body: string) => Promise<void>;
-  patchComment: (threadId: string, commentId: string, body: string) => Promise<void>;
+  replyThread: (id: string, body: string, attachments?: ReviewAttachment[]) => Promise<void>;
+  patchComment: (threadId: string, commentId: string, body: string, attachments?: ReviewAttachment[]) => Promise<void>;
   copyPrompt: (scope: PromptScope) => Promise<void>;
 };
 
@@ -65,8 +68,8 @@ export function useReviewActionsValue({
   onPromptCopied,
   onActionError
 }: UseReviewActionsOptions) {
-  const createThread = React.useCallback(async (anchor: CommentAnchor, body: string) => {
-    await createReviewThread(anchor, body);
+  const createThread = React.useCallback(async (anchor: CommentAnchor, body: string, attachments?: ReviewAttachment[]) => {
+    await createReviewThread(anchor, body, attachments);
     await refreshReviewState();
   }, [refreshReviewState]);
 
@@ -95,13 +98,13 @@ export function useReviewActionsValue({
     }
   }, [onActionError, refreshReviewState]);
 
-  const replyThread = React.useCallback(async (id: string, body: string) => {
-    await replyReviewThread(id, body);
+  const replyThread = React.useCallback(async (id: string, body: string, attachments?: ReviewAttachment[]) => {
+    await replyReviewThread(id, body, attachments);
     await refreshReviewState();
   }, [refreshReviewState]);
 
-  const patchComment = React.useCallback(async (threadId: string, commentId: string, body: string) => {
-    await patchReviewComment(threadId, commentId, body);
+  const patchComment = React.useCallback(async (threadId: string, commentId: string, body: string, attachments?: ReviewAttachment[]) => {
+    await patchReviewComment(threadId, commentId, body, attachments);
     await refreshReviewState();
   }, [refreshReviewState]);
 
@@ -112,6 +115,7 @@ export function useReviewActionsValue({
   }, [onPromptCopied]);
 
   return React.useMemo<ReviewActions>(() => ({
+    supportsAttachments: true,
     createThread,
     patchThread,
     deleteThread,

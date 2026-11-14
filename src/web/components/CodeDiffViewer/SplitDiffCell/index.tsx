@@ -70,8 +70,8 @@ export function SplitDiffCell({
       {activeLine === cellKey && cell.lineNumber ? (
         <CommentPopover
           onCancel={() => setActiveLine(null)}
-          onSubmit={async (body) => {
-            await createThread({ type: 'diff-line', filePath, side: cell.side, lineNumber: cell.lineNumber! }, body);
+          onSubmit={async (body, attachments) => {
+            await createThread({ type: 'diff-line', filePath, side: cell.side, lineNumber: cell.lineNumber! }, body, attachments);
             setActiveLine(null);
           }}
         />
