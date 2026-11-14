@@ -59,6 +59,7 @@ plan mode hook 的完整流程见 [`docs/plan-mode-hooks.md`](docs/plan-mode-hoo
 | 🔍 **Diff 审查** | 工作区、暂存区、指定版本；支持筛选部分文件 |
 | 🧩 **多格式查看** | 代码、图片，以及 Markdown `Preview / Code diff` 双视图 |
 | 💬 **精细评论** | 文件级、代码行级、Markdown 块级与源码行评论；支持文字选区的单行、跨行评论 |
+| 🖼️ **图片评论** | 评论、回复和编辑均可附图，也可仅提交图片；图片保存在本机，复制 prompt 时附带本地路径供 Agent 读取 |
 | 🔄 **评论闭环** | 多轮回复、状态流转、评论定位，以及极简 AI prompt |
 | 🔒 **纯本地** | 服务运行在 `127.0.0.1`，代码不出本机；审查过程不依赖把代码上传到远端平台 |
 | 🔗 **分享协作** | 分享 Markdown 审查链接，并将他人评论同步回本地 |
@@ -76,6 +77,7 @@ plan mode hook 的完整流程见 [`docs/plan-mode-hooks.md`](docs/plan-mode-hoo
 - 在 Markdown `Preview` 中拖选文字，可针对单行或跨行选区添加评论。
 - 一条评论线程可包含多条评论；同一锚点的新评论会继续追加到已有线程。
 - 评论支持 `submit`、`replied`、`resolved` 三种状态，并可复制为交给 AI 处理的极简 prompt。
+- 支持通过选择、拖放或粘贴添加图片，用截图说明问题或提供预期效果；图片仅保存在本地，不会上传到远程服务器。
 
 ### 分享与 Agent 工作流
 
@@ -176,7 +178,7 @@ npx skills add Mone-Lee/diff-review
 
 ## 评论与 AI prompt
 
-在审查页面中复制评论后，会得到只包含线程标识、定位信息和评论内容的 prompt。把它交给已加载 diff-review Skill 的 agent，agent 会处理评论并把结果回写到原线程。
+在审查页面中复制评论后，会得到包含线程标识、定位信息和评论内容的 prompt；有图片时还包含附件名称、绝对路径和读取提示。把它交给已加载 diff-review Skill 的 agent，agent 会处理评论并把结果回写到原线程。
 
 从界面复制出的 prompt 示例：
 
@@ -198,7 +200,29 @@ src/core/prompt.ts
 文件级评论
 ```
 
-评论状态含义：
+### 图片评论
+
+本地审查与计划审查的文件、段落、选区及代码行评论均支持图片，回复和编辑也支持。点击输入框下方图片按钮，可选择或拖放图片；也可直接在输入框或附件面板粘贴图片。图片以缩略图显示在文字上方，点击可预览大图，允许仅提交图片。支持 PNG、JPEG、WebP、GIF，每张最多 10 MiB，每条评论最多 8 张。
+
+例如，在按钮对应的代码行添加评论：“窄屏下按钮文字被截断，请按预期效果图调整间距”，附上 `当前效果.png`；随后回复“补充预期效果”，附上 `预期效果.png`。复制该线程后会得到如下 prompt（标识和路径仅为示例）：
+
+```text
+Attached images: use an image-reading tool to view every listed local file. Each image belongs to the comment or reply immediately above its attachment list.
+
+[thread:86fca351-f2c7-4d41-810c-f810fe066ca4]
+src/web/App.tsx:new:120
+窄屏下按钮文字被截断，请按预期效果图调整间距
+Attached images:
+- "当前效果.png": "/Users/lee/.local/diff-review/attachments/my-project-a1b2c3d4e5f6/48f8f786-7d0a-4f67-90e5-c7eb699a648b.png"
+Reply 1 (User)
+补充预期效果
+Attached images:
+- "预期效果.png": "/Users/lee/.local/diff-review/attachments/my-project-a1b2c3d4e5f6/da15a4cf-0f29-4ae0-81b4-379771b336e2.png"
+```
+
+单条或批量复制时，每条评论及回复下面分别列出自己的图片路径；计划审查退回反馈使用相同格式。Agent 需要使用图片读取工具逐张读取这些本地文件，因此应运行在可访问这些路径的电脑上。远程分享页暂不支持图片；生成分享链接时自动省略图片附件，图文评论保留文字，纯图片评论及过滤后无评论的线程不打包，并通过分享弹窗和 toast 提示。本地评论和图片不受影响。
+
+### 评论状态
 
 - `submit`：只有用户提交的评论，还没有 agent 发现或回复。
 - `replied`：已有 agent 内容，或从 `resolved` 重新打开。
@@ -210,3 +234,21 @@ src/core/prompt.ts
 Windows 下使用类似位置：
 `%LOCALAPPDATA%\diff-review\logs`，如果未设置 `LOCALAPPDATA` 则退到
 `~/AppData/Local/diff-review/logs`。
+
+### 图片存储位置
+
+**评论图片仅保存在本机磁盘，不会上传到远程服务器。** 添加图片时，浏览器将图片交给运行在 `127.0.0.1` 的本地服务，由它写入操作系统用户目录，并按仓库隔离：
+
+| 系统 | 图片目录 |
+| --- | --- |
+| macOS / Linux | `~/.local/diff-review/attachments/<仓库标识>/` |
+| Windows | `%LOCALAPPDATA%\diff-review\attachments\<仓库标识>\`；未设置 `LOCALAPPDATA` 时使用 `~/AppData/Local/diff-review/attachments/<仓库标识>/` |
+
+仓库标识由仓库目录名和绝对路径的哈希组成。图片不写入调用方项目目录，不会随项目提交到 Git。复制 prompt 时只写入图片名称和本地绝对路径，不嵌入图片内容；分享链接也不会携带图片附件。
+
+### 图片清除时机
+
+- **删除评论或保存编辑时移除附件**：如果没有其他已保存评论引用该图片，会从磁盘删除；此前复制的 prompt 中对应路径随之失效。
+- **取消草稿或取消编辑**：清理本次新添加的图片；取消编辑会保留原评论已有的图片。
+- **关闭页面、异常退出或清理失败后的遗留图片**：启动服务及后续添加图片时，会清理存放超过 24 小时、且未被已保存评论引用的图片。这不是到点执行的定时清理。
+- **仍被已保存评论引用的图片**：不会因存放超过 24 小时而自动删除。

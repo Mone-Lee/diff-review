@@ -87,6 +87,8 @@ If some selected files have no diff, omit them. If none have diff, still launch 
 - Markdown line comments anchor to source Markdown line numbers.
 - Comments support submit/replied/resolved state.
 - AI prompt copy output includes `[thread:<id>]`, file path, line number or Markdown source line, and comment body.
+- Local comments and replies may include `Attached images:` lists. Use an available image-reading tool to view every listed absolute file path before handling the comment. Each list belongs to its preceding comment or reply, including when multiple threads are copied together. Plan-review feedback uses the same attachment format.
+- Images live in the operating system user data directory outside the repository. Deleting a comment or removing its image deletes unreferenced files, so previously copied paths may no longer exist. If an image is unavailable, report that limitation instead of inferring its contents. Remote share links omit image attachments and image-only comments while retaining text from mixed comments; local comments and images are unchanged.
 - Agent findings can be preloaded as comments with `--comment`.
 - A thread can contain multiple comments. New findings for the same anchor are appended to the existing thread, and repeated agent comments with identical bodies in the same thread are skipped.
 - Comments are associated with the diff snapshot where they were created. Refreshed workbenches retain older threads in the comment rail as history, without attaching old line comments to changed content.
