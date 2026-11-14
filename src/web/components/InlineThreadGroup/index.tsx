@@ -175,6 +175,7 @@ export function InlineThreadGroup({
                             title="删除这条评论？"
                             okText="删除"
                             cancelText="取消"
+                            onPopupClick={(event) => event.stopPropagation()}
                             onConfirm={() => removeComment(thread.id, comment.id)}
                           >
                             <Button
@@ -245,6 +246,7 @@ export function InlineThreadGroup({
               title={threads.length > 1 ? '删除这组评论？' : '删除这条评论线程？'}
               okText="删除"
               cancelText="取消"
+              onPopupClick={(event) => event.stopPropagation()}
               onConfirm={async () => {
                 for (const thread of threads) {
                   await removeThread(thread.id);
