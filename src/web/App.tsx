@@ -545,6 +545,8 @@ export default function App() {
                     disabled={unresolvedThreadsCount === 0 || submittingPlanResult || planResultSubmitted}
                     icon={<RollbackOutlined />}
                     onClick={() => { handleSubmitPlanResult('changes-requested').catch(() => undefined); }}
+                    variant="outlined"
+                    type='primary'
                   >
                     退回评论
                   </Button>
