@@ -3,8 +3,8 @@
  * 仅在本地审查声明附件能力时启用上传，避免静态分享页调用本地接口。
  */
 import React from 'react';
-import { Alert, Button, Input, Flex, Popover, Typography } from 'antd';
-import { PictureOutlined, UploadOutlined } from '@ant-design/icons';
+import { Alert, Button, Input, Flex, Popover } from 'antd';
+import { PictureOutlined } from '@ant-design/icons';
 import { ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_BYTES, MAX_COMMENT_ATTACHMENTS, type ReviewAttachment } from '../../../shared/attachments';
 import { discardAttachment, uploadAttachment } from '../../api/attachments';
 import { useReviewActions } from '../../contexts/ReviewActionsContext';
@@ -138,24 +138,41 @@ export function CommentComposer({ style, placeholder, onSubmit, submitLabel = '�
   }
 
   const attachmentPanel = <div className={styles.attachmentPanel} onPaste={handlePaste}>
-    <Typography.Text strong>图片附件</Typography.Text>
-    <div
+    <div className={styles.attachmentHeader}>
+      <span className={styles.attachmentTitle}><PictureOutlined /> 图片附件</span>
+      <span className={styles.attachmentCount} aria-label={`已占用 ${attachments.length + uploads.length} 个图片名额，共 ${MAX_COMMENT_ATTACHMENTS} 个`}>
+        {attachments.length + uploads.length}<span> / {MAX_COMMENT_ATTACHMENTS}</span>
+      </span>
+    </div>
+    <button
+      type="button"
       className={[styles.dropzone, dragging ? styles.dragging : ''].filter(Boolean).join(' ')}
-      role="button" tabIndex={0} aria-label="选择或拖放图片"
-      onClick={() => { if (!submitting) inputRef.current?.click(); }}
-      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); inputRef.current?.click(); } }}
-      onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-      onDragLeave={() => setDragging(false)}
+      aria-label="选择或拖放图片"
+      disabled={submitting}
+      onClick={() => inputRef.current?.click()}
+      onDragOver={(event) => {
+        event.preventDefault();
+        if (!submitting) setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+      }}
       onDrop={(event) => {
         event.preventDefault(); event.stopPropagation(); setDragging(false);
         addFiles(Array.from(event.dataTransfer.files));
       }}
     >
-      <UploadOutlined />
-      <span>拖放图片或点击选择</span>
-      <Typography.Text type="secondary">⌘ / Ctrl + V 粘贴图片</Typography.Text>
+      <span className={styles.dropzoneTitle}>{dragging ? '松开即可上传' : '选择图片 / 拖拽图片到这里'}</span>
+      <span className={styles.dropzoneDescription}>为评论补充截图，让问题更清晰</span>
+    </button>
+    <div className={styles.attachmentDetails}>
+      <span>PNG · JPEG · WebP · GIF</span>
+      <span>每张最多 {MAX_ATTACHMENT_BYTES / 1024 / 1024} MiB</span>
     </div>
-    <Typography.Text type="secondary">每张最多 10 MiB，每条评论最多 8 张</Typography.Text>
+    <div className={styles.pasteHint}>
+      <span>也可直接粘贴图片</span>
+      <span className={styles.shortcut}><kbd>⌘ / Ctrl</kbd><span>+</span><kbd>V</kbd></span>
+    </div>
   </div>;
 
   return <form
@@ -180,7 +197,8 @@ export function CommentComposer({ style, placeholder, onSubmit, submitLabel = '�
     <Flex gap="small" justify="space-between" align="center">
       {supportsAttachments ? <>
         <Popover
-          open={open} onOpenChange={setOpen} trigger="click" placement="bottomLeft" content={attachmentPanel}
+          classNames={{ root: styles.attachmentPopover }}
+          open={open} onOpenChange={(visible) => { setOpen(visible); setDragging(false); }} trigger="click" placement="bottomLeft" content={attachmentPanel}
           afterOpenChange={(visible) => { if (visible) document.querySelector<HTMLElement>(`.${styles.dropzone}`)?.focus(); }}
         >
           <Button type="text" size="small" icon={<PictureOutlined />} aria-label="添加图片" disabled={submitting} />
