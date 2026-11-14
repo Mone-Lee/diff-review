@@ -1,7 +1,7 @@
 /**
  * Prompt 格式化工具：负责把评论线程整理成稳定的纯文本提示词，供复制到外部 Agent 或模型上下文中。
  */
-import type { ReviewThread } from '../shared/types';
+import type { ReviewComment, ReviewThread } from '../shared/types';
 
 export function formatPrompt(threads: ReviewThread[]): string {
   const threadPrompt = threads
@@ -15,7 +15,7 @@ export function formatPrompt(threads: ReviewThread[]): string {
             : comment.author === 'reviewer'
               ? `Reviewer: ${comment.authorName || 'Unknown'}`
               : 'User';
-          return `Reply ${index + 1} (${author})\n${comment.body.trim()}`;
+          return `Reply ${index + 1} (${author})\n${formatCommentContent(comment)}`;
         })
         .join('\n');
 
@@ -23,14 +23,23 @@ export function formatPrompt(threads: ReviewThread[]): string {
     })
     .join('\n\n');
 
-  if (!threads.some((thread) => thread.anchor.type === 'markdown-selection')) return threadPrompt;
-  return `Markdown selections: \`Selected (JSON)\` contains rendered text. Locate it within the source lines shown for that thread; Markdown syntax may interrupt the text. Edit only the selected content.\n\n${threadPrompt}`;
+  const imageInstruction = threads.some((thread) => thread.comments.some((comment) => comment.attachments?.length))
+    ? 'Attached images: use an image-reading tool to view every listed local file. Each image belongs to the comment or reply immediately above its attachment list.\n\n' : '';
+  if (!threads.some((thread) => thread.anchor.type === 'markdown-selection')) return imageInstruction + threadPrompt;
+  return imageInstruction + `Markdown selections: \`Selected (JSON)\` contains rendered text. Locate it within the source lines shown for that thread; Markdown syntax may interrupt the text. Edit only the selected content.\n\n${threadPrompt}`;
 }
 
 function formatFirstComment(comment: ReviewThread['comments'][number] | undefined) {
   if (!comment) return '';
   const author = comment.author === 'reviewer' ? `[Reviewer: ${comment.authorName || 'Unknown'}]\n` : '';
-  return `${author}${comment.body.trim()}`;
+  return `${author}${formatCommentContent(comment)}`;
+}
+
+// 附件紧跟所属评论或回复，批量复制时保留归属；JSON 字符串避免文件名和路径中的换行破坏格式。
+function formatCommentContent(comment: ReviewComment): string {
+  const images = comment.attachments?.length
+    ? ['Attached images:', ...comment.attachments.map((image) => `- ${JSON.stringify(image.name)}: ${JSON.stringify(image.path)}`)].join('\n') : '';
+  return [comment.body.trim(), images].filter(Boolean).join('\n');
 }
 
 function getThreadLocation(thread: ReviewThread) {

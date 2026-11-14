@@ -2,6 +2,8 @@
  * Review 服务端入口：负责暴露会话、diff、评论、预览与 prompt 相关 API，并维护运行时 review 状态。
  */
 import express from 'express';
+import { MAX_ATTACHMENT_BYTES } from '../shared/attachments';
+import { AttachmentInputError, cleanupAttachments, readAttachment, resolveCommentAttachments, saveAttachment } from './attachments';
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
@@ -37,6 +39,42 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   const app = express();
 
   app.use(express.json({ limit: '2mb' }));
+
+  await updateComments(state.session.repoRoot, async (store) => {
+    await cleanupAttachments(state.session.repoRoot, store.threads).catch((error) => console.warn(`Failed to clean up attachments: ${String(error)}`));
+    return { changed: false, result: undefined };
+  });
+
+  app.post('/api/attachments', express.raw({ type: () => true, limit: MAX_ATTACHMENT_BYTES }), async (req, res, next) => {
+    try {
+      const attachment = await updateComments(state.session.repoRoot, async (store) => {
+        await cleanupAttachments(state.session.repoRoot, store.threads).catch((error) => console.warn(`Failed to clean up attachments: ${String(error)}`));
+        if (!Buffer.isBuffer(req.body)) throw new AttachmentInputError('图片上传内容无效');
+        const result = await saveAttachment(state.session.repoRoot, req.body, req.get('Content-Type') ?? '', String(req.query.name ?? ''));
+        return { changed: false, result };
+      });
+      res.status(201).json(attachment);
+    } catch (error) { next(error); }
+  });
+
+  app.get('/api/attachments/:id', async (req, res, next) => {
+    try {
+      const attachment = await readAttachment(state.session.repoRoot, req.params.id);
+      res.set({ 'Content-Type': attachment.mimeType, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' });
+      // 用户数据目录在 macOS/Linux 下包含 .local；路径已由附件 ID 限定，允许读取其中的图片。
+      res.sendFile(attachment.path, { dotfiles: 'allow' }, (error) => { if (error) next(error); });
+    } catch (error) { next(error); }
+  });
+
+  app.delete('/api/attachments/:id', async (req, res, next) => {
+    try {
+      await updateComments(state.session.repoRoot, async (store) => {
+        await cleanupAttachments(state.session.repoRoot, store.threads, [req.params.id]);
+        return { changed: false, result: undefined };
+      });
+      res.status(204).end();
+    } catch (error) { next(error); }
+  });
 
   app.get('/api/session', (_req, res) => {
     res.json(state.session);
@@ -301,10 +339,10 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.post('/api/threads', async (req, res, next) => {
     try {
       const now = new Date().toISOString();
-      const body = req.body as Pick<ReviewThread, 'filePath' | 'anchor'> & { body: string };
+      const body = req.body as Pick<ReviewThread, 'filePath' | 'anchor'> & { body: string; attachments?: unknown };
       const commentBody = body.body?.trim();
-      if (!commentBody) {
-        res.status(400).json({ error: 'Comment body is required' });
+      if (!commentBody && !(Array.isArray(body.attachments) && body.attachments.length)) {
+        res.status(400).json({ error: '评论须包含文字或图片' });
         return;
       }
       const file = state.diffFiles.find((item) => item.path === body.filePath);
@@ -314,12 +352,13 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
       }
       const comment: ReviewComment = {
         id: crypto.randomUUID(),
-        body: commentBody,
+        body: commentBody ?? '',
         author: 'user',
         createdAt: now,
         updatedAt: now
       };
-      const thread = await updateComments(state.session.repoRoot, (store) => {
+      const thread = await updateComments(state.session.repoRoot, async (store) => {
+        comment.attachments = await resolveCommentAttachments(state.session.repoRoot, body.attachments);
         const existingThread = store.threads.find((item) => item.fileSnapshotHash === file.snapshotHash && sameAnchor(item.anchor, body.anchor));
         if (existingThread) {
           existingThread.comments.push(comment);
@@ -351,21 +390,22 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   app.post('/api/threads/:id/comments', async (req, res, next) => {
     try {
       const now = new Date().toISOString();
-      const body = req.body as { body?: string; author?: 'user' | 'agent' };
+      const body = req.body as { body?: string; author?: 'user' | 'agent'; attachments?: unknown };
       const commentBody = body.body?.trim();
-      if (!commentBody) {
-        res.status(400).json({ error: 'Comment body is required' });
+      if (!commentBody && !(Array.isArray(body.attachments) && body.attachments.length)) {
+        res.status(400).json({ error: '评论须包含文字或图片' });
         return;
       }
 
       const comment: ReviewComment = {
         id: crypto.randomUUID(),
-        body: commentBody,
+        body: commentBody ?? '',
         author: body.author === 'agent' ? 'agent' : 'user',
         createdAt: now,
         updatedAt: now
       };
-      const commentResult = await updateComments(state.session.repoRoot, (store) => {
+      const commentResult = await updateComments(state.session.repoRoot, async (store) => {
+        comment.attachments = await resolveCommentAttachments(state.session.repoRoot, body.attachments);
         const thread = store.threads.find((item) => item.id === req.params.id);
         if (!thread) {
           throw new Error('THREAD_NOT_FOUND');
@@ -430,11 +470,7 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     try {
       const now = new Date().toISOString();
       const nextBody = String(req.body?.body ?? '').trim();
-      if (!nextBody) {
-        res.status(400).json({ error: 'Comment body is required' });
-        return;
-      }
-      const comment = await updateComments(state.session.repoRoot, (store) => {
+      const comment = await updateComments(state.session.repoRoot, async (store) => {
         const thread = store.threads.find((item) => item.id === req.params.id);
         if (!thread) {
           throw new Error('THREAD_NOT_FOUND');
@@ -449,6 +485,11 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
         if (currentComment.author === 'agent' || currentComment.author === 'reviewer') {
           throw new Error('COMMENT_READ_ONLY');
         }
+        const attachments = req.body.attachments === undefined
+          ? currentComment.attachments ?? []
+          : await resolveCommentAttachments(state.session.repoRoot, req.body.attachments);
+        if (!nextBody && !attachments.length) throw new AttachmentInputError('评论须包含文字或图片');
+        currentComment.attachments = attachments;
         currentComment.body = nextBody;
         currentComment.updatedAt = now;
         thread.updatedAt = now;
@@ -554,8 +595,10 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
     app.get(/.*/, (_req, res) => res.sendFile(join(webDist, 'index.html')));
   }
 
-  app.use((error: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    res.status(500).json({ error: error.message });
+  app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) { next(error); return; }
+    const status = error instanceof AttachmentInputError ? 400 : (error as Error & { status?: number }).status ?? 500;
+    res.status(status).type('json').json({ error: status === 413 && req.path === '/api/attachments' ? '图片不能超过 10 MiB' : error.message });
   });
 
   return listen(app, port, fileWatcher);

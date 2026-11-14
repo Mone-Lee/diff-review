@@ -1,3 +1,5 @@
+import type { ReviewAttachment } from './attachments';
+
 /**
  * 审查模式决定本次 diff 的来源：
  * `working` 表示审查工作区变更；带 base 时表示从某个 ref 到当前工作树的完整对比；
@@ -72,6 +74,8 @@ export type CommentAnchor =
 export type ReviewComment = {
   id: string;
   body: string;
+  /** 图片按评论归属保存；旧评论省略此字段，等价于无附件。 */
+  attachments?: ReviewAttachment[];
   author?: 'user' | 'agent' | 'reviewer';
   /** 导入评论的展示昵称；本地用户与 Agent 继续使用既有固定标签。 */
   authorName?: string;

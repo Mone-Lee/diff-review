@@ -2,9 +2,9 @@
  * 评论存储工具：负责评论文件路径计算、读写持久化，以及旧评论数据的兼容迁移与归并规范化。
  */
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
-import { homedir, platform } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { repositoryStorageKey, reviewDataDir } from './data-paths';
+import { cleanupAttachments, referencedAttachmentIds } from './attachments';
 import type { DiffFile, ReviewThread } from '../shared/types';
 import { anchorKey, getMergedThreadStatus, getThreadStatus } from '../shared/thread-utils';
 
@@ -35,9 +35,13 @@ export async function updateComments<T>(
     .catch(() => undefined)
     .then(async () => {
       const store = await readCommentStore(repoRoot);
+      const previousAttachments = referencedAttachmentIds(store.threads);
       const { changed, result } = await updater(store);
       if (changed) {
         await writeComments(repoRoot, store);
+        const currentAttachments = referencedAttachmentIds(store.threads);
+        await cleanupAttachments(repoRoot, store.threads, [...previousAttachments].filter((id) => !currentAttachments.has(id)))
+          .catch((error) => console.warn(`Failed to clean up attachments: ${String(error)}`));
       }
       return result;
     });
@@ -101,16 +105,7 @@ export async function writeComments(repoRoot: string, store: CommentStore): Prom
 }
 
 function commentsPath(repoRoot: string): string {
-  const repoName = basename(repoRoot) || 'repo';
-  const repoHash = createHash('sha256').update(repoRoot).digest('hex').slice(0, 12);
-  return join(commentLogsDir(), `${repoName}-${repoHash}.comments.json`);
-}
-
-function commentLogsDir(): string {
-  if (platform() === 'win32') {
-    return join(process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'), 'diff-review', 'logs');
-  }
-  return join(homedir(), '.local', 'diff-review', 'logs');
+  return join(reviewDataDir(), 'logs', `${repositoryStorageKey(repoRoot)}.comments.json`);
 }
 
 async function readLegacyComments(repoRoot: string): Promise<CommentStore> {

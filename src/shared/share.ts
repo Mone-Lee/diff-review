@@ -62,14 +62,16 @@ export function isShareableAnchor(anchor: CommentAnchor): anchor is ShareAnchor 
   return anchor.type === 'file' || anchor.type === 'markdown-line' || anchor.type === 'markdown-selection';
 }
 
+// 分享只携带文字：省略图片附件和纯图片评论，避免将本地路径泄露到分享页或生成空正文评论。
 export function reviewThreadsToShareThreads(threads: ReviewThread[]): ShareThread[] {
   return threads
     .filter((thread) => isShareableAnchor(thread.anchor))
+    .filter((thread) => !thread.comments.length || thread.comments.some((comment) => comment.body.trim()))
     .map((thread) => ({
       id: thread.id,
       status: thread.status,
       anchor: thread.anchor as ShareAnchor,
-      comments: thread.comments.map((comment) => ({
+      comments: thread.comments.filter((comment) => comment.body.trim()).map((comment) => ({
         id: comment.shareOrigin?.commentId ?? comment.id,
         body: comment.body,
         authorName: comment.authorName ?? (comment.author === 'agent' ? 'Agent' : '发起者'),
