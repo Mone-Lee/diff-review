@@ -49,6 +49,8 @@ export type DiffFile = {
   additions: number;
   deletions: number;
   isMarkdown: boolean;
+  /** 无 Git diff 的全文审阅；hunks 保存完整原文，两侧均使用该快照，不读取 Git 历史。 */
+  isContentOnly?: boolean;
   hunks: DiffHunk[];
 };
 

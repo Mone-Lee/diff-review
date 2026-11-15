@@ -78,7 +78,7 @@ DIFF_REVIEW_SKILL_FILES='["/absolute/path/to/target/workspace/src/foo.ts","/abso
 
 Apply selection only to diff review launches (`working`, `staged`, revision pairs, including `--new-session` and preloaded comments), not update/install/stop commands or plan/Markdown share workflows. Select exact files, not directories or globs. Selected paths must belong to the target repository. Renamed files match either their old or new path. The session preserves selection when refreshed or when its comparison mode changes; a later unscoped Skill invocation restores all files.
 
-If some selected files have no diff, omit them. If none have diff, still launch or refresh the viewer with an empty diff so it displays the existing “未发现变更，当前工作区很安静。” fallback. Never fall back to unrelated changes or show unchanged files as synthetic diffs.
+Explicitly selected Markdown (`.md`, `.markdown`) and Feature (`.feature`) files remain reviewable even without a Git diff, including files in hidden directories or ignored by Git. Markdown opens for preview; Feature opens as full source with line comments and zero additions/deletions. Preserve existing diffs when present. Read content from the selected review mode; ignored files that only exist on disk require `working` mode. When resolving an explicit attachment, include hidden and ignored paths in the search (for example, `rg --files --hidden --no-ignore -g '*.feature'`). Omit other selected files that have no diff. If no reviewable files remain, launch or refresh with the existing empty state. Never fall back to unrelated changes.
 
 ## Review Scope
 

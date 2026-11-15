@@ -382,6 +382,7 @@ export function CodeDiffViewer({
                       <InlineDiffLine
                         key={`${block.key}-${index}`}
                         filePath={file.path}
+                        contentOnly={file.isContentOnly}
                         line={line}
                         index={index}
                         hunkKey={block.key}

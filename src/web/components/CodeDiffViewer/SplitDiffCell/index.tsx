@@ -8,6 +8,7 @@ import type { SplitCell } from '../types';
 import { CommentPopover } from '../../CommentPopover';
 import { getCodeViewAnchor, getLineSign } from '../utils';
 import { InlineThreadStack } from '../InlineThreadStack';
+import { GherkinLine } from '../GherkinLine';
 import { useReviewActions } from '../../../contexts/ReviewActionsContext';
 import styles from './index.module.less';
 
@@ -61,7 +62,7 @@ export function SplitDiffCell({
       <span className={cell.type === 'add' ? `${styles.lineSign} ${styles.signAdd}` : cell.type === 'remove' ? `${styles.lineSign} ${styles.signRemove}` : styles.lineSign}>
         {getLineSign(cell.type)}
       </span>
-      <pre className={styles.codeLine} data-split-copy-content="true">{cell.content || ' '}</pre>
+      <pre className={styles.codeLine} data-split-copy-content="true"><GherkinLine filePath={filePath} content={cell.content} /></pre>
       {cell.lineNumber && cellThreads.length === 0 ? (
         <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setActiveLine(cellKey)}>
           <MessageOutlined />

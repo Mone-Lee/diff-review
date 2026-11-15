@@ -104,6 +104,8 @@ export default function App() {
   const currentViewedStorageKey = React.useMemo(() => (session ? viewedStorageKey(session) : null), [session]);
   const selectedFile = files.find((file) => file.path === selectedPath) ?? displayFiles[0];
   const selectedFileIsImage = selectedFile ? isImageFilePath(selectedFile.path) : false;
+  const isFeaturePreview = Boolean(selectedFile?.isContentOnly && /\.feature$/i.test(selectedFile.path));
+  const selectedCodeViewMode = selectedFile?.isMarkdown ? 'split' : isFeaturePreview ? 'inline' : diffViewMode;
   const canRefreshSnapshot = session ? isRefreshableReviewMode(session.mode) : false;
   const isPlanReview = session?.reviewKind === 'plan';
   const isCodexPlanReview = session?.planReviewSource === 'codex';
@@ -704,7 +706,7 @@ export default function App() {
                       onChange={(value) => setMarkdownViewMode(value as MarkdownViewMode)}
                     />
                   </div>
-                ) : selectedFileIsImage ? (
+                ) : isFeaturePreview ? null : selectedFileIsImage ? (
                   <div className={styles.topToolbar} />
                 ) : (
                   <div className={styles.topToolbar}>
@@ -726,7 +728,7 @@ export default function App() {
                     threads={selectedFileThreads}
                     isViewed={viewedFilePaths.has(selectedFile.path)}
                     showViewed={files.length >= 3}
-                    showToggleAllLines={!selectedFileIsImage && (!selectedFile.isMarkdown || markdownViewMode === 'diff')}
+                    showToggleAllLines={!isFeaturePreview && !selectedFileIsImage && (!selectedFile.isMarkdown || markdownViewMode === 'diff')}
                     hasExpandedContext={selectedFile ? (expandedContextByFile[selectedFile.path] ?? false) : false}
                     onToggleAllLines={toggleAllLines}
                     onToggleViewed={toggleViewedFile}
@@ -749,13 +751,13 @@ export default function App() {
                     />
                   ) : (
                     <CodeDiffViewer
-                      key={`${session?.id ?? 'session'}:${selectedFile.path}:${selectedFile.snapshotHash}:${selectedFile.isMarkdown ? 'split' : diffViewMode}`}
+                      key={`${session?.id ?? 'session'}:${selectedFile.path}:${selectedFile.snapshotHash}:${selectedCodeViewMode}`}
                       file={selectedFile}
                       threads={selectedFileThreads}
                       locateTarget={locateTarget}
                       expandAllRequest={expandAllRequest}
                       onExpandedContextChange={handleExpandedContextChange}
-                      viewMode={selectedFile.isMarkdown ? 'split' : diffViewMode}
+                      viewMode={selectedCodeViewMode}
                     />
                   )}
                 </div>

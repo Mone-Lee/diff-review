@@ -70,6 +70,9 @@ plan mode hook 的完整流程见 [`docs/plan-mode-hooks.md`](docs/plan-mode-hoo
 - 查看当前工作区 diff、暂存区 diff 或指定版本 diff，并可只选择部分文件预览。
 - 代码文件使用 GitHub 风格 diff，支持并排与行内视图；图片文件支持直接比较。
 - Markdown 文件可在渲染后的 `Preview` 与源码 `Code diff` 之间切换。
+- 通过 `/diff-review` 明确选中 `.feature` 文件后，即使文件位于隐藏目录、被 Git 忽略或没有变更，也可展示全文并逐行评论；已有 diff 时展示正常差异。仅存在于磁盘的忽略文件需使用 `working` 模式。
+- Feature 的行内与并排视图支持 Gherkin 英文关键字、字符串、参数、标签和 TODO 高亮，长行换行保留源码缩进。
+- 无 diff 的 Feature 全文预览固定为 Inline，只显示一列源码行号，隐藏布局切换与上下文展开按钮。
 
 ### 评论与协作
 

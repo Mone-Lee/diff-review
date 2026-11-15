@@ -77,6 +77,10 @@ export type DiffFileContents = {
 };
 
 export async function readDiffFileContents(file: DiffFile, mode: ReviewMode, repoRoot: string): Promise<DiffFileContents> {
+  if (file.isContentOnly) {
+    const lines = file.hunks.flatMap((hunk) => hunk.lines.map((line) => line.content));
+    return { oldLines: lines, newLines: lines, oldTotalLines: lines.length, newTotalLines: lines.length };
+  }
   const [oldContent, newContent] = await Promise.all([
     readDiffSideContent(file, mode, repoRoot, 'old'),
     readDiffSideContent(file, mode, repoRoot, 'new')

@@ -7,11 +7,14 @@ import type { CommentAnchor, DiffFile, ReviewThread } from '../../../../shared/t
 import { CommentPopover } from '../../CommentPopover';
 import { getLineSign } from '../utils';
 import { InlineThreadStack } from '../InlineThreadStack';
+import { GherkinLine } from '../GherkinLine';
 import { useReviewActions } from '../../../contexts/ReviewActionsContext';
 import styles from './index.module.less';
 
 type Props = {
   filePath: string;
+  /** 全文预览仅显示当前行号，省略 diff 标记。 */
+  contentOnly?: boolean;
   line: DiffFile['hunks'][number]['lines'][number];
   index: number;
   hunkKey: string;
@@ -23,6 +26,7 @@ type Props = {
 
 export function InlineDiffLine({
   filePath,
+  contentOnly = false,
   line,
   index,
   hunkKey,
@@ -46,17 +50,21 @@ export function InlineDiffLine({
     line.type === 'add' ? `${styles.diffRow} ${styles.add}` : line.type === 'remove' ? `${styles.diffRow} ${styles.remove}` : styles.diffRow;
 
   return (
-    <div className={rowClass} data-review-anchor={`${side}:${lineNumber}`}>
-      <button className={styles.lineNo} onClick={() => line.oldLineNumber && setActiveLine(anchorKey)}>
-        {line.oldLineNumber ?? ''}
-      </button>
+    <div className={contentOnly ? `${rowClass} ${styles.contentOnlyRow}` : rowClass} data-review-anchor={`${side}:${lineNumber}`}>
+      {!contentOnly ? (
+        <button className={styles.lineNo} onClick={() => line.oldLineNumber && setActiveLine(anchorKey)}>
+          {line.oldLineNumber ?? ''}
+        </button>
+      ) : null}
       <button className={styles.lineNo} onClick={() => line.newLineNumber && setActiveLine(anchorKey)}>
         {line.newLineNumber ?? ''}
       </button>
-      <span className={line.type === 'add' ? `${styles.lineSign} ${styles.signAdd}` : line.type === 'remove' ? `${styles.lineSign} ${styles.signRemove}` : styles.lineSign}>
-        {getLineSign(line.type)}
-      </span>
-      <pre className={styles.codeLine}>{line.content || ' '}</pre>
+      {!contentOnly ? (
+        <span className={line.type === 'add' ? `${styles.lineSign} ${styles.signAdd}` : line.type === 'remove' ? `${styles.lineSign} ${styles.signRemove}` : styles.lineSign}>
+          {getLineSign(line.type)}
+        </span>
+      ) : null}
+      <pre className={styles.codeLine}><GherkinLine filePath={filePath} content={line.content} /></pre>
       {lineNumber && lineThreads.length === 0 ? (
         <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setActiveLine(anchorKey)}>
           <MessageOutlined />

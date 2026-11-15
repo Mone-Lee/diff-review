@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, normalize, resolve, sep } from 'node:path';
 import { parseUnifiedDiff } from '../core/diff-parser';
-import { includeSelectedMarkdownFiles } from '../core/selected-markdown';
+import { includeSelectedReviewFiles } from '../core/selected-markdown';
 import { importShareFeedback } from '../core/share-import';
 import { diffHash, getDefaultWorkingBase, getDiff, getRecentCommits, readDiffFileContents, readDiffImageContent, readFileForPreview } from '../core/git';
 import { REVIEW_REFRESH_PROTOCOL, isRefreshableReviewMode, type DiffFile, type MarkdownPreview, type PlanReviewResult, type PromptScope, type ReviewComment, type ReviewMode, type ReviewSession, type ReviewThread } from '../shared/types';
@@ -34,7 +34,14 @@ export async function startServer(state: ReviewServerState, port = 4966): Promis
   const fileWatcher = new FileWatcherService(state.session.repoRoot, async () => {
     if (!isRefreshableReviewMode(state.session.mode)) return false;
     const currentDiff = await getDiff(state.session.mode, state.session.repoRoot, state.session.selectedFiles);
-    return diffHash(currentDiff) !== state.session.diffHash;
+    if (diffHash(currentDiff) !== state.session.diffHash) return true;
+    if (!state.session.selectedFiles?.length) return false;
+    // 被忽略的选中文档不影响 Git diff，需要比较全文快照才能提示刷新。
+    const files = await includeSelectedReviewFiles(
+      parseUnifiedDiff(currentDiff), state.session.selectedFiles, state.session.mode, state.session.repoRoot
+    );
+    return files.length !== state.diffFiles.length
+      || files.some((file, index) => file.snapshotHash !== state.diffFiles[index].snapshotHash);
   });
   const app = express();
 
@@ -649,7 +656,7 @@ function applyReviewState(currentState: ReviewServerState, nextState: Pick<Revie
 async function rebuildReviewState(state: ReviewServerState, overrideMode?: ReviewMode): Promise<ReviewServerState> {
   const mode = overrideMode ?? state.session.mode;
   const diff = await getDiff(mode, state.session.repoRoot, state.session.selectedFiles);
-  const diffFiles = await includeSelectedMarkdownFiles(
+  const diffFiles = await includeSelectedReviewFiles(
     parseUnifiedDiff(diff),
     state.session.selectedFiles,
     mode,
