@@ -56,6 +56,7 @@ import {
   writeViewedFilePaths
 } from './utils/app-state';
 import { useFileWatch } from './hooks/useFileWatch';
+import { useResizableSidebar } from './hooks/useResizableSidebar';
 import styles from './styles.module.less';
 
 type DiffViewMode = 'inline' | 'split';
@@ -74,6 +75,7 @@ function planReviewResultMessage(decision: 'approved' | 'changes-requested', isC
 
 export default function App() {
   const { message } = AntApp.useApp();
+  const sidebar = useResizableSidebar();
   const [session, setSession] = React.useState<ReviewSession | null>(null);
   const [files, setFiles] = React.useState<DiffFile[]>([]);
   const [threads, setThreads] = React.useState<ReviewThread[]>([]);
@@ -593,7 +595,10 @@ export default function App() {
   return (
     <ReviewActionsProvider value={reviewActions}>
       <ReviewNavigationActionsProvider value={reviewNavigationActions}>
-        <Layout className={styles.shell}>
+        <Layout
+          className={`${styles.shell}${sidebar.isResizing ? ` ${styles.resizingSidebar}` : ''}`}
+          style={{ '--sidebar-width': `${sidebar.width}px` } as React.CSSProperties}
+        >
           <header className={styles.mainHeader}>
             <div className={styles.mainHeaderBrand}>
               <div className={styles.brandMark}>DR</div>
@@ -689,6 +694,7 @@ export default function App() {
               onSelectFile={setSelectedPath}
               onToggleViewed={toggleViewedFile}
             />
+            <div className={styles.sidebarResizeHandle} {...sidebar.separatorProps} />
           </aside>
 
           <section className={styles.reviewPane}>

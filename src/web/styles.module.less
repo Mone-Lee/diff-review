@@ -75,7 +75,7 @@
   --amber-border: #f2c76d;
   height: 100vh;
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr) 360px;
+  grid-template-columns: var(--sidebar-width, 360px) minmax(0, 1fr) 360px;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
   overflow: hidden;
@@ -159,7 +159,52 @@
 }
 
 .sidebar {
+  position: relative;
+  min-width: 0;
   border-right: 1px solid var(--line);
+}
+
+.sidebarResizeHandle {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+
+  &::after {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: transparent;
+    content: '';
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    background: #2f6fed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #2f6fed;
+    outline-offset: -2px;
+  }
+}
+
+.resizingSidebar {
+  &,
+  * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+
+  .sidebarResizeHandle::after {
+    background: #2f6fed;
+  }
 }
 
 .threadRail {
@@ -307,11 +352,15 @@
 
 @media (max-width: 1280px) {
   .shell {
-    grid-template-columns: 320px minmax(0, 1fr) 320px;
+    grid-template-columns: var(--sidebar-width, 320px) minmax(0, 1fr) 320px;
   }
 }
 
 @media (max-width: 1100px) {
+  .sidebarResizeHandle {
+    display: none;
+  }
+
   .shell {
     height: auto;
     grid-template-columns: 1fr;
