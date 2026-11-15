@@ -1,8 +1,8 @@
 /**
  * CodeDiffViewer 工具函数：仅包含可复用的纯函数与无副作用辅助逻辑。
  */
-import type { CommentAnchor, DiffFile, ReviewThread } from '../../../shared/types';
-import type { FileContents, GapDescriptor, RenderedBlock, RenderedGapRow, SplitRow } from './types';
+import type { CommentAnchor, DiffFile, DiffLine, ReviewThread } from '../../../shared/types';
+import type { FileContents, GapDescriptor, InlineChangeRange, RenderedBlock, RenderedGapRow, SplitRow } from './types';
 
 export const GAP_EXPAND_STEP = 20;
 
@@ -176,7 +176,7 @@ export function getLineSign(type: 'context' | 'add' | 'remove' | 'empty') {
 }
 
 // 将 hunk 按左右并排格式重组，便于 split 视图统一渲染。
-export function buildSplitRows(hunk: DiffFile['hunks'][number]): SplitRow[] {
+export function buildSplitRows(hunk: DiffFile['hunks'][number], changes?: Map<DiffLine, InlineChangeRange[]>): SplitRow[] {
   const rows: SplitRow[] = [];
   let index = 0;
 
@@ -211,10 +211,10 @@ export function buildSplitRows(hunk: DiffFile['hunks'][number]): SplitRow[] {
         rows.push({
           key: `${hunk.header}-change-${index}-${pairIndex}`,
           oldCell: oldLine
-            ? { lineNumber: oldLine.oldLineNumber, content: oldLine.content, type: 'remove', side: 'old' }
+            ? { lineNumber: oldLine.oldLineNumber, content: oldLine.content, changes: changes?.get(oldLine), type: 'remove', side: 'old' }
             : { content: '', type: 'empty', side: 'old' },
           newCell: newLine
-            ? { lineNumber: newLine.newLineNumber, content: newLine.content, type: 'add', side: 'new' }
+            ? { lineNumber: newLine.newLineNumber, content: newLine.content, changes: changes?.get(newLine), type: 'add', side: 'new' }
             : { content: '', type: 'empty', side: 'new' }
         });
       }

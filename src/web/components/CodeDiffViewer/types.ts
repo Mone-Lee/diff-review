@@ -3,7 +3,12 @@
  */
 import type { DiffFile, DiffLine } from '../../../shared/types';
 
+/** 行内变更在原始文本中的 UTF-16 范围，左闭右开，与字符串切片保持一致。 */
+export type InlineChangeRange = { start: number; end: number };
+
 export type SplitCell = {
+  /** 仅配对的替换行具有行内范围，未配对增删行沿用整行底色。 */
+  changes?: InlineChangeRange[];
   lineNumber?: number;
   content: string;
   type: 'context' | 'add' | 'remove' | 'empty';

@@ -17,6 +17,7 @@ import {
   GAP_EXPAND_STEP,
   scrollToContentTop
 } from '../CodeDiffViewer/utils';
+import { buildInlineChanges } from '../CodeDiffViewer/inline-changes';
 import styles from './index.module.less';
 
 type Props = {
@@ -98,6 +99,7 @@ export function CodeDiffViewer({
     });
     return map;
   }, [gapDescriptors]);
+  const inlineChanges = React.useMemo(() => file.isContentOnly ? undefined : buildInlineChanges(file.hunks), [file]);
   const renderedBlocks = React.useMemo(() => buildRenderedBlocks(file, gapByPosition), [file, gapByPosition]);
   const hasExpandedContext = React.useMemo(
     () => gapDescriptors.some((gap) => Math.min(expandedGapLines[gap.key] ?? 0, gap.hiddenCount) > 0),
@@ -384,6 +386,7 @@ export function CodeDiffViewer({
                         filePath={file.path}
                         contentOnly={file.isContentOnly}
                         line={line}
+                        changes={inlineChanges?.get(line)}
                         index={index}
                         hunkKey={block.key}
                         activeLine={activeLine}
@@ -394,7 +397,7 @@ export function CodeDiffViewer({
                   ) : (
                     <div className={styles.splitTable}>
                       {(() => {
-                        const rows = buildSplitRows(block.hunk);
+                        const rows = buildSplitRows(block.hunk, inlineChanges);
                         return (
                           <>
                             {rows.map((row, rowIndex) => (

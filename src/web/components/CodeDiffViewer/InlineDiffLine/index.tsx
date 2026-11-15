@@ -5,6 +5,7 @@ import React from 'react';
 import { MessageOutlined } from '@ant-design/icons';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../../../shared/types';
 import { CommentPopover } from '../../CommentPopover';
+import type { InlineChangeRange } from '../types';
 import { getLineSign } from '../utils';
 import { InlineThreadStack } from '../InlineThreadStack';
 import { GherkinLine } from '../GherkinLine';
@@ -13,6 +14,7 @@ import styles from './index.module.less';
 
 type Props = {
   filePath: string;
+  changes?: InlineChangeRange[];
   /** 全文预览仅显示当前行号，省略 diff 标记。 */
   contentOnly?: boolean;
   line: DiffFile['hunks'][number]['lines'][number];
@@ -27,6 +29,7 @@ type Props = {
 export function InlineDiffLine({
   filePath,
   contentOnly = false,
+  changes,
   line,
   index,
   hunkKey,
@@ -64,7 +67,7 @@ export function InlineDiffLine({
           {getLineSign(line.type)}
         </span>
       ) : null}
-      <pre className={styles.codeLine}><GherkinLine filePath={filePath} content={line.content} /></pre>
+      <pre className={styles.codeLine}><GherkinLine filePath={filePath} content={line.content} changes={changes} changeType={line.type} /></pre>
       {lineNumber && lineThreads.length === 0 ? (
         <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setActiveLine(anchorKey)}>
           <MessageOutlined />
