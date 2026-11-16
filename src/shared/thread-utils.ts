@@ -30,8 +30,9 @@ export function anchorKey(anchor: CommentAnchor): string {
   return `markdown-selection:${anchor.filePath}:${anchor.startLine}:${anchor.endLine}:${anchor.startOffset}:${anchor.endOffset}`;
 }
 
+// 文件级评论不依赖具体内容，跨快照继续挂载；行级和选区评论仍须匹配快照，避免错误定位。
 export function isThreadOnFileSnapshot(thread: ReviewThread, file: DiffFile): boolean {
-  return thread.filePath === file.path && thread.fileSnapshotHash === file.snapshotHash;
+  return thread.filePath === file.path && (thread.anchor.type === 'file' || thread.fileSnapshotHash === file.snapshotHash);
 }
 
 // 仅加载当前 diff 文件的评论，同时保留这些文件的历史快照供评论面板查看。

@@ -12,7 +12,8 @@
 2. 旧 diff 上的行评论不能直接贴到新 diff 中恰好相同的文件路径和行号上，否则
    会把旧问题错误地展示在新的代码内容旁边。
 
-因此系统采用“侧栏保留历史，内容区只挂当前快照”的规则。
+因此系统采用“侧栏保留历史，行级和选区评论只挂当前快照”的规则；文件级评论
+不依赖具体内容，只要文件路径仍在当前审查范围内，就继续在文件头展示。
 
 ## 核心对象
 
@@ -95,8 +96,8 @@ export type CommentAnchor =
 | `diff-line` | 代码 diff 的 old/new 行 | `filePath + side + lineNumber` |
 | `markdown-line` | Markdown 源文件行 | `filePath + lineNumber` |
 
-锚点只在所属 `fileSnapshotHash` 内有定位意义。相同行号出现在另一个文件快照时，
-不视为同一可行内挂载位置。
+行级和选区锚点只在所属 `fileSnapshotHash` 内有定位意义。相同行号出现在另一个
+文件快照时，不视为同一可行内挂载位置。文件级锚点按 `filePath` 挂载，不受快照变化影响。
 
 ## Markdown 评论块定位
 
@@ -423,7 +424,8 @@ CLI 在刷新前会先请求 `GET /api/capabilities`，仅当返回的
 | 新增评论是否追加到已有 thread | 当前 `fileSnapshotHash` 相同且 anchor 相同 | 追加 comment |
 | 相同行号的新快照是否沿用旧 thread | `fileSnapshotHash` 不同 | 不沿用、不行内挂载 |
 | 侧栏是否展示旧评论 | 服务端返回全部 thread | 展示并标为历史快照 |
-| 内容区是否展示旧评论 | `thread.fileSnapshotHash === selectedFile.snapshotHash` | 不满足则不展示 |
+| 文件头是否展示旧文件级评论 | `thread.filePath === selectedFile.path` | 路径相同则继续展示 |
+| 内容区是否展示旧行级或选区评论 | 路径相同且 `thread.fileSnapshotHash === selectedFile.snapshotHash` | 不满足则不展示 |
 | agent 是否能回复旧评论 | 根据 `threadId` 查找 | 可以回复 |
 | 是否替换页面中的 diff | `forceSnapshot` 或 `session.id` 改变 | 替换文件快照 |
 | 是否同步新回复/状态 | 每次 `refreshReviewState()` | 始终同步 threads |
@@ -434,8 +436,8 @@ CLI 在刷新前会先请求 `GET /api/capabilities`，仅当返回的
 `POST /api/prompt` 的筛选规则与页面展示规则保持一致：
 
 - `thread`：按 `threadId` 精确选择（不限制是否历史快照）。
-- `file-unresolved`：要求 `filePath` 命中、未解决，且属于当前文件快照。
-- `all-unresolved`：要求未解决，且属于当前 diff 的文件快照集合。
+- `file-unresolved`：要求 `filePath` 命中、未解决；行级和选区评论还须匹配当前文件快照。
+- `all-unresolved`：要求未解决且路径属于当前 diff；行级和选区评论还须匹配对应文件快照。
 
 ## 相关实现文件
 

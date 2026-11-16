@@ -98,7 +98,7 @@ export type ReviewThread = {
   anchor: CommentAnchor;
   /** 创建此评论时的整份 diff 快照，仅用于兼容旧存储和追溯来源。 */
   diffHash?: string;
-  /** 此评论所属文件的 diff 快照；其他文件变化不会影响当前文件评论挂载。 */
+  /** 创建评论时的文件 diff 快照；行级和选区评论据此挂载，文件级评论仅按路径挂载。 */
   fileSnapshotHash?: string;
   status: ReviewThreadStatus;
   comments: ReviewComment[];
