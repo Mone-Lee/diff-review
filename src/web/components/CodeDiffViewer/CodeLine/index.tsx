@@ -1,6 +1,6 @@
 /**
- * 源码行渲染：叠加行内增删背景，并为 Gherkin 的结构、步骤与待办保留语法着色。
- * 行内与并排视图共用此渲染，不解析或重排场景，未识别的语法保持原样。
+ * 源码行渲染：供行内与并排视图共用，统一叠加语法颜色和行内增删背景。
+ * 普通源码消费 Shiki 全文分词结果，Gherkin 使用专用规则着色，保持原文与复制内容一致。
  */
 import React from 'react';
 import type { InlineChangeRange } from '../types';
@@ -24,8 +24,8 @@ function highlightTokens(content: string, renderText: (text: string) => React.Re
   });
 }
 
-// 按原文偏移叠加变更范围；Gherkin 仅按行首识别结构，避免误标说明文字中的步骤词。
-export function GherkinLine({ filePath, content, changes = [], changeType, side, lineNumber }: {
+// 按侧别和行号读取 Shiki token，并按原文偏移叠加变更背景；Gherkin 使用行首结构与文本规则着色。
+export function CodeLine({ filePath, content, changes = [], changeType, side, lineNumber }: {
   filePath: string;
   content: string;
   changes?: InlineChangeRange[];
