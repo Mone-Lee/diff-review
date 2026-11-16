@@ -67,7 +67,7 @@ export function InlineDiffLine({
           {getLineSign(line.type)}
         </span>
       ) : null}
-      <pre className={styles.codeLine}><GherkinLine filePath={filePath} content={line.content} changes={changes} changeType={line.type} /></pre>
+      <pre className={styles.codeLine}><GherkinLine side={side} lineNumber={lineNumber} filePath={filePath} content={line.content} changes={changes} changeType={line.type} /></pre>
       {lineNumber && lineThreads.length === 0 ? (
         <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setActiveLine(anchorKey)}>
           <MessageOutlined />

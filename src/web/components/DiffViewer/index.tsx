@@ -2,6 +2,7 @@
  * 代码 Diff 视图：渲染 hunk/行信息，并支持行级评论的定位与提交。
  */
 import React from 'react';
+import { SyntaxContext, useSyntaxHighlight } from '../CodeDiffViewer/syntax';
 import type { CommentAnchor, DiffFile, ReviewThread } from '../../../shared/types';
 import type { GapDescriptor, GapExpandDirection } from '../CodeDiffViewer/types';
 import { useDiffFileContents } from '../CodeDiffViewer/hooks/useDiffFileContents';
@@ -86,6 +87,7 @@ export function CodeDiffViewer({
   const [expandedGapLines, setExpandedGapLines] = React.useState<Record<string, number>>({});
   const [gapExpandDirection, setGapExpandDirection] = React.useState<Record<string, GapExpandDirection>>({});
   const fileContents = useDiffFileContents(file.path, file.snapshotHash);
+  const syntax = useSyntaxHighlight(file.path, fileContents);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const splitCopySideRef = React.useRef<'old' | 'new' | null>(null);
   const isSplitSelectingRef = React.useRef(false);
@@ -341,6 +343,7 @@ export function CodeDiffViewer({
   }
 
   return (
+    <SyntaxContext.Provider value={syntax}>
     <div
       className={styles.diffCard}
       ref={scrollRef}
@@ -438,5 +441,6 @@ export function CodeDiffViewer({
         )
       )}
     </div>
+    </SyntaxContext.Provider>
   );
 }

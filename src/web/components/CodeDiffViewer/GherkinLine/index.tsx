@@ -5,6 +5,7 @@
 import React from 'react';
 import type { InlineChangeRange } from '../types';
 import styles from './index.module.less';
+import { SyntaxContext } from '../syntax';
 
 const headingPattern = /^(Feature|Business Need|Ability|Rule|Background|Scenario Outline|Scenario Template|Scenario|Example|Examples|Scenarios)(\s*:)/;
 const stepPattern = /^(Given|When|Then|And|But|\*)(?=\s|$)/;
@@ -24,12 +25,16 @@ function highlightTokens(content: string, renderText: (text: string) => React.Re
 }
 
 // 按原文偏移叠加变更范围；Gherkin 仅按行首识别结构，避免误标说明文字中的步骤词。
-export function GherkinLine({ filePath, content, changes = [], changeType }: {
+export function GherkinLine({ filePath, content, changes = [], changeType, side, lineNumber }: {
   filePath: string;
   content: string;
   changes?: InlineChangeRange[];
   changeType?: 'context' | 'add' | 'remove' | 'empty';
+  side?: 'old' | 'new';
+  lineNumber?: number;
 }) {
+  const syntax = React.useContext(SyntaxContext);
+  const tokens = side && lineNumber ? syntax?.[side][lineNumber - 1] : undefined;
   let offset = 0;
   // 在语法 token 内按原文偏移叠加背景，不拆散语法识别或改变复制内容。
   const renderText = (text: string): React.ReactNode => {
@@ -48,7 +53,12 @@ export function GherkinLine({ filePath, content, changes = [], changeType }: {
     parts.push(text.slice(cursor - start));
     return parts;
   };
-  if (!/\.feature$/i.test(filePath)) return <>{renderText(content || ' ')}</>;
+  if (!/\.feature$/i.test(filePath)) {
+    if (tokens && tokens.map((token) => token.content).join('') === content) {
+      return <>{tokens.map((token, index) => <span key={index} style={{ color: token.color }}>{renderText(token.content)}</span>)}</>;
+    }
+    return <>{renderText(content || ' ')}</>;
+  }
 
   const indent = content.match(/^[\t ]*/)?.[0] ?? '';
   const body = content.slice(indent.length);

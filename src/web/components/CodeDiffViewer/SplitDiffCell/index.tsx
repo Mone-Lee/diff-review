@@ -62,7 +62,7 @@ export function SplitDiffCell({
       <span className={cell.type === 'add' ? `${styles.lineSign} ${styles.signAdd}` : cell.type === 'remove' ? `${styles.lineSign} ${styles.signRemove}` : styles.lineSign}>
         {getLineSign(cell.type)}
       </span>
-      <pre className={styles.codeLine} data-split-copy-content="true"><GherkinLine filePath={filePath} content={cell.content} changes={cell.changes} changeType={cell.type} /></pre>
+      <pre className={styles.codeLine} data-split-copy-content="true"><GherkinLine side={cell.side} lineNumber={cell.lineNumber} filePath={filePath} content={cell.content} changes={cell.changes} changeType={cell.type} /></pre>
       {cell.lineNumber && cellThreads.length === 0 ? (
         <button className={styles.commentTrigger} type="button" aria-label="添加行评论" onClick={() => setActiveLine(cellKey)}>
           <MessageOutlined />
