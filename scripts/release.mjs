@@ -1,113 +1,61 @@
-import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+/** 从当前提交创建隔离的发布工作树，避免发布过程触碰用户的工作区和暂存区。 */
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-const NPMJS_REGISTRY = 'https://registry.npmjs.org/';
-
-function run(command) {
-  console.log(`\n$ ${command}`);
-  execSync(command, { stdio: 'inherit' });
+const registry = 'https://registry.npmjs.org/';
+const releaseType = process.argv[2] ?? 'patch';
+if (!['patch', 'minor', 'major'].includes(releaseType)) {
+  throw new Error('Usage: npm run release [patch|minor|major]');
 }
 
-function runCapture(command) {
-  return execSync(command, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    encoding: 'utf8'
-  }).trim();
+function run(command, args, cwd, capture = false) {
+  if (!capture) console.log(`\n$ ${[command, ...args].join(' ')}`);
+  return execFileSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit'
+  })?.trim();
 }
 
-function verifyNpmAuthentication() {
-  return runCapture(`npm whoami --registry=${NPMJS_REGISTRY}`);
+const root = run('git', ['rev-parse', '--show-toplevel'], undefined, true);
+const branch = run('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], root, true);
+const head = run('git', ['rev-parse', 'HEAD'], root, true);
+const upstream = run('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], root, true);
+const remote = run('git', ['config', '--get', `branch.${branch}.remote`], root, true);
+const remoteBranch = run('git', ['config', '--get', `branch.${branch}.merge`], root, true);
+if (remote === '.' || !remoteBranch.startsWith('refs/heads/')) throw new Error('Release requires a remote branch upstream.');
+try {
+  run('git', ['merge-base', '--is-ancestor', upstream, head], root);
+} catch {
+  throw new Error('The upstream branch must be an ancestor of the current commit before releasing.');
 }
-
-function readVersion() {
-  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-  return pkg.version;
-}
-
-function getReleaseType() {
-  const releaseType = process.argv[2] ?? 'patch';
-  const allowed = new Set(['patch', 'minor', 'major']);
-  if (!allowed.has(releaseType)) {
-    console.error(`\nInvalid release type: "${releaseType}"`);
-    console.error('Usage: npm run release [patch|minor|major]');
-    process.exit(1);
-  }
-  return releaseType;
-}
-
-// 发布期间临时收起本地草稿，确保检查、构建和版本提交只使用 HEAD 中的已提交内容。
-function stashWorkingTree() {
-  if (!runCapture('git status --porcelain')) {
-    return false;
-  }
-
-  run('git stash push --include-untracked --message "release: preserve local changes"');
-  return true;
-}
-
-// 无论发布成功与否，都把发布前的本地草稿恢复到当前分支。
-function restoreWorkingTree() {
-  run('git stash pop --index');
-}
-
-function ensureNpmPublishPreflight() {
-  const configuredRegistry = runCapture('npm config get registry');
-  if (configuredRegistry !== NPMJS_REGISTRY) {
-    console.warn(`\nWarning: current npm registry is ${configuredRegistry}`);
-    console.warn(`Release publish target is fixed to ${NPMJS_REGISTRY}`);
-  }
-
-  try {
-    const npmUser = verifyNpmAuthentication();
-    console.log(`\nPublish preflight passed. npmjs user: ${npmUser}`);
-  } catch {
-    console.warn('\nRelease preflight failed: npmjs authentication is missing or expired.');
-    console.warn(`Starting interactive login: npm login --registry=${NPMJS_REGISTRY}`);
-
-    try {
-      run(`npm login --registry=${NPMJS_REGISTRY}`);
-      const npmUser = verifyNpmAuthentication();
-      console.log(`\nPublish preflight passed after login. npmjs user: ${npmUser}`);
-    } catch {
-      console.error('\nRelease preflight failed: npmjs authentication is still unavailable after login.');
-      console.error(`Please verify manually: npm whoami --registry=${NPMJS_REGISTRY}`);
-      process.exit(1);
-    }
-  }
-
-  try {
-    runCapture(`npm ping --registry=${NPMJS_REGISTRY}`);
-    console.log(`Publish preflight passed. npmjs registry reachable: ${NPMJS_REGISTRY}`);
-  } catch {
-    console.error('\nRelease preflight failed: npmjs registry is not reachable from current network.');
-    console.error(`Please check proxy/network and retry: npm ping --registry=${NPMJS_REGISTRY}`);
-    process.exit(1);
-  }
-}
-
-const releaseType = getReleaseType();
-
-ensureNpmPublishPreflight();
-
-const hasStashedChanges = stashWorkingTree();
 
 try {
-  run('npm run release:check');
-  run(`npm version ${releaseType} --no-git-tag-version`);
+  run('npm', ['whoami', `--registry=${registry}`], root);
+} catch {
+  run('npm', ['login', `--registry=${registry}`], root);
+  run('npm', ['whoami', `--registry=${registry}`], root);
+}
+run('npm', ['ping', `--registry=${registry}`], root);
 
-  const version = readVersion();
-  run('git add package.json package-lock.json 2>/dev/null || git add package.json');
-  run(`git commit -m "release: v${version}"`);
-  run(`git tag v${version}`);
-  run(`npm publish --registry=${NPMJS_REGISTRY}`);
-
-  console.log('\nnpm publish succeeded, pushing commits and tags to GitHub...');
-  run('git push');
-  run('git push --tags');
-
-  console.log('\nRelease finished: npm published and GitHub updated.');
+const directory = mkdtempSync(join(tmpdir(), 'diff-review-release-'));
+let worktreeCreated = false;
+try {
+  run('git', ['worktree', 'add', '--detach', directory, head], root);
+  worktreeCreated = true;
+  run('npm', ['ci'], directory);
+  run('npm', ['run', 'release:check'], directory);
+  run('npm', ['version', releaseType, '--no-git-tag-version'], directory);
+  const version = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')).version;
+  run('git', ['add', '--', 'package.json', 'package-lock.json'], directory);
+  run('git', ['commit', '-m', `release: v${version}`], directory);
+  run('git', ['tag', `v${version}`], directory);
+  run('npm', ['publish', `--registry=${registry}`], directory);
+  run('git', ['push', remote, `HEAD:${remoteBranch}`, `refs/tags/v${version}`], directory);
+  console.log(`\nRelease v${version} published. Your local branch remains at ${head}; update it after preserving your changes.`);
 } finally {
-  if (hasStashedChanges) {
-    restoreWorkingTree();
-  }
+  if (worktreeCreated) run('git', ['worktree', 'remove', '--force', directory], root);
+  rmSync(directory, { recursive: true, force: true });
 }
